@@ -8,7 +8,7 @@
 <style>
 body{
   margin:0;
-  font-family: Arial, sans-serif;
+  font-family:Arial, sans-serif;
   background:#f2f6fb;
 }
 
@@ -21,9 +21,7 @@ header{
   font-weight:bold;
 }
 
-.container{
-  padding:20px;
-}
+.container{ padding:20px; }
 
 .card{
   background:white;
@@ -36,8 +34,7 @@ header{
 input{
   width:100%;
   padding:8px;
-  margin-top:5px;
-  margin-bottom:10px;
+  margin:5px 0 10px 0;
 }
 
 button{
@@ -48,14 +45,6 @@ button{
   width:100%;
   border-radius:6px;
   font-size:16px;
-}
-
-button:hover{
-  opacity:0.9;
-}
-
-#results{
-  margin-top:15px;
 }
 
 .bottom-nav{
@@ -72,7 +61,6 @@ button:hover{
   background:none;
   color:white;
   border:none;
-  font-size:14px;
 }
 </style>
 </head>
@@ -84,13 +72,13 @@ button:hover{
 <div class="container" id="generatePage">
 
 <div class="card">
-<label>Toplam Sayı Adedi</label>
+<label>Toplam Sayı</label>
 <input type="number" id="maxNumber" value="34">
 
-<label>Kolon Başına Sayı</label>
+<label>Kolon Başına</label>
 <input type="number" id="perSet" value="5">
 
-<label>Joker Sayısı</label>
+<label>Joker</label>
 <input type="number" id="jokerCount" value="1">
 
 <label>Kolon Sayısı</label>
@@ -114,112 +102,114 @@ button:hover{
 </div>
 
 <script>
-let generatedSets = [];
-let savedGroups = [];
-let groupCounter = 1;
+let generatedSets=[];
+let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[];
+let groupCounter=savedGroups.length>0
+?Math.max(...savedGroups.map(g=>g.id))+1
+:1;
 
 function generateSets(){
-  const max = parseInt(document.getElementById("maxNumber").value);
-  const per = parseInt(document.getElementById("perSet").value);
-  const joker = parseInt(document.getElementById("jokerCount").value);
-  const count = parseInt(document.getElementById("setCount").value);
+const max=parseInt(maxNumber.value);
+const per=parseInt(perSet.value);
+const joker=parseInt(jokerCount.value);
+const count=parseInt(setCount.value);
 
-  generatedSets = [];
+generatedSets=[];
 
-  for(let i=0;i<count;i++){
-    let numbers = [];
-    while(numbers.length < per){
-      let n = Math.floor(Math.random()*max)+1;
-      if(!numbers.includes(n)) numbers.push(n);
-    }
-    numbers.sort((a,b)=>a-b);
+for(let i=0;i<count;i++){
+let numbers=[];
+while(numbers.length<per){
+let n=Math.floor(Math.random()*max)+1;
+if(!numbers.includes(n)) numbers.push(n);
+}
+numbers.sort((a,b)=>a-b);
 
-    let jokers = [];
-    while(jokers.length < joker){
-      let j = Math.floor(Math.random()*max)+1;
-      if(!jokers.includes(j)) jokers.push(j);
-    }
+let jokers=[];
+while(jokers.length<joker){
+let j=Math.floor(Math.random()*max)+1;
+if(!jokers.includes(j)) jokers.push(j);
+}
 
-    generatedSets.push({numbers,jokers});
-  }
+generatedSets.push({numbers,jokers});
+}
 
-  displayGenerated();
+displayGenerated();
 }
 
 function displayGenerated(){
-  let html="";
-  generatedSets.forEach((set,i)=>{
-    html += "<div class='card'>";
-    html += "<b>"+(i+1)+")</b> ";
-    html += set.numbers.join(" - ");
-    if(set.jokers.length>0){
-      html += " | "+set.jokers.join(" - ");
-    }
-    html += "</div>";
-  });
+let html="";
+generatedSets.forEach((set,i)=>{
+html+=`<div class='card'><b>${i+1})</b> 
+${set.numbers.join(" - ")}
+${set.jokers.length?" | "+set.jokers.join(" - "):""}
+</div>`;
+});
 
-  if(generatedSets.length>0){
-    html += "<button onclick='saveGroup()'>Kaydet</button>";
-  }
+if(generatedSets.length>0){
+html+="<button onclick='saveGroup()'>Kaydet</button>";
+}
 
-  document.getElementById("results").innerHTML = html;
+results.innerHTML=html;
 }
 
 function saveGroup(){
-  let name = prompt("Bu set grubuna isim ver:");
-  if(!name) return;
+let name=prompt("Grup adı:");
+if(!name) return;
 
-  savedGroups.push({
-    id:groupCounter++,
-    name:name,
-    sets:[...generatedSets]
-  });
+savedGroups.push({
+id:groupCounter++,
+name:name,
+sets:[...generatedSets]
+});
 
-  alert("Kaydedildi!");
+localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
+alert("Kaydedildi");
 }
 
 function showGenerate(){
-  document.getElementById("generatePage").style.display="block";
-  document.getElementById("mySetsPage").style.display="none";
+generatePage.style.display="block";
+mySetsPage.style.display="none";
 }
 
 function showMySets(){
-  document.getElementById("generatePage").style.display="none";
-  document.getElementById("mySetsPage").style.display="block";
+generatePage.style.display="none";
+mySetsPage.style.display="block";
 
-  let html="";
-  savedGroups.forEach(group=>{
-    html+="<div class='card'>";
-    html+="<b>["+group.id+"] "+group.name+"</b><br>";
-    html+="Kolon: "+group.sets.length+"<br>";
-    html+="<button onclick='viewGroup("+group.id+")'>Görüntüle</button>";
-    html+="</div>";
-  });
+let html="";
+savedGroups.forEach(group=>{
+html+=`<div class='card'>
+<b>[${group.id}] ${group.name}</b><br>
+Kolon: ${group.sets.length}<br>
+<button onclick='viewGroup(${group.id})'>Görüntüle</button>
+<button onclick='deleteGroup(${group.id})'>Sil</button>
+</div>`;
+});
 
-  document.getElementById("savedSets").innerHTML=html;
+savedSets.innerHTML=html;
 }
 
 function viewGroup(id){
-  let group = savedGroups.find(g=>g.id===id);
-  if(!group) return;
+let group=savedGroups.find(g=>g.id===id);
+if(!group) return;
 
-  let html="<h3>"+group.name+"</h3>";
-  group.sets.forEach((set,i)=>{
-    html+="<div class='card'>";
-    html+="<b>"+(i+1)+")</b> ";
-    html+=set.numbers.join(" - ");
-    if(set.jokers.length>0){
-      html+=" | "+set.jokers.join(" - ");
-    }
-    html+="</div>";
-  });
+let html=`<h3>${group.name}</h3>`;
+group.sets.forEach((set,i)=>{
+html+=`<div class='card'><b>${i+1})</b>
+${set.numbers.join(" - ")}
+${set.jokers.length?" | "+set.jokers.join(" - "):""}
+</div>`;
+});
 
-  html+="<button onclick='showMySets()'>Geri</button>";
+html+="<button onclick='showMySets()'>Geri</button>";
+savedSets.innerHTML=html;
+}
 
-  document.getElementById("savedSets").innerHTML=html;
+function deleteGroup(id){
+savedGroups=savedGroups.filter(g=>g.id!==id);
+localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
+showMySets();
 }
 </script>
 
 </body>
 </html>
-
