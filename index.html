@@ -109,6 +109,10 @@ let groupCounter=savedGroups.length>0
 ?Math.max(...savedGroups.map(g=>g.id))+1
 :1;
 
+let selectedNumbers=[];
+
+// ================== GENERATE ==================
+
 function generateSets(){
 const max=parseInt(maxNumber.value);
 const per=parseInt(perSet.value);
@@ -116,6 +120,7 @@ const joker=parseInt(jokerCount.value);
 const count=parseInt(setCount.value);
 
 generatedSets=[];
+selectedNumbers=[];
 
 for(let i=0;i<count;i++){
 let numbers=[];
@@ -137,21 +142,74 @@ generatedSets.push({numbers,jokers});
 displayGenerated();
 }
 
+// ================== EKRANA BAS ==================
+
 function displayGenerated(){
 let html="";
+
 generatedSets.forEach((set,i)=>{
-html+=`<div class='card'><b>${i+1})</b> 
-${set.numbers.join(" - ")}
-${set.jokers.length?" | "+set.jokers.join(" - "):""}
-</div>`;
+
+html+=`<div class="card"><b>${i+1})</b><div class="set-row">`;
+
+set.numbers.forEach(n=>{
+let active = selectedNumbers.includes(n) ? "match" : "";
+html+=`<div class="ball ${active}">${n}</div>`;
+});
+
+set.jokers.forEach(j=>{
+let active = selectedNumbers.includes(j) ? "match-joker" : "";
+html+=`<div class="ball joker ${active}">${j}</div>`;
+});
+
+html+=`</div></div>`;
 });
 
 if(generatedSets.length>0){
-html+="<button onclick='saveGroup()'>Kaydet</button>";
+html+=`
+<div class="card">
+<div id="numberPicker" class="set-row"></div>
+<button onclick="checkMatches()">Kontrol Et</button>
+<button onclick="saveGroup()">Kaydet</button>
+</div>`;
 }
 
 results.innerHTML=html;
+
+createNumberPicker();
 }
+
+// ================== NUMARA SEÇ ==================
+
+function createNumberPicker(){
+let html="";
+for(let i=1;i<=90;i++){
+html+=`<div class="ball"
+onclick="toggleNumber(${i})"
+id="pick-${i}">${i}</div>`;
+}
+numberPicker.innerHTML=html;
+}
+
+function toggleNumber(n){
+let el=document.getElementById("pick-"+n);
+let index=selectedNumbers.indexOf(n);
+
+if(index>-1){
+selectedNumbers.splice(index,1);
+el.classList.remove("selected");
+}else{
+selectedNumbers.push(n);
+el.classList.add("selected");
+}
+}
+
+// ================== KONTROL ==================
+
+function checkMatches(){
+displayGenerated();
+}
+
+// ================== KAYDET ==================
 
 function saveGroup(){
 let name=prompt("Grup adı:");
@@ -166,6 +224,8 @@ sets:[...generatedSets]
 localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
 alert("Kaydedildi");
 }
+
+// ================== SAYFA GEÇİŞ ==================
 
 function showGenerate(){
 generatePage.style.display="block";
@@ -189,21 +249,28 @@ Kolon: ${group.sets.length}<br>
 savedSets.innerHTML=html;
 }
 
+// ================== MY SETS DETAY ==================
+
 function viewGroup(id){
 let group=savedGroups.find(g=>g.id===id);
 if(!group) return;
 
 let html=`<h3>${group.name}</h3>`;
+
 group.sets.forEach((set,i)=>{
-html+=`<div class='card'><b>${i+1})</b>
-${set.numbers.join(" - ")}
-${set.jokers.length?" | "+set.jokers.join(" - "):""}
+html+=`<div class="card"><b>${i+1})</b>
+<div class="set-row">
+${set.numbers.map(n=>`<div class="ball">${n}</div>`).join("")}
+${set.jokers.map(j=>`<div class="ball joker">${j}</div>`).join("")}
+</div>
 </div>`;
 });
 
 html+="<button onclick='showMySets()'>Geri</button>";
 savedSets.innerHTML=html;
 }
+
+// ================== SİL ==================
 
 function deleteGroup(id){
 savedGroups=savedGroups.filter(g=>g.id!==id);
