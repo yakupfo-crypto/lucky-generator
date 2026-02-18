@@ -256,7 +256,16 @@ function viewGroup(id){
 let group=savedGroups.find(g=>g.id===id);
 if(!group) return;
 
-let html=`<h3>${group.name}</h3>`;
+let html = `
+<div class="card">
+<b>Name: ${group.name}</b><br>
+Number of sets: ${group.sets.length}<br>
+Result: <span id="resultText">-</span><br><br>
+
+<button onclick="openResultPanel()">Sonuç Gir</button>
+</div>
+`;
+
 
 group.sets.forEach((set,i)=>{
 
