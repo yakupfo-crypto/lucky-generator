@@ -308,7 +308,40 @@ localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
 showMySets();
 
 }
+let selectedResult=[];
 
+function openResultPanel(){
+resultPanel.classList.add("active");
+createNumberGrid();
+}
+
+function closeResultPanel(){
+resultPanel.classList.remove("active");
+selectedResult=[];
+}
+
+function createNumberGrid(){
+let html="";
+for(let i=1;i<=35;i++){
+html+=`<div class="ball" onclick="toggleResult(${i},this)">${i}</div>`;
+}
+numberGrid.innerHTML=html;
+}
+
+function toggleResult(num,el){
+el.classList.toggle("selected");
+
+if(selectedResult.includes(num))
+selectedResult=selectedResult.filter(x=>x!==num);
+else
+selectedResult.push(num);
+}
+
+function confirmResult(){
+resultText.innerText=selectedResult.join(", ");
+closeResultPanel();
+checkMatches();
+}
 </script>
 <div id="resultPanel" class="result-panel">
 <div class="result-box">
