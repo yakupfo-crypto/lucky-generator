@@ -92,6 +92,23 @@ color:#fff;
 background:#ff9800;
 color:#fff;
 }
+.result-panel{
+position:fixed;
+bottom:-100%;
+left:0;
+width:100%;
+background:#fff;
+transition:0.3s;
+box-shadow:0 -2px 10px rgba(0,0,0,0.2);
+}
+
+.result-panel.active{
+bottom:0;
+}
+
+.result-box{
+padding:15px;
+}
 </style>
 </head>
 
@@ -293,6 +310,17 @@ showMySets();
 }
 
 </script>
+<div id="resultPanel" class="result-panel">
+<div class="result-box">
 
+<h3>Enter the result</h3>
+
+<div id="numberGrid" class="ball-row"></div>
+
+<button onclick="confirmResult()">CONFIRMATION</button>
+<button onclick="closeResultPanel()">CLEAN</button>
+
+</div>
+</div>
 </body>
 </html>
