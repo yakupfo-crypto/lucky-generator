@@ -327,13 +327,17 @@ html+=`<div class="ball" onclick="toggleResult(${i},this)">${i}</div>`;
 numberGrid.innerHTML=html;
 }
 
-function toggleResult(num,el){
-el.classList.toggle("selected");
+function toggleResult(num, el){
 
-if(selectedResult.includes(num))
-selectedResult=selectedResult.filter(x=>x!==num);
-else
+if(selectedResult.includes(num)){
+selectedResult = selectedResult.filter(n => n !== num);
+el.classList.remove("selected");
+}else{
 selectedResult.push(num);
+el.classList.add("selected");
+}
+
+selectedResult.sort((a,b)=>a-b);
 }
 
 function confirmResult(){
