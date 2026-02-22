@@ -341,9 +341,13 @@ selectedResult.sort((a,b)=>a-b);
 }
 
 function confirmResult(){
-resultText.innerText=selectedResult.join(", ");
+
+document.getElementById("resultText").innerText =
+selectedResult.join(", ");
+
 closeResultPanel();
-checkMatches();
+
+calculateAllPoints();
 }
 function checkMatches(){
 
