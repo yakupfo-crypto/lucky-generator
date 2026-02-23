@@ -280,7 +280,7 @@ let html = `
 Number of sets: ${group.sets.length}<br>
 Result: <span id="resultText">${group.result ? group.result.join(", ") : "-"}</span><br><br>
 
-<button onclick="openResultPanel()">Sonuç Gir</button>
+<button onclick="openResultPanel(${savedGroups.findIndex(g=>g.id===id)})">Sonuç Gir</button>
 </div>
 `;
 
@@ -310,62 +310,103 @@ showMySets();
 
 }
 
-function openResultPanel(){
-resultPanel.classList.add("active");
-createNumberGrid();
+let selectedResult = [];
+let activeGroupIndex = null;
+
+function openResultPanel(groupIndex){
+  activeGroupIndex = groupIndex;
+  selectedResult = groups[groupIndex].result || [];
+
+  document.getElementById("resultPanel").classList.add("show");
+  renderResultBalls();
 }
 
-function closeResultPanel(){
-resultPanel.classList.remove("active");
-selectedResult=[];
+function renderResultBalls(){
+  document.querySelectorAll(".result-ball").forEach(b=>{
+    let val = parseInt(b.innerText);
+
+    if(selectedResult.includes(val))
+      b.classList.add("selected");
+    else
+      b.classList.remove("selected");
+  });
 }
 
-function createNumberGrid(){
-let html="";
-for(let i=1;i<=35;i++){
-html+=`<div class="ball" onclick="toggleResult(${i},this)">${i}</div>`;
-}
-numberGrid.innerHTML=html;
-}
+function toggleResultNumber(el){
+  let val = parseInt(el.innerText);
 
-function toggleResult(num, el){
+  if(selectedResult.includes(val))
+    selectedResult = selectedResult.filter(x=>x!==val);
+  else{
+    if(selectedResult.length < 7)
+      selectedResult.push(val);
+  }
 
-if(selectedResult.includes(num)){
-selectedResult = selectedResult.filter(n => n !== num);
-el.classList.remove("selected");
-}else{
-selectedResult.push(num);
-el.classList.add("selected");
-}
-
-selectedResult.sort((a,b)=>a-b);
+  renderResultBalls();
 }
 
 function confirmResult(){
 
-document.getElementById("resultText").innerText =
-selectedResult.join(", ");
+  groups[activeGroupIndex].result = selectedResult;
 
-closeResultPanel();
+  updateResultText();
+  checkMatches();
 
-calculateAllPoints();
+  closeResultPanel();
 }
+
+function updateResultText(){
+  let res = groups[activeGroupIndex].result;
+
+  document.querySelector(`#group-${activeGroupIndex} .resultText`)
+    .innerText = res.join(", ");
+}
+
+function closeResultPanel(){
+  document.getElementById("resultPanel").classList.remove("show");
+}
+
 function cleanResult(){
-
-selectedResult = [];
-
-document.querySelectorAll(".ball").forEach(b=>{
-b.classList.remove("selected");
-});
+  selectedResult = [];
+  renderResultBalls();
 }
+
 function checkMatches(){
 
-document.querySelectorAll(".ball").forEach(b=>{
-let val=parseInt(b.innerText);
+  let result = groups[activeGroupIndex].result;
 
-if(selectedResult.includes(val))
-b.classList.add("selected");
-});
+  document
+  .querySelectorAll(`#group-${activeGroupIndex} .ball`)
+  .forEach(b=>{
+
+    let val = parseInt(b.innerText);
+
+    if(result.includes(val))
+      b.classList.add("selected");
+    else
+      b.classList.remove("selected");
+
+  });
+
+  updatePoints(result);
+}
+
+function updatePoints(result){
+
+  document
+  .querySelectorAll(`#group-${activeGroupIndex} .set`)
+  .forEach(set=>{
+
+    let match = 0;
+
+    set.querySelectorAll(".ball").forEach(b=>{
+      if(result.includes(parseInt(b.innerText)))
+        match++;
+    });
+
+    set.querySelector(".points").innerText = match + " point(s)";
+  });
+
 }
 </script>
 <div id="resultPanel" class="result-panel">
