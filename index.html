@@ -278,7 +278,7 @@ let html = `
 <div class="card">
 <b>Name: ${group.name}</b><br>
 Number of sets: ${group.sets.length}<br>
-Result: <span id="resultText">-</span><br><br>
+Result: <span id="resultText">${group.result ? group.result.join(", ") : "-"}</span><br><br>
 
 <button onclick="openResultPanel()">Sonuç Gir</button>
 </div>
