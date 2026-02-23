@@ -156,6 +156,7 @@ let groupCounter=savedGroups.length>0
 ?Math.max(...savedGroups.map(g=>g.id))+1
 :1;
 let selectedResult = [];
+let activeGroupIndex = null;
 function createBalls(set){
 let balls="<div class='ball-row'>";
 
