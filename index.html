@@ -92,6 +92,10 @@ color:#fff;
 background:#ff9800;
 color:#fff;
 }
+.ball.result-selected{
+background:#4caf50;
+color:#fff;
+}
 </style>
 </head>
 
@@ -134,6 +138,7 @@ color:#fff;
 <script>
 
 let generatedSets=[];
+let selectedResult=[];
 let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[];
 let groupCounter=savedGroups.length>0
 ?Math.max(...savedGroups.map(g=>g.id))+1
@@ -257,7 +262,7 @@ let group=savedGroups.find(g=>g.id===id);
 if(!group) return;
 
 let html=`<h3>${group.name}</h3>`;
-
+html+=`<button onclick="openResultPanel(${Math.max(...group.sets.flatMap(s=>s.numbers))})">Sonuç Gir</button>`;
 group.sets.forEach((set,i)=>{
 
 html+=`
@@ -282,8 +287,72 @@ localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
 showMySets();
 
 }
+function openResultPanel(max=34){
 
+let html="";
+
+for(let i=1;i<=max;i++){
+html+=`<div class="ball ${selectedResult.includes(i)?"result-selected":""}" onclick="toggleResultNumber(this)">${i}</div>`;
+}
+
+resultNumbers.innerHTML=html;
+resultPanel.style.display="block";
+}
+
+function closeResultPanel(){
+resultPanel.style.display="none";
+}
+
+function toggleResultNumber(el){
+
+let val=parseInt(el.innerText);
+
+if(selectedResult.includes(val)){
+selectedResult=selectedResult.filter(n=>n!==val);
+el.classList.remove("result-selected");
+}else{
+selectedResult.push(val);
+el.classList.add("result-selected");
+}
+}
+
+function confirmResult(){
+resultPanel.style.display="none";
+updateMatches();
+}
+
+function cleanResult(){
+selectedResult=[];
+document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
+updateMatches();
+}
+function updateMatches(){
+
+document.querySelectorAll(".ball").forEach(b=>{
+
+let val=parseInt(b.innerText);
+
+if(selectedResult.includes(val)){
+b.style.background="#4caf50";
+b.style.color="#fff";
+}else{
+b.style.background="";
+b.style.color="";
+}
+
+});
+
+}
 </script>
+<div id="resultPanel" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,0.2); max-height:70%; overflow:auto;">
 
+<h3>Sonuç Gir <span onclick="closeResultPanel()" style="float:right;cursor:pointer;">✖</span></h3>
+
+<div id="resultNumbers" class="ball-row"></div>
+
+<button onclick="confirmResult()">Onayla</button>
+<button onclick="cleanResult()" style="background:#999;margin-top:8px;">Temizle</button>
+
+</div>
 </body>
 </html>
