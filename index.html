@@ -92,23 +92,6 @@ color:#fff;
 background:#ff9800;
 color:#fff;
 }
-.result-panel{
-position:fixed;
-bottom:-100%;
-left:0;
-width:100%;
-background:#fff;
-transition:0.3s;
-box-shadow:0 -2px 10px rgba(0,0,0,0.2);
-}
-
-.result-panel.active{
-bottom:0;
-}
-
-.result-box{
-padding:15px;
-}
 </style>
 </head>
 
@@ -155,8 +138,7 @@ let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[];
 let groupCounter=savedGroups.length>0
 ?Math.max(...savedGroups.map(g=>g.id))+1
 :1;
-let selectedResult = [];
-let activeGroupIndex = null;
+
 function createBalls(set){
 let balls="<div class='ball-row'>";
 
@@ -274,16 +256,7 @@ function viewGroup(id){
 let group=savedGroups.find(g=>g.id===id);
 if(!group) return;
 
-let html = `
-<div class="card">
-<b>Name: ${group.name}</b><br>
-Number of sets: ${group.sets.length}<br>
-Result: <span id="resultText">${group.result ? group.result.join(", ") : "-"}</span><br><br>
-
-<button onclick="openResultPanel(${savedGroups.findIndex(g=>g.id===id)})">Sonuç Gir</button>
-</div>
-`;
-
+let html=`<h3>${group.name}</h3>`;
 
 group.sets.forEach((set,i)=>{
 
@@ -310,117 +283,7 @@ showMySets();
 
 }
 
-let selectedResult = [];
-let activeGroupIndex = null;
-
-function openResultPanel(groupIndex){
-  activeGroupIndex = groupIndex;
-  selectedResult = groups[groupIndex].result || [];
-
-  document.getElementById("resultPanel").classList.add("show");
-  renderResultBalls();
-}
-
-function renderResultBalls(){
-  document.querySelectorAll(".result-ball").forEach(b=>{
-    let val = parseInt(b.innerText);
-
-    if(selectedResult.includes(val))
-      b.classList.add("selected");
-    else
-      b.classList.remove("selected");
-  });
-}
-
-function toggleResultNumber(el){
-  let val = parseInt(el.innerText);
-
-  if(selectedResult.includes(val))
-    selectedResult = selectedResult.filter(x=>x!==val);
-  else{
-    if(selectedResult.length < 7)
-      selectedResult.push(val);
-  }
-
-  renderResultBalls();
-}
-
-function confirmResult(){
-
-  groups[activeGroupIndex].result = selectedResult;
-
-  updateResultText();
-  checkMatches();
-
-  closeResultPanel();
-}
-
-function updateResultText(){
-  let res = groups[activeGroupIndex].result;
-
-  document.querySelector(`#group-${activeGroupIndex} .resultText`)
-    .innerText = res.join(", ");
-}
-
-function closeResultPanel(){
-  document.getElementById("resultPanel").classList.remove("show");
-}
-
-function cleanResult(){
-  selectedResult = [];
-  renderResultBalls();
-}
-
-function checkMatches(){
-
-  let result = groups[activeGroupIndex].result;
-
-  document
-  .querySelectorAll(`#group-${activeGroupIndex} .ball`)
-  .forEach(b=>{
-
-    let val = parseInt(b.innerText);
-
-    if(result.includes(val))
-      b.classList.add("selected");
-    else
-      b.classList.remove("selected");
-
-  });
-
-  updatePoints(result);
-}
-
-function updatePoints(result){
-
-  document
-  .querySelectorAll(`#group-${activeGroupIndex} .set`)
-  .forEach(set=>{
-
-    let match = 0;
-
-    set.querySelectorAll(".ball").forEach(b=>{
-      if(result.includes(parseInt(b.innerText)))
-        match++;
-    });
-
-    set.querySelector(".points").innerText = match + " point(s)";
-  });
-
-}
 </script>
-<div id="resultPanel" class="panel">
 
-<h3>Enter the result <span onclick="closeResultPanel()">✖</span></h3>
-
-<div class="numbers">
-  <!-- 1–35 -->
-  <div class="result-ball" onclick="toggleResultNumber(this)">1</div>
-</div>
-
-<button onclick="confirmResult()">CONFIRMATION</button>
-<button onclick="cleanResult()">CLEAN</button>
-
-</div>
 </body>
 </html>
