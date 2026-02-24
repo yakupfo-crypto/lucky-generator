@@ -409,17 +409,18 @@ function updatePoints(result){
 
 }
 </script>
-<div id="resultPanel" class="result-panel">
-<div class="result-box">
+<div id="resultPanel" class="panel">
 
-<h3>Enter the result</h3>
+<h3>Enter the result <span onclick="closeResultPanel()">✖</span></h3>
 
-<div id="numberGrid" class="ball-row"></div>
+<div class="numbers">
+  <!-- 1–35 -->
+  <div class="result-ball" onclick="toggleResultNumber(this)">1</div>
+</div>
 
 <button onclick="confirmResult()">CONFIRMATION</button>
 <button onclick="cleanResult()">CLEAN</button>
 
-</div>
 </div>
 </body>
 </html>
