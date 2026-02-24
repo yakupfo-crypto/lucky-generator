@@ -209,6 +209,7 @@ html+=`<button onclick='saveGroup()'>Kaydet</button>`;
 }
 
 results.innerHTML=html;
+updateMatches();
 }
 
 function saveGroup(){
@@ -262,7 +263,8 @@ let group=savedGroups.find(g=>g.id===id);
 if(!group) return;
 
 let html=`<h3>${group.name}</h3>`;
-html+=`<button onclick="openResultPanel(${Math.max(...group.sets.flatMap(s=>s.numbers))})">Sonuç Gir</button>`;
+html+=`<div class="card"><b>Result:</b> <span id="resultText">${selectedResult.join(", ")||"-"}</span></div>`;
+html+=`<button onclick="openResultPanel(${document.getElementById('maxNumber').value})">Sonuç Gir</button>`;
 group.sets.forEach((set,i)=>{
 
 html+=`
@@ -318,12 +320,18 @@ el.classList.add("result-selected");
 
 function confirmResult(){
 resultPanel.style.display="none";
+
+let el=document.getElementById("resultText");
+if(el) el.innerText=selectedResult.join(", ")||"-";
+
 updateMatches();
 }
 
 function cleanResult(){
 selectedResult=[];
 document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
+let el=document.getElementById("resultText");
+if(el) el.innerText="-";
 updateMatches();
 }
 function updateMatches(){
