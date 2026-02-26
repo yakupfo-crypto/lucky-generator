@@ -183,7 +183,7 @@ let j=Math.floor(Math.random()*max)+1;
 if(!jokers.includes(j)) jokers.push(j);
 }
 
-generatedSets.push({numbers,jokers});
+generatedSets.push({numbers,jokers,max});
 }
 
 displayGenerated();
@@ -220,7 +220,8 @@ if(!name) return;
 savedGroups.push({
 id:groupCounter++,
 name:name,
-sets:[...generatedSets]
+sets:[...generatedSets],
+max:generatedSets[0].max
 });
 
 localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
@@ -264,7 +265,7 @@ if(!group) return;
 
 let html=`<h3>${group.name}</h3>`;
 html+=`<div class="card"><b>Result:</b> <span id="resultText">${selectedResult.join(", ")||"-"}</span></div>`;
-html+=`<button onclick="openResultPanel(${document.getElementById('maxNumber').value})">Sonuç Gir</button>`;
+html+=`<button onclick="openResultPanel(${group.max})">Sonuç Gir</button>`;
 group.sets.forEach((set,i)=>{
 
 html+=`
@@ -338,14 +339,14 @@ function updateMatches(){
 
 document.querySelectorAll(".ball").forEach(b=>{
 
+if(b.classList.contains("joker")) return;
+
 let val=parseInt(b.innerText);
 
 if(selectedResult.includes(val)){
-b.style.background="#4caf50";
-b.style.color="#fff";
+b.classList.add("result-selected");
 }else{
-b.style.background="";
-b.style.color="";
+b.classList.remove("result-selected");
 }
 
 });
