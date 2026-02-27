@@ -311,7 +311,9 @@ showMySets();
 
 }
 function openResultPanel(max=34, groupId){
-activeResultGroupId = groupId;
+  activeResultGroupId = groupId;
+  const resultPanel = document.getElementById("resultPanel");
+  const resultNumbers = document.getElementById("resultNumbers");
   let html="";
   let selected = selectedResultMap[groupId] || [];
   for(let i=1;i<=max;i++){
