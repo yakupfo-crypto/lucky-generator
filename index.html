@@ -142,11 +142,12 @@ const resultNumbers = document.getElementById("resultNumbers");
 let generatedSets=[];
 let selectedResult=[];
 let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[];
+let activeResultGroupId = null;
 let groupCounter=savedGroups.length>0
 ?Math.max(...savedGroups.map(g=>g.id))+1
 :1;
 let selectedResultMap = {}; // { groupId: [1,2,3] }
-
+let activeResultGroupId = null;
 function toggleResultNumber(el, groupId){
   let val = parseInt(el.innerText);
   if(!selectedResultMap[groupId]) selectedResultMap[groupId] = [];
@@ -224,7 +225,7 @@ html+=`<button onclick='saveGroup()'>Kaydet</button>`;
 }
 
 results.innerHTML=html;
-updateMatches();
+
 }
 
 function saveGroup(){
@@ -279,7 +280,7 @@ let group=savedGroups.find(g=>g.id===id);
 if(!group) return;
 
 let html=`<h3>${group.name}</h3>`;
-html+=`<div class="card"><b>Result:</b> <span id="resultText">${selectedResult.join(", ")||"-"}</span></div>`;
+html+=`<div class="card"><b>Result:</b> <span id="resultText">${(selectedResultMap[group.id]||[]).join(", ")||"-"}</span></div>`;
 <button onclick="openResultPanel(${group.max}, ${group.id})">Sonuç Gir</button>
 group.sets.forEach((set,i)=>{
 
@@ -306,6 +307,7 @@ showMySets();
 
 }
 function openResultPanel(max=34, groupId){
+activeResultGroupId = groupId;
   let html="";
   let selected = selectedResultMap[groupId] || [];
   for(let i=1;i<=max;i++){
@@ -317,19 +319,6 @@ function openResultPanel(max=34, groupId){
 
 function closeResultPanel(){
 resultPanel.style.display="none";
-}
-
-function toggleResultNumber(el){
-
-let val=parseInt(el.innerText);
-
-if(selectedResult.includes(val)){
-selectedResult=selectedResult.filter(n=>n!==val);
-el.classList.remove("result-selected");
-}else{
-selectedResult.push(val);
-el.classList.add("result-selected");
-}
 }
 
 function confirmResult(groupId){
@@ -348,13 +337,15 @@ function cleanResult(groupId){
 }
 function updateMatches(){
 
+let result = selectedResultMap[activeResultGroupId] || [];
+
 document.querySelectorAll(".ball").forEach(b=>{
 
 if(b.classList.contains("joker")) return;
 
 let val=parseInt(b.innerText);
 
-if(selectedResult.includes(val)){
+if(result.includes(val)){
 b.classList.add("result-selected");
 }else{
 b.classList.remove("result-selected");
@@ -370,8 +361,8 @@ b.classList.remove("result-selected");
 
 <div id="resultNumbers" class="ball-row"></div>
 
-<button onclick="confirmResult()">Onayla</button>
-<button onclick="cleanResult()" style="background:#999;margin-top:8px;">Temizle</button>
+<button onclick="confirmResult(activeResultGroupId)">Onayla</button>
+<button onclick="cleanResult(activeResultGroupId)" style="background:#999;margin-top:8px;">Temizle</button>
 
 </div>
 </body>
