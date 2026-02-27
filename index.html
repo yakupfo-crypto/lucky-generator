@@ -283,9 +283,13 @@ let group=savedGroups.find(g=>g.id===id);
 if(!group) return;
 
 let html=`<h3>${group.name}</h3>`;
-html+=`<div class="card"><b>Result:</b> <span id="resultText">${(selectedResultMap[group.id]||[]).join(", ")||"-"}</span>
-<button onclick="openResultPanel(${group.max}, ${group.id})">Sonuç Gir</button>
-</div>`;
+html+=`
+<div class="card">
+  <b>Result:</b> <span id="resultText">${(selectedResultMap[group.id]||[]).join(", ")||"-"}</span>
+  <br>
+  <button onclick="openResultPanel(${group.max}, ${group.id})">Sonuç Gir</button>
+</div>
+`;
 group.sets.forEach((set,i)=>{
 
 html+=`
