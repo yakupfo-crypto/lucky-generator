@@ -136,6 +136,8 @@ color:#fff;
 </div>
 
 <script>
+const resultPanel = document.getElementById("resultPanel");
+const resultNumbers = document.getElementById("resultNumbers");
 
 let generatedSets=[];
 let selectedResult=[];
@@ -143,7 +145,20 @@ let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[];
 let groupCounter=savedGroups.length>0
 ?Math.max(...savedGroups.map(g=>g.id))+1
 :1;
+let selectedResultMap = {}; // { groupId: [1,2,3] }
 
+function toggleResultNumber(el, groupId){
+  let val = parseInt(el.innerText);
+  if(!selectedResultMap[groupId]) selectedResultMap[groupId] = [];
+  
+  if(selectedResultMap[groupId].includes(val)){
+    selectedResultMap[groupId] = selectedResultMap[groupId].filter(n=>n!==val);
+    el.classList.remove("result-selected");
+  } else {
+    selectedResultMap[groupId].push(val);
+    el.classList.add("result-selected");
+  }
+}
 function createBalls(set){
 let balls="<div class='ball-row'>";
 
@@ -265,7 +280,7 @@ if(!group) return;
 
 let html=`<h3>${group.name}</h3>`;
 html+=`<div class="card"><b>Result:</b> <span id="resultText">${selectedResult.join(", ")||"-"}</span></div>`;
-html+=`<button onclick="openResultPanel(${group.max})">Sonuç Gir</button>`;
+<button onclick="openResultPanel(${group.max}, ${group.id})">Sonuç Gir</button>
 group.sets.forEach((set,i)=>{
 
 html+=`
@@ -290,16 +305,14 @@ localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
 showMySets();
 
 }
-function openResultPanel(max=34){
-
-let html="";
-
-for(let i=1;i<=max;i++){
-html+=`<div class="ball ${selectedResult.includes(i)?"result-selected":""}" onclick="toggleResultNumber(this)">${i}</div>`;
-}
-
-resultNumbers.innerHTML=html;
-resultPanel.style.display="block";
+function openResultPanel(max=34, groupId){
+  let html="";
+  let selected = selectedResultMap[groupId] || [];
+  for(let i=1;i<=max;i++){
+    html+=`<div class="ball ${selected.includes(i)?"result-selected":""}" onclick="toggleResultNumber(this, ${groupId})">${i}</div>`;
+  }
+  resultNumbers.innerHTML = html;
+  resultPanel.style.display = "block";
 }
 
 function closeResultPanel(){
@@ -319,21 +332,19 @@ el.classList.add("result-selected");
 }
 }
 
-function confirmResult(){
-resultPanel.style.display="none";
-
-let el=document.getElementById("resultText");
-if(el) el.innerText=selectedResult.join(", ")||"-";
-
-updateMatches();
+function confirmResult(groupId){
+  resultPanel.style.display="none";
+  let el=document.getElementById("resultText");
+  if(el) el.innerText=(selectedResultMap[groupId]||[]).join(", ")||"-";
+  updateMatches();
 }
 
-function cleanResult(){
-selectedResult=[];
-document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
-let el=document.getElementById("resultText");
-if(el) el.innerText="-";
-updateMatches();
+function cleanResult(groupId){
+  selectedResultMap[groupId]=[];
+  document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
+  let el=document.getElementById("resultText");
+  if(el) el.innerText="-";
+  updateMatches();
 }
 function updateMatches(){
 
