@@ -285,9 +285,9 @@ if(!group) return;
 let html=`<h3>${group.name}</h3>`;
 html+=`
 <div class="card">
-  <b>Result:</b> <span id="resultText">${(selectedResultMap[group.id]||[]).join(", ")||"-"}</span>
-  <br>
-  <button onclick="openResultPanel(${group.max}, ${group.id})">Sonuç Gir</button>
+<b>Result:</b> <span id="resultText-${group.id}">${(selectedResultMap[group.id]||[]).join(", ")||"-"}</span>
+<br>
+<button onclick="openResultPanel(${group.max}, ${group.id})">Sonuç Gir</button>
 </div>
 `;
 group.sets.forEach((set,i)=>{
@@ -333,7 +333,7 @@ resultPanel.style.display="none";
 
 function confirmResult(groupId){
   resultPanel.style.display="none";
-  let el=document.getElementById("resultText");
+  let el=document.getElementById(`resultText-${groupId}`);
   if(el) el.innerText=(selectedResultMap[groupId]||[]).join(", ")||"-";
   updateMatches();
 }
@@ -341,7 +341,7 @@ function confirmResult(groupId){
 function cleanResult(groupId){
   selectedResultMap[groupId]=[];
   document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
-  let el=document.getElementById("resultText");
+  let el=document.getElementById(`resultText-${groupId}`);
   if(el) el.innerText="-";
   updateMatches();
 }
