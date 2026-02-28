@@ -136,7 +136,7 @@ color:#fff;
 </div>
 
 <script>
-const resultPanel = document.getElementById("resultPanel");
+
 const resultNumbers = document.getElementById("resultNumbers");
 const generatePage = document.getElementById("generatePage");
 const mySetsPage = document.getElementById("mySetsPage");
@@ -328,11 +328,11 @@ function openResultPanel(max=34, groupId){
 }
 
 function closeResultPanel(){
-resultPanel.style.display="none";
+document.getElementById("resultPanel").style.display="none";
 }
 
 function confirmResult(groupId){
-  resultPanel.style.display="none";
+document.getElementById("resultPanel").style.display="none";
   let el=document.getElementById(`resultText-${groupId}`);
   if(el) el.innerText=(selectedResultMap[groupId]||[]).join(", ")||"-";
   updateMatches();
