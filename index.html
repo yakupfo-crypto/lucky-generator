@@ -232,20 +232,20 @@ results.innerHTML=html;
 }
 
 function saveGroup(){
+    let name = prompt("Grup adı:");
+    if(!name) return;
 
-let name=prompt("Grup adı:");
-if(!name) return;
+    savedGroups.push({
+        id: groupCounter++,
+        name: name,
+        sets: [...generatedSets],
+        max: parseInt(document.getElementById("maxNumber").value),
+        jokerMax: parseInt(document.getElementById("maxNumber").value), 
+        jokerPerSet: parseInt(document.getElementById("jokerCount").value)
+    });
 
-savedGroups.push({
-id:groupCounter++,
-name:name,
-sets:[...generatedSets],
-max:generatedSets[0].max
-});
-
-localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
-alert("Kaydedildi");
-
+    localStorage.setItem("savedGroups", JSON.stringify(savedGroups));
+    alert("Kaydedildi");
 }
 
 function showGenerate(){
