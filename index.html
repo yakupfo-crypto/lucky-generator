@@ -314,14 +314,20 @@ localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
 showMySets();
 
 }
-function openResultPanel(max=34, groupId){
+function openResultPanel(max, groupId) {
+  if (!max || isNaN(max)) {
+    let group = savedGroups.find(g => g.id === groupId);
+    max = group ? group.max : 34;
+  }
+
   activeResultGroupId = groupId;
   const resultPanel = document.getElementById("resultPanel");
   const resultNumbers = document.getElementById("resultNumbers");
-  let html="";
+  let html = "";
   let selected = selectedResultMap[groupId] || [];
-  for(let i=1;i<=max;i++){
-    html+=`<div class="ball ${selected.includes(i)?"result-selected":""}" onclick="toggleResultNumber(this, ${groupId})">${i}</div>`;
+
+  for (let i = 1; i <= max; i++) {
+    html += `<div class="ball ${selected.includes(i) ? "result-selected" : ""}" onclick="toggleResultNumber(this, ${groupId})">${i}</div>`;
   }
   resultNumbers.innerHTML = html;
   resultPanel.style.display = "block";
