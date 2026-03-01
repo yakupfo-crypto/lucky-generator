@@ -315,22 +315,32 @@ showMySets();
 
 }
 function openResultPanel(max, groupId) {
-  if (!max || isNaN(max)) {
+    activeResultGroupId = groupId;
     let group = savedGroups.find(g => g.id === groupId);
-    max = group ? group.max : 34;
-  }
+    const resultNumbers = document.getElementById("resultNumbers");
+    
+    if (!selectedResultMap[groupId]) {
+        selectedResultMap[groupId] = { main: [], joker: [] };
+    }
 
-  activeResultGroupId = groupId;
-  const resultPanel = document.getElementById("resultPanel");
-  const resultNumbers = document.getElementById("resultNumbers");
-  let html = "";
-  let selected = selectedResultMap[groupId] || [];
+    let html = "<h4>Ana Sayılar</h4><div class='ball-row'>";
+    for (let i = 1; i <= max; i++) {
+        let isSelected = selectedResultMap[groupId].main.includes(i) ? "result-selected" : "";
+        html += `<div class="ball ${isSelected}" onclick="toggleMainResult(this, ${groupId}, ${i})">${i}</div>`;
+    }
+    html += "</div>";
 
-  for (let i = 1; i <= max; i++) {
-    html += `<div class="ball ${selected.includes(i) ? "result-selected" : ""}" onclick="toggleResultNumber(this, ${groupId})">${i}</div>`;
-  }
-  resultNumbers.innerHTML = html;
-  resultPanel.style.display = "block";
+    if (group && group.jokerPerSet > 0) {
+        html += "<h4>Ekstra Grup (Joker)</h4><div class='ball-row'>";
+        for (let i = 1; i <= group.jokerMax; i++) {
+            let isSelectedJoker = selectedResultMap[groupId].joker.includes(i) ? "joker" : "";
+            html += `<div class="ball ${isSelectedJoker}" onclick="toggleJokerResult(this, ${groupId}, ${i})">${i}</div>`;
+        }
+        html += "</div>";
+    }
+
+    resultNumbers.innerHTML = html;
+    document.getElementById("resultPanel").style.display = "block";
 }
 
 function closeResultPanel(){
