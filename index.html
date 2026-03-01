@@ -331,38 +331,34 @@ function closeResultPanel(){
 document.getElementById("resultPanel").style.display="none";
 }
 
-function confirmResult(groupId){
-document.getElementById("resultPanel").style.display="none";
+function confirmResult(groupId=activeResultGroupId){
+  document.getElementById("resultPanel").style.display="none";
   let el=document.getElementById(`resultText-${groupId}`);
   if(el) el.innerText=(selectedResultMap[groupId]||[]).join(", ")||"-";
-  updateMatches();
+  updateMatches(groupId);
 }
 
-function cleanResult(groupId){
+function cleanResult(groupId=activeResultGroupId){
   selectedResultMap[groupId]=[];
   document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
   let el=document.getElementById(`resultText-${groupId}`);
   if(el) el.innerText="-";
-  updateMatches();
-}
-function updateMatches(){
-
-let result = selectedResultMap[activeResultGroupId] || [];
-
-document.querySelectorAll(".ball").forEach(b=>{
-
-if(b.classList.contains("joker")) return;
-
-let val=parseInt(b.innerText);
-
-if(result.includes(val)){
-b.classList.add("result-selected");
-}else{
-b.classList.remove("result-selected");
+  updateMatches(groupId);
 }
 
-});
-
+function updateMatches(groupId=activeResultGroupId){
+  let result = selectedResultMap[groupId] || [];
+  document.querySelectorAll(".card").forEach(card=>{
+    card.querySelectorAll(".ball").forEach(b=>{
+      if(b.classList.contains("joker")) return;
+      let val=parseInt(b.innerText);
+      if(result.includes(val)){
+        b.classList.add("result-selected");
+      } else {
+        b.classList.remove("result-selected");
+      }
+    });
+  });
 }
 </script>
 <div id="resultPanel" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,0.2); max-height:70%; overflow:auto;">
