@@ -293,7 +293,6 @@ function closeResultPanel(){
     document.getElementById("resultPanel").style.display="none";
 }
 
-// GÖNDERDİĞİN YENİ FONKSİYONLAR BURADA:
 function toggleMainResult(el, groupId, val) {
     if (!selectedResultMap[groupId]) selectedResultMap[groupId] = { main: [], joker: [] };
     let index = selectedResultMap[groupId].main.indexOf(val);
