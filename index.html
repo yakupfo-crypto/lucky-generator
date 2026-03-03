@@ -336,15 +336,24 @@ function confirmResult(groupId = activeResultGroupId) {
 function updateMatches(groupId = activeResultGroupId) {
     let result = selectedResultMap[groupId];
     if (!result) return;
+    
     document.querySelectorAll(".card").forEach(card => {
         card.querySelectorAll(".ball").forEach(b => {
             let val = parseInt(b.innerText);
+            
             if (b.classList.contains("joker")) {
-                if (result.joker.includes(val)) b.classList.add("result-selected");
-                else b.classList.remove("result-selected");
-            } else {
-                if (result.main.includes(val)) b.classList.add("result-selected");
-                else b.classList.remove("result-selected");
+                if (result.joker.includes(val)) {
+                    b.classList.add("result-selected");
+                } else {
+                    b.classList.remove("result-selected");
+                }
+            } 
+            else {
+                if (result.main.includes(val)) {
+                    b.classList.add("result-selected");
+                } else {
+                    b.classList.remove("result-selected");
+                }
             }
         });
     });
