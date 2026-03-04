@@ -174,7 +174,6 @@ let generatedSets=[];
 let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[];
 let activeResultGroupId = null;
 let groupCounter=savedGroups.length>0 ? Math.max(...savedGroups.map(g=>g.id))+1 : 1;
-let selectedResultMap = {}; 
 
 function createBalls(set) {
     let balls="<div class='ball-row'>";
@@ -238,7 +237,8 @@ function saveGroup(){
         sets: [...generatedSets],
         max: maxVal,
         jokerMax: jMaxVal, 
-        jokerPerSet: jPerVal
+        jokerPerSet: jPerVal,
+        results: { main: [], joker: [] } // Sonuçları burada tutacağız
     });
     localStorage.setItem("savedGroups", JSON.stringify(savedGroups));
     alert("Kaydedildi");
@@ -270,7 +270,11 @@ function viewGroup(id){
     let group=savedGroups.find(g=>g.id===id);
     if(!group) return;
     activeResultGroupId = id;
-    let res = selectedResultMap[id] ? (selectedResultMap[id].main.join(",") + " | " + selectedResultMap[id].joker.join(",")) : "-";
+    
+    let res = (group.results && (group.results.main.length > 0 || group.results.joker.length > 0)) 
+        ? (group.results.main.join(",") + " | " + group.results.joker.join(",")) 
+        : "-";
+    
     let html=`<h3>${group.name}</h3>`;
     html+=`
     <div class="card">
@@ -296,18 +300,20 @@ function deleteGroup(id){
 function openResultPanel(max, groupId) {
     activeResultGroupId = groupId;
     let group = savedGroups.find(g => g.id === groupId);
+    if(!group.results) group.results = { main: [], joker: [] };
+
     const resultDiv = document.getElementById("resultNumbers");
-    if (!selectedResultMap[groupId]) selectedResultMap[groupId] = { main: [], joker: [] };
     let html = "<h4>Ana Sayı Havuzu (1-" + max + ")</h4><div class='ball-row'>";
     for (let i = 1; i <= max; i++) {
-        let isSelected = selectedResultMap[groupId].main.includes(i) ? "result-selected" : "";
+        let isSelected = group.results.main.includes(i) ? "result-selected" : "";
         html += `<div class="ball ${isSelected}" onclick="toggleMainResult(this, ${groupId}, ${i})">${i}</div>`;
     }
     html += "</div>";
-    if (group && group.jokerPerSet > 0) {
+    
+    if (group.jokerPerSet > 0) {
         html += "<h4>Joker Havuzu (1-" + group.jokerMax + ")</h4><div class='ball-row'>";
         for (let i = 1; i <= group.jokerMax; i++) {
-            let isSelectedJoker = selectedResultMap[groupId].joker.includes(i) ? "joker result-selected" : "joker";
+            let isSelectedJoker = group.results.joker.includes(i) ? "joker result-selected" : "joker";
             html += `<div class="ball ${isSelectedJoker}" onclick="toggleJokerResult(this, ${groupId}, ${i})">${i}</div>`;
         }
         html += "</div>";
@@ -321,53 +327,63 @@ function closeResultPanel(){
 }
 
 function toggleMainResult(el, groupId, val) {
-    if (!selectedResultMap[groupId]) selectedResultMap[groupId] = { main: [], joker: [] };
-    let index = selectedResultMap[groupId].main.indexOf(val);
+    let group = savedGroups.find(g => g.id === groupId);
+    let index = group.results.main.indexOf(val);
     if (index > -1) {
-        selectedResultMap[groupId].main.splice(index, 1);
+        group.results.main.splice(index, 1);
         el.classList.remove("result-selected");
     } else {
-        selectedResultMap[groupId].main.push(val);
+        group.results.main.push(val);
         el.classList.add("result-selected");
     }
 }
 
 function toggleJokerResult(el, groupId, val) {
-    if (!selectedResultMap[groupId]) selectedResultMap[groupId] = { main: [], joker: [] };
-    let index = selectedResultMap[groupId].joker.indexOf(val);
+    let group = savedGroups.find(g => g.id === groupId);
+    let index = group.results.joker.indexOf(val);
     if (index > -1) {
-        selectedResultMap[groupId].joker.splice(index, 1);
+        group.results.joker.splice(index, 1);
         el.classList.remove("result-selected");
     } else {
-        selectedResultMap[groupId].joker.push(val);
+        group.results.joker.push(val);
         el.classList.add("result-selected");
     }
 }
 
-function confirmResult(groupId = activeResultGroupId) {
+function confirmResult() {
+    let groupId = activeResultGroupId;
+    let group = savedGroups.find(g => g.id === groupId);
+    
+    // LocalStorage güncelleme
+    localStorage.setItem("savedGroups", JSON.stringify(savedGroups));
+    
     document.getElementById("resultPanel").style.display = "none";
     let el = document.getElementById(`resultText-${groupId}`);
-    if (el && selectedResultMap[groupId]) {
-        el.innerText = "Ana: " + selectedResultMap[groupId].main.join(", ") + 
-                       " | Joker: " + selectedResultMap[groupId].joker.join(", ");
+    if (el) {
+        el.innerText = "Ana: " + group.results.main.join(", ") + 
+                       " | Joker: " + group.results.joker.join(", ");
     }
     updateMatches(groupId);
 }
 
-function updateMatches(groupId = activeResultGroupId) {
-    let result = selectedResultMap[groupId];
-    if (!result) return;
-    document.querySelectorAll(".card").forEach(card => {
+function updateMatches(groupId) {
+    let group = savedGroups.find(g => g.id === groupId);
+    if (!group || !group.results) return;
+
+    document.querySelectorAll("#savedSets .card").forEach((card, index) => {
+        // İlk card 'Sonuçlar' card'ı olduğu için onu atlıyoruz (index 0)
+        if(index === 0) return;
+
         card.querySelectorAll(".ball").forEach(b => {
             let val = parseInt(b.innerText);
             if (b.classList.contains("joker")) {
-                if (result.joker.includes(val)) {
+                if (group.results.joker.includes(val)) {
                     b.classList.add("result-selected");
                 } else {
                     b.classList.remove("result-selected");
                 }
             } else {
-                if (result.main.includes(val)) {
+                if (group.results.main.includes(val)) {
                     b.classList.add("result-selected");
                 } else {
                     b.classList.remove("result-selected");
@@ -377,8 +393,13 @@ function updateMatches(groupId = activeResultGroupId) {
     });
 }
 
-function cleanResult(groupId = activeResultGroupId) {
-    selectedResultMap[groupId] = { main: [], joker: [] };
+function cleanResult() {
+    let groupId = activeResultGroupId;
+    let group = savedGroups.find(g => g.id === groupId);
+    group.results = { main: [], joker: [] };
+    
+    localStorage.setItem("savedGroups", JSON.stringify(savedGroups));
+    
     document.querySelectorAll("#resultNumbers .ball").forEach(b => {
         b.classList.remove("result-selected");
     });
