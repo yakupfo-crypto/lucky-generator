@@ -175,6 +175,20 @@ let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[];
 let activeResultGroupId = null;
 let groupCounter=savedGroups.length>0 ? Math.max(...savedGroups.map(g=>g.id))+1 : 1;
 
+window.onload = function() {
+    const lastPage = sessionStorage.getItem("lastPage");
+    const lastViewedId = sessionStorage.getItem("activeResultGroupId");
+    
+    if (lastPage === "mySets") {
+        showMySets();
+        if (lastViewedId) {
+            viewGroup(parseInt(lastViewedId));
+        }
+    } else {
+        showGenerate();
+    }
+};
+
 function createBalls(set) {
     let balls="<div class='ball-row'>";
     set.numbers.forEach(n=>{
@@ -238,18 +252,22 @@ function saveGroup(){
         max: maxVal,
         jokerMax: jMaxVal, 
         jokerPerSet: jPerVal,
-        results: { main: [], joker: [] } // Sonuçları burada tutacağız
+        results: { main: [], joker: [] }
     });
     localStorage.setItem("savedGroups", JSON.stringify(savedGroups));
     alert("Kaydedildi");
 }
 
 function showGenerate(){
+    sessionStorage.setItem("lastPage", "generate");
+    sessionStorage.removeItem("activeResultGroupId");
     generatePage.style.display="block";
     mySetsPage.style.display="none";
 }
 
 function showMySets(){
+    sessionStorage.setItem("lastPage", "mySets");
+    sessionStorage.removeItem("activeResultGroupId");
     generatePage.style.display="none";
     mySetsPage.style.display="block";
     let html="";
@@ -270,6 +288,7 @@ function viewGroup(id){
     let group=savedGroups.find(g=>g.id===id);
     if(!group) return;
     activeResultGroupId = id;
+    sessionStorage.setItem("activeResultGroupId", id);
     
     let res = (group.results && (group.results.main.length > 0 || group.results.joker.length > 0)) 
         ? (group.results.main.join(",") + " | " + group.results.joker.join(",")) 
@@ -354,7 +373,6 @@ function confirmResult() {
     let groupId = activeResultGroupId;
     let group = savedGroups.find(g => g.id === groupId);
     
-    // LocalStorage güncelleme
     localStorage.setItem("savedGroups", JSON.stringify(savedGroups));
     
     document.getElementById("resultPanel").style.display = "none";
@@ -371,7 +389,6 @@ function updateMatches(groupId) {
     if (!group || !group.results) return;
 
     document.querySelectorAll("#savedSets .card").forEach((card, index) => {
-        // İlk card 'Sonuçlar' card'ı olduğu için onu atlıyoruz (index 0)
         if(index === 0) return;
 
         card.querySelectorAll(".ball").forEach(b => {
