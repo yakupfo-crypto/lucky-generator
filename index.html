@@ -153,8 +153,8 @@ button{
 </div>
 
 <div class="bottom-nav">
-<button onclick="showGenerate()">Üret</button>
-<button onclick="showMySets()">Kayıtlarım</button>
+<button onclick="navTo('generate')">Üret</button>
+<button onclick="navTo('mySets')">Kayıtlarım</button>
 </div>
 
 <div id="resultPanel" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,0.2); max-height:70%; overflow:auto; z-index: 1000;">
@@ -176,18 +176,37 @@ let activeResultGroupId = null;
 let groupCounter=savedGroups.length>0 ? Math.max(...savedGroups.map(g=>g.id))+1 : 1;
 
 window.onload = function() {
-    const lastPage = sessionStorage.getItem("lastPage");
+    const lastPage = sessionStorage.getItem("lastPage") || "generate";
     const lastViewedId = sessionStorage.getItem("activeResultGroupId");
     
-    if (lastPage === "mySets") {
-        showMySets();
-        if (lastViewedId) {
-            viewGroup(parseInt(lastViewedId));
-        }
-    } else {
-        showGenerate();
+    history.replaceState({page: lastPage, groupId: lastViewedId}, "");
+    
+    renderCurrentState(lastPage, lastViewedId);
+};
+
+window.onpopstate = function(event) {
+    if (event.state) {
+        renderCurrentState(event.state.page, event.state.groupId);
     }
 };
+
+function navTo(page, groupId = null) {
+    history.pushState({page: page, groupId: groupId}, "");
+    renderCurrentState(page, groupId);
+}
+
+function renderCurrentState(page, groupId) {
+    if (page === "mySets") {
+        if (groupId) {
+            showMySets(false);
+            viewGroup(parseInt(groupId), false);
+        } else {
+            showMySets(false);
+        }
+    } else {
+        showGenerate(false);
+    }
+}
 
 function createBalls(set) {
     let balls="<div class='ball-row'>";
@@ -258,15 +277,15 @@ function saveGroup(){
     alert("Kaydedildi");
 }
 
-function showGenerate(){
-    sessionStorage.setItem("lastPage", "generate");
+function showGenerate(updateHistory = true){
+    if(updateHistory) sessionStorage.setItem("lastPage", "generate");
     sessionStorage.removeItem("activeResultGroupId");
     generatePage.style.display="block";
     mySetsPage.style.display="none";
 }
 
-function showMySets(){
-    sessionStorage.setItem("lastPage", "mySets");
+function showMySets(updateHistory = true){
+    if(updateHistory) sessionStorage.setItem("lastPage", "mySets");
     sessionStorage.removeItem("activeResultGroupId");
     generatePage.style.display="none";
     mySetsPage.style.display="block";
@@ -277,18 +296,18 @@ function showMySets(){
         <div class='card'>
         <b>[${group.id}] ${group.name}</b><br>
         Kolon Sayısı: ${group.sets.length}<br>
-        <button onclick='viewGroup(${group.id})'>Görüntüle</button>
+        <button onclick='navTo("mySets", ${group.id})'>Görüntüle</button>
         <button onclick='deleteGroup(${group.id})' style="background:#d32f2f; margin-top:5px;">Sil</button>
         </div>`;
     });
     savedSets.innerHTML=html;
 }
 
-function viewGroup(id){
+function viewGroup(id, updateHistory = true){
     let group=savedGroups.find(g=>g.id===id);
     if(!group) return;
     activeResultGroupId = id;
-    sessionStorage.setItem("activeResultGroupId", id);
+    if(updateHistory) sessionStorage.setItem("activeResultGroupId", id);
     
     let res = (group.results && (group.results.main.length > 0 || group.results.joker.length > 0)) 
         ? (group.results.main.join(",") + " | " + group.results.joker.join(",")) 
@@ -304,7 +323,7 @@ function viewGroup(id){
     group.sets.forEach((set,i)=>{
         html+=`<div class='card'><b>${i+1}.</b>${createBalls(set)}</div>`;
     });
-    html+=`<button onclick='showMySets()'>Geri Dön</button>`;
+    html+=`<button onclick='navTo("mySets")'>Geri Dön</button>`;
     savedSets.innerHTML=html;
     updateMatches(id);
 }
@@ -313,7 +332,7 @@ function deleteGroup(id){
     if(!confirm("Silmek istediğinize emin misiniz?")) return;
     savedGroups=savedGroups.filter(g=>g.id!==id);
     localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
-    showMySets();
+    showMySets(false);
 }
 
 function openResultPanel(max, groupId) {
