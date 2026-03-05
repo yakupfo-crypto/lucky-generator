@@ -176,13 +176,21 @@ let activeResultGroupId = null;
 let groupCounter=savedGroups.length>0 ? Math.max(...savedGroups.map(g=>g.id))+1 : 1;
 
 window.onload = function() {
+    restoreState();
+};
+
+document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === 'visible') {
+        restoreState();
+    }
+});
+
+function restoreState() {
     const lastPage = sessionStorage.getItem("lastPage") || "generate";
     const lastViewedId = sessionStorage.getItem("activeResultGroupId");
     
-    history.replaceState({page: lastPage, groupId: lastViewedId}, "");
-    
     renderCurrentState(lastPage, lastViewedId);
-};
+}
 
 window.onpopstate = function(event) {
     if (event.state) {
@@ -191,6 +199,13 @@ window.onpopstate = function(event) {
 };
 
 function navTo(page, groupId = null) {
+    sessionStorage.setItem("lastPage", page);
+    if(groupId) {
+        sessionStorage.setItem("activeResultGroupId", groupId);
+    } else {
+        sessionStorage.removeItem("activeResultGroupId");
+    }
+    
     history.pushState({page: page, groupId: groupId}, "");
     renderCurrentState(page, groupId);
 }
@@ -198,7 +213,8 @@ function navTo(page, groupId = null) {
 function renderCurrentState(page, groupId) {
     if (page === "mySets") {
         if (groupId) {
-            showMySets(false);
+            generatePage.style.display="none";
+            mySetsPage.style.display="block";
             viewGroup(parseInt(groupId), false);
         } else {
             showMySets(false);
