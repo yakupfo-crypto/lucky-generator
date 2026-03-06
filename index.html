@@ -186,8 +186,8 @@ document.addEventListener("visibilitychange", function() {
 });
 
 function restoreState() {
-    const lastPage = sessionStorage.getItem("lastPage") || "generate";
-    const lastViewedId = sessionStorage.getItem("activeResultGroupId");
+const lastPage = localStorage.getItem("lastPage") || "generate";
+const lastViewedId = localStorage.getItem("activeResultGroupId");
     
     renderCurrentState(lastPage, lastViewedId);
 }
@@ -201,12 +201,12 @@ window.onpopstate = function(event) {
 };
 
 function navTo(page, groupId = null) {
-    sessionStorage.setItem("lastPage", page);
-    if(groupId) {
-        sessionStorage.setItem("activeResultGroupId", groupId);
-    } else {
-        sessionStorage.removeItem("activeResultGroupId");
-    }
+localStorage.setItem("lastPage", page);
+if(groupId) {
+    localStorage.setItem("activeResultGroupId", groupId);
+} else {
+    localStorage.removeItem("activeResultGroupId");
+}
     
     history.pushState({page: page, groupId: groupId}, "");
     renderCurrentState(page, groupId);
@@ -296,15 +296,15 @@ function saveGroup(){
 }
 
 function showGenerate(updateHistory = true){
-    if(updateHistory) sessionStorage.setItem("lastPage", "generate");
-    sessionStorage.removeItem("activeResultGroupId");
+if(updateHistory) localStorage.setItem("lastPage", "generate");
+localStorage.removeItem("activeResultGroupId");
     generatePage.style.display="block";
     mySetsPage.style.display="none";
 }
 
 function showMySets(updateHistory = true){
-    if(updateHistory) sessionStorage.setItem("lastPage", "mySets");
-    sessionStorage.removeItem("activeResultGroupId");
+if(updateHistory) localStorage.setItem("lastPage", "mySets");
+localStorage.removeItem("activeResultGroupId");
     generatePage.style.display="none";
     mySetsPage.style.display="block";
     let html="";
