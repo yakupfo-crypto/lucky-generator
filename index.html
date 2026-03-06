@@ -186,10 +186,10 @@ document.addEventListener("visibilitychange", function() {
 });
 
 function restoreState() {
-const lastPage = localStorage.getItem("lastPage") || "generate";
-const lastViewedId = localStorage.getItem("activeResultGroupId");
-    
-    renderCurrentState(lastPage, lastViewedId);
+const lastPage = "generate";
+const lastViewedId = null;
+
+renderCurrentState(lastPage, lastViewedId);
 }
 
 window.onpopstate = function(event) {
