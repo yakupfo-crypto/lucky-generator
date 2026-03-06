@@ -176,7 +176,7 @@ let activeResultGroupId = null;
 let groupCounter=savedGroups.length>0 ? Math.max(...savedGroups.map(g=>g.id))+1 : 1;
 
 window.onload = function() {
-    showGenerate(false); 
+    restoreState();
 };
 
 document.addEventListener("visibilitychange", function() {
@@ -195,6 +195,8 @@ function restoreState() {
 window.onpopstate = function(event) {
     if (event.state) {
         renderCurrentState(event.state.page, event.state.groupId);
+    } else {
+        renderCurrentState("generate", null);
     }
 };
 
@@ -424,7 +426,7 @@ function updateMatches(groupId) {
     if (!group || !group.results) return;
 
     document.querySelectorAll("#savedSets .card").forEach((card, index) => {
-        if(index === 0) return;
+        if(card.querySelector("b") && card.querySelector("b").innerText === "Sonuçlar:") return;
 
         card.querySelectorAll(".ball").forEach(b => {
             let val = parseInt(b.innerText);
