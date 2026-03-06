@@ -59,6 +59,7 @@ button{
   display:flex;
   justify-content:space-around;
   padding:10px 0;
+  z-index: 1001;
 }
 
 .bottom-nav button{
@@ -90,22 +91,14 @@ border:1px solid #ddd;
 cursor:pointer;
 }
 
-.ball.selected.result-selected{
-background:#1976d2!important;
-color:white!important;
-border:none;
+.ball.selected{
+background:#fff;
 }
 
 .ball.joker{
 background:#e8f5e9;
 color:#2e7d32;
 border:1px solid #c8e6c9;
-}
-
-.ball.joker.result-selected{
-background:#4caf50!important;
-color:white!important;
-border:none;
 }
 
 .card b{
@@ -115,8 +108,9 @@ color:#1976d2;
 }
 
 .ball.result-selected{
-background:#4caf50;
-color:#fff;
+background:#4caf50 !important;
+color:#fff !important;
+border-color: #388e3c;
 }
 </style>
 </head>
@@ -164,15 +158,15 @@ color:#fff;
 <button onclick="navTo('mySets')">Kayıtlarım</button>
 </div>
 
-<div id="resultPanel" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,0.2); max-height:70%; overflow:auto; z-index:1000;">
+<div id="resultPanel" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,0.2); max-height:70%; overflow:auto; z-index:2000; box-sizing: border-box;">
 
 <h3>Sonuç Gir <span onclick="closeResultPanel()" style="float:right;cursor:pointer;">×</span></h3>
 
-<div id="resultNumbers" class="ball-row"></div>
+<div id="resultNumbers"></div>
 
 <button onclick="confirmResult()">Onayla</button>
-
 <button onclick="cleanResult()" style="background:#999;margin-top:8px;">Temizle</button>
+<button onclick="closeResultPanel()" style="background:#eee; color:#333; margin-top:8px;">Kapat</button>
 
 </div>
 
@@ -189,425 +183,269 @@ let activeResultGroupId=null
 let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
 
 window.onload=function(){
-restoreState()
+  restoreState()
 }
-
-document.addEventListener("visibilitychange",function(){
-if(document.visibilityState==="visible"){
-restoreState()
-}
-})
 
 function restoreState(){
-
-const lastPage=localStorage.getItem("lastPage")||"generate"
-const lastViewedId=parseInt(localStorage.getItem("activeResultGroupId"))
-
-renderCurrentState(lastPage,lastViewedId)
+  const lastPage = localStorage.getItem("lastPage") || "generate"
+  const lastViewedId = localStorage.getItem("activeResultGroupId")
+  renderCurrentState(lastPage, lastViewedId ? parseInt(lastViewedId) : null)
 }
 
-window.onpopstate=function(event){
-
-if(event.state){
-renderCurrentState(event.state.page,event.state.groupId)
-}else{
-renderCurrentState("generate",null)
+function navTo(page, groupId=null){
+  localStorage.setItem("lastPage", page)
+  if(groupId) {
+    localStorage.setItem("activeResultGroupId", groupId)
+  } else {
+    localStorage.removeItem("activeResultGroupId")
+  }
+  renderCurrentState(page, groupId)
 }
 
-}
-
-function navTo(page,groupId=null){
-
-localStorage.setItem("lastPage",page)
-
-if(groupId){
-localStorage.setItem("activeResultGroupId",groupId)
-}else{
-localStorage.removeItem("activeResultGroupId")
-}
-
-history.pushState({page:page,groupId:groupId},"")
-
-renderCurrentState(page,groupId)
-
-}
-
-function renderCurrentState(page,groupId){
-
-if(page==="mySets"){
-
-if(groupId){
-
-generatePage.style.display="none"
-mySetsPage.style.display="block"
-
-viewGroup(parseInt(groupId),false)
-
-}else{
-
-showMySets(false)
-
-}
-
-}else{
-
-showGenerate(false)
-
-}
-
+function renderCurrentState(page, groupId){
+  if(page === "mySets"){
+    if(groupId){
+      viewGroup(groupId)
+    } else {
+      showMySets()
+    }
+  } else {
+    showGenerate()
+  }
 }
 
 function createBalls(set){
-
-let balls="<div class='ball-row'>"
-
-set.numbers.forEach(n=>{
-balls+=`<div class="ball selected">${n}</div>`
-})
-
-set.jokers.forEach(j=>{
-balls+=`<div class="ball joker">${j}</div>`
-})
-
-balls+="</div>"
-
-return balls
+  let balls="<div class='ball-row'>"
+  set.numbers.forEach(n=>{
+    balls+=`<div class="ball selected">${n}</div>`
+  })
+  set.jokers.forEach(j=>{
+    balls+=`<div class="ball joker">${j}</div>`
+  })
+  balls+="</div>"
+  return balls
 }
 
 function generateSets(){
+  const max=parseInt(document.getElementById("maxNumber").value)
+  const per=parseInt(document.getElementById("perSet").value)
+  const jMax=parseInt(document.getElementById("jokerMax").value)
+  const jPer=parseInt(document.getElementById("jokerCount").value)
+  const count=parseInt(document.getElementById("setCount").value)
 
-const max=parseInt(document.getElementById("maxNumber").value)
-const per=parseInt(document.getElementById("perSet").value)
-const jMax=parseInt(document.getElementById("jokerMax").value)
-const jPer=parseInt(document.getElementById("jokerCount").value)
-const count=parseInt(document.getElementById("setCount").value)
+  generatedSets=[]
 
-generatedSets=[]
+  for(let i=0;i<count;i++){
+    let numbers=[]
+    while(numbers.length<per){
+      let n=Math.floor(Math.random()*max)+1
+      if(!numbers.includes(n))numbers.push(n)
+    }
+    numbers.sort((a,b)=>a-b)
 
-for(let i=0;i<count;i++){
+    let jokers=[]
+    while(jokers.length<jPer){
+      let j=Math.floor(Math.random()*jMax)+1
+      if(!jokers.includes(j))jokers.push(j)
+    }
+    jokers.sort((a,b)=>a-b)
 
-let numbers=[]
-
-while(numbers.length<per){
-let n=Math.floor(Math.random()*max)+1
-if(!numbers.includes(n))numbers.push(n)
-}
-
-numbers.sort((a,b)=>a-b)
-
-let jokers=[]
-
-while(jokers.length<jPer){
-let j=Math.floor(Math.random()*jMax)+1
-if(!jokers.includes(j))jokers.push(j)
-}
-
-jokers.sort((a,b)=>a-b)
-
-generatedSets.push({
-numbers,
-jokers,
-max,
-jokerMax:jMax
-})
-
-}
-
-displayGenerated()
-
+    generatedSets.push({
+      numbers,
+      jokers,
+      max,
+      jokerMax:jMax,
+      jokerPerSet: jPer
+    })
+  }
+  displayGenerated()
 }
 
 function displayGenerated(){
-
-let html=""
-
-generatedSets.forEach((set,i)=>{
-html+=`<div class='card'><b>${i+1}. Kolon</b>${createBalls(set)}</div>`
-})
-
-if(generatedSets.length>0){
-html+=`<button onclick='saveGroup()'>Kaydet</button>`
-}
-
-results.innerHTML=html
-
+  let html=""
+  generatedSets.forEach((set,i)=>{
+    html+=`<div class='card'><b>${i+1}. Kolon</b>${createBalls(set)}</div>`
+  })
+  if(generatedSets.length>0){
+    html+=`<button onclick='saveGroup()'>Kaydet</button>`
+  }
+  results.innerHTML=html
 }
 
 function saveGroup(){
+  let name=prompt("Grup adı:")
+  if(!name)return
 
-let name=prompt("Grup adı:")
+  const currentSet = generatedSets[0];
 
-if(!name)return
+  savedGroups.push({
+    id: groupCounter++,
+    name: name,
+    sets: [...generatedSets],
+    max: currentSet.max,
+    jokerMax: currentSet.jokerMax,
+    jokerPerSet: currentSet.jokerPerSet,
+    results: {main:[], joker:[]}
+  })
 
-const maxVal=parseInt(document.getElementById("maxNumber").value)
-const jMaxVal=parseInt(document.getElementById("jokerMax").value)
-const jPerVal=parseInt(document.getElementById("jokerCount").value)
-
-savedGroups.push({
-
-id:groupCounter++,
-name:name,
-sets:[...generatedSets],
-max:maxVal,
-jokerMax:jMaxVal,
-jokerPerSet:jPerVal,
-results:{main:[],joker:[]}
-
-})
-
-localStorage.setItem("savedGroups",JSON.stringify(savedGroups))
-
-alert("Kaydedildi")
-
+  localStorage.setItem("savedGroups", JSON.stringify(savedGroups))
+  alert("Kaydedildi")
+  navTo('mySets')
 }
 
 function showGenerate(){
-
-generatePage.style.display="block"
-mySetsPage.style.display="none"
-
+  generatePage.style.display="block"
+  mySetsPage.style.display="none"
+  results.innerHTML = "" 
+  generatedSets = []
 }
 
 function showMySets(){
-
-generatePage.style.display="none"
-mySetsPage.style.display="block"
-
-let html=""
-
-if(savedGroups.length===0)html="<p>Henüz kayıtlı set yok.</p>"
-
-savedGroups.forEach(group=>{
-
-html+=`
-<div class='card'>
-<b>[${group.id}] ${group.name}</b><br>
-Kolon Sayısı: ${group.sets.length}<br>
-<button onclick='navTo("mySets",${group.id})'>Görüntüle</button>
-<button onclick='deleteGroup(${group.id})' style="background:#d32f2f;margin-top:5px;">Sil</button>
-</div>`
-
-})
-
-savedSets.innerHTML=html
-
+  generatePage.style.display="none"
+  mySetsPage.style.display="block"
+  
+  let html="<h3>Kayıtlı Kolonlarım</h3>"
+  if(savedGroups.length===0) {
+    html+="<p>Henüz kayıtlı set yok.</p>"
+  } else {
+    savedGroups.forEach(group=>{
+      html+=`
+      <div class='card'>
+        <b>[${group.id}] ${group.name}</b>
+        Kolon Sayısı: ${group.sets.length}<br>
+        <button onclick='navTo("mySets",${group.id})'>Görüntüle</button>
+        <button onclick='deleteGroup(${group.id})' style="background:#d32f2f;margin-top:5px;">Sil</button>
+      </div>`
+    })
+  }
+  savedSets.innerHTML=html
 }
 
 function viewGroup(id){
+  let group=savedGroups.find(g=>g.id===id)
+  if(!group) return navTo('mySets')
 
-let group=savedGroups.find(g=>g.id===id)
-if(!group)return
+  activeResultGroupId=id
+  generatePage.style.display="none"
+  mySetsPage.style.display="block"
 
-activeResultGroupId=id
+  let res="-"
+  if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
+    res = (group.results.main.join(",") || "-") + " | " + (group.results.joker.join(",") || "-")
+  }
 
-localStorage.setItem("activeResultGroupId",id)
+  let html=`<h3>${group.name}</h3>`
+  html+=`
+  <div class="card">
+    <b>Sonuçlar:</b>
+    <span id="resultText-${group.id}">${res}</span>
+    <br>
+    <button onclick="openResultPanel(${group.max},${group.id})">Sonuç Gir (Kıyasla)</button>
+  </div>`
 
-let res="-"
+  group.sets.forEach((set,i)=>{
+    html+=`<div class='card'><b>${i+1}. Kolon</b>${createBalls(set)}</div>`
+  })
 
-if(group.results&&(group.results.main.length>0||group.results.joker.length>0)){
-res=group.results.main.join(",")+" | "+group.results.joker.join(",")
-}
+  html+=`<button onclick='navTo("mySets")' style="background:#555">Geri Dön</button>`
+  savedSets.innerHTML=html
 
-let html=`<h3>${group.name}</h3>`
-
-html+=`
-<div class="card">
-<b>Sonuçlar:</b>
-<span id="resultText-${group.id}">${res}</span>
-<br>
-<button onclick="openResultPanel(${group.max},${group.id})">Sonuç Gir (Kıyasla)</button>
-</div>`
-
-group.sets.forEach((set,i)=>{
-html+=`<div class='card'><b>${i+1}.</b>${createBalls(set)}</div>`
-})
-
-html+=`<button onclick='navTo("mySets")'>Geri Dön</button>`
-
-savedSets.innerHTML=html
-
-updateMatches(id)
-
+  setTimeout(() => updateMatches(id), 50)
 }
 
 function deleteGroup(id){
-
-if(!confirm("Silmek istediğinize emin misiniz?"))return
-
-savedGroups=savedGroups.filter(g=>g.id!==id)
-
-localStorage.setItem("savedGroups",JSON.stringify(savedGroups))
-
-showMySets()
-
+  if(!confirm("Silmek istediğinize emin misiniz?"))return
+  savedGroups=savedGroups.filter(g=>g.id!==id)
+  localStorage.setItem("savedGroups",JSON.stringify(savedGroups))
+  showMySets()
 }
 
-function openResultPanel(max,groupId){
+function openResultPanel(max, groupId){
+  activeResultGroupId=groupId
+  let group=savedGroups.find(g=>g.id===groupId)
+  const resultDiv=document.getElementById("resultNumbers")
 
-activeResultGroupId=groupId
+  let html="<h4>Ana Sayı Havuzu (1-"+max+")</h4><div class='ball-row'>"
+  for(let i=1;i<=max;i++){
+    let isSelected=group.results.main.includes(i)?"result-selected":""
+    html+=`<div class="ball ${isSelected}" onclick="toggleMainResult(this,${groupId},${i})">${i}</div>`
+  }
+  html+="</div>"
 
-let group=savedGroups.find(g=>g.id===groupId)
+  if(group.jokerPerSet>0){
+    html+="<h4>Joker Havuzu (1-"+group.jokerMax+")</h4><div class='ball-row'>"
+    for(let i=1;i<=group.jokerMax;i++){
+      let isSelectedJoker=group.results.joker.includes(i)?"result-selected":""
+      html+=`<div class="ball joker ${isSelectedJoker}" onclick="toggleJokerResult(this,${groupId},${i})">${i}</div>`
+    }
+    html+="</div>"
+  }
 
-if(!group.results)group.results={main:[],joker:[]}
-
-const resultDiv=document.getElementById("resultNumbers")
-
-let html="<h4>Ana Sayı Havuzu (1-"+max+")</h4><div class='ball-row'>"
-
-for(let i=1;i<=max;i++){
-
-let isSelected=group.results.main.includes(i)?"result-selected":""
-
-html+=`<div class="ball ${isSelected}" onclick="toggleMainResult(this,${groupId},${i})">${i}</div>`
-
-}
-
-html+="</div>"
-
-if(group.jokerPerSet>0){
-
-html+="<h4>Joker Havuzu (1-"+group.jokerMax+")</h4><div class='ball-row'>"
-
-for(let i=1;i<=group.jokerMax;i++){
-
-let isSelectedJoker=group.results.joker.includes(i)?"joker result-selected":"joker"
-
-html+=`<div class="ball ${isSelectedJoker}" onclick="toggleJokerResult(this,${groupId},${i})">${i}</div>`
-
-}
-
-html+="</div>"
-
-}
-
-resultDiv.innerHTML=html
-
-document.getElementById("resultPanel").style.display="block"
-
+  resultDiv.innerHTML=html
+  document.getElementById("resultPanel").style.display="block"
 }
 
 function closeResultPanel(){
-document.getElementById("resultPanel").style.display="none"
+  document.getElementById("resultPanel").style.display="none"
 }
 
 function toggleMainResult(el,groupId,val){
-
-let group=savedGroups.find(g=>g.id===groupId)
-
-let index=group.results.main.indexOf(val)
-
-if(index>-1){
-
-group.results.main.splice(index,1)
-el.classList.remove("result-selected")
-
-}else{
-
-group.results.main.push(val)
-el.classList.add("result-selected")
-
-}
-
+  let group=savedGroups.find(g=>g.id===groupId)
+  let index=group.results.main.indexOf(val)
+  if(index>-1){
+    group.results.main.splice(index,1)
+    el.classList.remove("result-selected")
+  }else{
+    group.results.main.push(val)
+    el.classList.add("result-selected")
+  }
 }
 
 function toggleJokerResult(el,groupId,val){
-
-let group=savedGroups.find(g=>g.id===groupId)
-
-let index=group.results.joker.indexOf(val)
-
-if(index>-1){
-
-group.results.joker.splice(index,1)
-el.classList.remove("result-selected")
-
-}else{
-
-group.results.joker.push(val)
-el.classList.add("result-selected")
-
-}
-
+  let group=savedGroups.find(g=>g.id===groupId)
+  let index=group.results.joker.indexOf(val)
+  if(index>-1){
+    group.results.joker.splice(index,1)
+    el.classList.remove("result-selected")
+  }else{
+    group.results.joker.push(val)
+    el.classList.add("result-selected")
+  }
 }
 
 function confirmResult(){
-
-let groupId=activeResultGroupId
-
-let group=savedGroups.find(g=>g.id===groupId)
-
-localStorage.setItem("savedGroups",JSON.stringify(savedGroups))
-
-document.getElementById("resultPanel").style.display="none"
-
-let el=document.getElementById(`resultText-${groupId}`)
-
-if(el){
-
-el.innerText="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ")
-
-}
-
-updateMatches(groupId)
-
+  localStorage.setItem("savedGroups",JSON.stringify(savedGroups))
+  closeResultPanel()
+  viewGroup(activeResultGroupId)
 }
 
 function updateMatches(groupId){
+  let group=savedGroups.find(g=>g.id===groupId)
+  if(!group || !group.results) return
 
-let group=savedGroups.find(g=>g.id===groupId)
-
-if(!group||!group.results)return
-
-document.querySelectorAll("#savedSets .card").forEach(card=>{
-
-card.querySelectorAll(".ball").forEach(b=>{
-
-let val=parseInt(b.innerText)
-
-if(b.classList.contains("joker")){
-
-if(group.results.joker.includes(val)){
-b.classList.add("result-selected")
-}else{
-b.classList.remove("result-selected")
-}
-
-}else{
-
-if(group.results.main.includes(val)){
-b.classList.add("result-selected")
-}else{
-b.classList.remove("result-selected")
-}
-
-}
-
-})
-
-})
-
+  const cards = savedSets.querySelectorAll(".card")
+  cards.forEach(card => {
+    card.querySelectorAll(".ball").forEach(b => {
+      let val=parseInt(b.innerText)
+      if(b.classList.contains("joker")){
+        if(group.results.joker.includes(val)) b.classList.add("result-selected")
+        else b.classList.remove("result-selected")
+      }else{
+        if(group.results.main.includes(val)) b.classList.add("result-selected")
+        else b.classList.remove("result-selected")
+      }
+    })
+  })
 }
 
 function cleanResult(){
-
-let groupId=activeResultGroupId
-
-let group=savedGroups.find(g=>g.id===groupId)
-
-group.results={main:[],joker:[]}
-
-localStorage.setItem("savedGroups",JSON.stringify(savedGroups))
-
-document.querySelectorAll("#resultNumbers .ball").forEach(b=>{
-b.classList.remove("result-selected")
-})
-
-let el=document.getElementById(`resultText-${groupId}`)
-
-if(el)el.innerText="-"
-
-updateMatches(groupId)
-
+  let group=savedGroups.find(g=>g.id===activeResultGroupId)
+  if(group) {
+    group.results={main:[],joker:[]}
+    localStorage.setItem("savedGroups",JSON.stringify(savedGroups))
+    document.querySelectorAll("#resultNumbers .ball").forEach(b=> b.classList.remove("result-selected"))
+    updateMatches(activeResultGroupId)
+  }
 }
 
 </script>
