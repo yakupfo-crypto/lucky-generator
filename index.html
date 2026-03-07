@@ -172,6 +172,11 @@ color:#fff;
 </div>
 
 <script>
+if(!sessionStorage.getItem("sessionStarted")){
+  sessionStorage.setItem("sessionStarted","1")
+  localStorage.removeItem("lastPage")
+  localStorage.removeItem("activeResultGroupId")
+}
 const generatePage=document.getElementById("generatePage")
 const mySetsPage=document.getElementById("mySetsPage")
 const results=document.getElementById("results")
