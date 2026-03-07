@@ -73,6 +73,19 @@ let activeResultGroupId = null;
 let groupCounter = savedGroups.length > 0 ? Math.max(...savedGroups.map(g => g.id)) + 1 : 1;
 
 window.onload = function() {
+    initApp();
+};
+
+document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "visible") {
+        // Görünürlük değiştiğinde sessionStorage varsa konumu koru
+        if (sessionStorage.getItem("isReloaded")) {
+            restoreState();
+        }
+    }
+});
+
+function initApp() {
     const isReloaded = sessionStorage.getItem("isReloaded");
     if (isReloaded) {
         restoreState();
@@ -80,13 +93,7 @@ window.onload = function() {
         sessionStorage.setItem("isReloaded", "true");
         navTo('generate');
     }
-};
-
-document.addEventListener("visibilitychange", function() {
-    if (document.visibilityState === "visible") {
-        restoreState();
-    }
-});
+}
 
 function restoreState() {
     const lastPage = localStorage.getItem("lastPage") || "generate";
