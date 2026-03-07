@@ -193,7 +193,7 @@ document.addEventListener("visibilitychange",function(){
 })
 
 function restoreState(){
-const lastPage="generate"
+const lastPage=localStorage.getItem("lastPage")||"generate"
   const storedId=localStorage.getItem("activeResultGroupId")
   const lastViewedId=storedId?parseInt(storedId):null
   renderCurrentState(lastPage,lastViewedId)
