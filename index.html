@@ -193,15 +193,17 @@ if(!window.appStarted){
 }
 
 function restoreState(){
-
-  const lastPage = sessionStorage.getItem("lastPage") || localStorage.getItem("lastPage") || "generate"
+const lastPage=sessionStorage.getItem("lastPage") || "generate"
 
   const storedId = localStorage.getItem("activeResultGroupId")
   const lastViewedId = storedId ? parseInt(storedId) : null
 
   renderCurrentState(lastPage,lastViewedId)
 }
-
+window.addEventListener("beforeunload",function(){
+  sessionStorage.removeItem("lastPage")
+  sessionStorage.removeItem("activeResultGroupId")
+})
 window.onpopstate=function(event){
   if(event.state){
     renderCurrentState(event.state.page,event.state.groupId)
@@ -213,7 +215,6 @@ window.onpopstate=function(event){
 function navTo(page,groupId=null){
 
   sessionStorage.setItem("lastPage",page)
-  localStorage.setItem("lastPage",page)
 
   if(groupId!=null){
     localStorage.setItem("activeResultGroupId",groupId)
