@@ -193,7 +193,7 @@ document.addEventListener("visibilitychange",function(){
 })
 
 function restoreState(){
-const lastPage=localStorage.getItem("lastPage")||"generate"
+const lastPage=sessionStorage.getItem("lastPage")||"generate"
   const storedId=localStorage.getItem("activeResultGroupId")
   const lastViewedId=storedId?parseInt(storedId):null
   renderCurrentState(lastPage,lastViewedId)
@@ -208,7 +208,7 @@ window.onpopstate=function(event){
 }
 
 function navTo(page,groupId=null){
-  localStorage.setItem("lastPage",page)
+sessionStorage.setItem("lastPage",page)
   if(groupId!=null){
     localStorage.setItem("activeResultGroupId",groupId)
   }else{
