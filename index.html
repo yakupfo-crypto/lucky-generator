@@ -194,16 +194,10 @@ if(!window.appStarted){
 
 function restoreState(){
 
-  const nav = performance.getEntriesByType("navigation")[0]
+  const lastPage = sessionStorage.getItem("lastPage") || localStorage.getItem("lastPage") || "generate"
 
-  let lastPage="generate"
-
-  if(nav && nav.type==="reload"){
-    lastPage=sessionStorage.getItem("lastPage") || "generate"
-  }
-
-  const storedId=localStorage.getItem("activeResultGroupId")
-  const lastViewedId=storedId?parseInt(storedId):null
+  const storedId = localStorage.getItem("activeResultGroupId")
+  const lastViewedId = storedId ? parseInt(storedId) : null
 
   renderCurrentState(lastPage,lastViewedId)
 }
@@ -217,12 +211,16 @@ window.onpopstate=function(event){
 }
 
 function navTo(page,groupId=null){
-sessionStorage.setItem("lastPage",page)
+
+  sessionStorage.setItem("lastPage",page)
+  localStorage.setItem("lastPage",page)
+
   if(groupId!=null){
     localStorage.setItem("activeResultGroupId",groupId)
   }else{
     localStorage.removeItem("activeResultGroupId")
   }
+
   history.pushState({page:page,groupId:groupId},"")
   renderCurrentState(page,groupId)
 }
