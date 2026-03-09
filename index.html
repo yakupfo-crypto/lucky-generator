@@ -186,7 +186,11 @@ window.onload=function(){
   restoreState()
 }
 
-
+document.addEventListener("visibilitychange",function(){
+  if(document.visibilityState==="visible"){
+    restoreState()
+  }
+})
 
 function restoreState(){
 
