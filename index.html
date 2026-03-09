@@ -193,20 +193,21 @@ document.addEventListener("visibilitychange",function(){
 })
 
 function restoreState(){
-
+  // Sayfa ilk açılıyorsa veya reload ise
   const navType = performance.getEntriesByType("navigation")[0]?.type
 
-  let page="generate"
-  let groupId=null
+  // localStorage'da lastPage varsa onu kullan, yoksa "generate"
+  let page = localStorage.getItem("lastPage") || "generate"
+  const storedId = localStorage.getItem("activeResultGroupId")
+  let groupId = storedId ? parseInt(storedId) : null
 
-  if(navType==="reload"){
-    page=localStorage.getItem("lastPage") || "generate"
-    const storedId=localStorage.getItem("activeResultGroupId")
-    groupId=storedId?parseInt(storedId):null
+  // Sadece "reload" ise sayfa durumunu yeniden render et
+  if(navType === "reload"){
+    renderCurrentState(page, groupId)
+  } else {
+    // sekmeden geri gelme, hiçbir şey yapma
+    // bu şekilde sayfa olduğu gibi kalacak
   }
-
-  renderCurrentState(page,groupId)
-
 }
 
 window.onpopstate=function(event){
