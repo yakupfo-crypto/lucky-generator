@@ -193,20 +193,12 @@ document.addEventListener("visibilitychange",function(){
 })
 
 function restoreState(){
+  // Navigation type kontrolünü kaldırıyoruz, doğrudan localStorage'a bakıyoruz
+  let page = localStorage.getItem("lastPage") || "generate";
+  let storedId = localStorage.getItem("activeResultGroupId");
+  let groupId = storedId ? parseInt(storedId) : null;
 
-  const navType = performance.getEntriesByType("navigation")[0]?.type
-
-  let page="generate"
-  let groupId=null
-
-  if(navType==="reload"){
-    page=localStorage.getItem("lastPage") || "generate"
-    const storedId=localStorage.getItem("activeResultGroupId")
-    groupId=storedId?parseInt(storedId):null
-  }
-
-  renderCurrentState(page,groupId)
-
+  renderCurrentState(page, groupId);
 }
 
 window.onpopstate=function(event){
@@ -318,8 +310,10 @@ function saveGroup(){
 }
 
 function showGenerate(){
-  generatePage.style.display="block"
-  mySetsPage.style.display="none"
+  localStorage.setItem("lastPage", "generate"); // Sayfayı kaydet
+  localStorage.removeItem("activeResultGroupId"); // Eski grup ID'sini temizle
+  generatePage.style.display = "block";
+  mySetsPage.style.display = "none";
 }
 
 function showMySets(){
