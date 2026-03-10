@@ -186,50 +186,47 @@ window.onload=function(){
   restoreState()
 }
 
-document.addEventListener("visibilitychange",function(){
-  if(document.visibilityState==="visible"){
-    restoreState()
-  }
-})
+window.onpopstate=function(event){
+  restoreState()
+}
 
 function restoreState(){
-  let page = localStorage.getItem("lastPage") || "generate";
-  let storedId = localStorage.getItem("activeResultGroupId");
-  let groupId = storedId ? parseInt(storedId) : null;
-
+  const params = new URLSearchParams(window.location.search);
+  let page = params.get("p") || localStorage.getItem("lastPage") || "generate";
+  let gid = params.get("id") || localStorage.getItem("activeResultGroupId");
+  
+  let groupId = gid ? parseInt(gid) : null;
   renderCurrentState(page, groupId);
 }
 
-window.onpopstate=function(event){
-  if(event.state){
-    renderCurrentState(event.state.page,event.state.groupId)
-  }else{
-    renderCurrentState("generate",null)
+function navTo(page, groupId=null){
+  localStorage.setItem("lastPage", page);
+  let url = new URL(window.location);
+  url.searchParams.set("p", page);
+
+  if(groupId != null){
+    localStorage.setItem("activeResultGroupId", groupId);
+    url.searchParams.set("id", groupId);
+  } else {
+    localStorage.removeItem("activeResultGroupId");
+    url.searchParams.delete("id");
   }
+
+  history.pushState({page: page, groupId: groupId}, "", url);
+  renderCurrentState(page, groupId);
 }
 
-function navTo(page,groupId=null){
-  localStorage.setItem("lastPage",page)
-  if(groupId!=null){
-    localStorage.setItem("activeResultGroupId",groupId)
-  }else{
-    localStorage.removeItem("activeResultGroupId")
-  }
-  history.pushState({page:page,groupId:groupId},"")
-  renderCurrentState(page,groupId)
-}
-
-function renderCurrentState(page,groupId){
-  if(page==="mySets"){
-    generatePage.style.display="none"
-    mySetsPage.style.display="block"
-    if(groupId!=null){
-      viewGroup(parseInt(groupId))
-    }else{
-      showMySets()
+function renderCurrentState(page, groupId){
+  if(page === "mySets"){
+    generatePage.style.display = "none";
+    mySetsPage.style.display = "block";
+    if(groupId != null){
+      viewGroup(parseInt(groupId));
+    } else {
+      showMySets();
     }
-  }else{
-    showGenerate()
+  } else {
+    showGenerate();
   }
 }
 
@@ -309,16 +306,11 @@ function saveGroup(){
 }
 
 function showGenerate(){
-  localStorage.setItem("lastPage", "generate");
-  localStorage.removeItem("activeResultGroupId");
   generatePage.style.display = "block";
   mySetsPage.style.display = "none";
 }
 
 function showMySets(){
-  generatePage.style.display="none"
-  mySetsPage.style.display="block"
-
   let html=""
   if(savedGroups.length===0) html="<p>Henüz kayıtlı set yok.</p>"
 
@@ -338,12 +330,11 @@ function showMySets(){
 function viewGroup(id){
   let group=savedGroups.find(g=>g.id===id)
   if(!group) {
-      navTo("mySets");
-      return;
+    navTo("mySets");
+    return;
   }
 
-  activeResultGroupId=id
-  localStorage.setItem("activeResultGroupId",id)
+  activeResultGroupId=id;
 
   let res="-"
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
@@ -410,7 +401,7 @@ function closeResultPanel(){
 function toggleMainResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId)
   if(!group) return
-  if(!group.results.main.includes(val) && group.results.main.length>=document.getElementById("perSet").value){
+  if(!group.results.main.includes(val) && group.results.main.length>=5){
     alert("Maksimum ana sayı seçildi!")
     return
   }
