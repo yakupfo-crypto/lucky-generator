@@ -183,20 +183,12 @@ let activeResultGroupId=null
 let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
 
 window.onload=function(){
-  const isNewSession = !sessionStorage.getItem('session_active');
-  if(isNewSession){
-    sessionStorage.setItem('session_active', 'true');
-    localStorage.setItem("lastPage", "generate");
-    localStorage.removeItem("activeResultGroupId");
-    renderCurrentState("generate", null);
-  } else {
-    restoreState();
-  }
+  restoreState()
 }
 
 document.addEventListener("visibilitychange",function(){
   if(document.visibilityState==="visible"){
-    restoreState();
+    restoreState()
   }
 })
 
@@ -204,6 +196,7 @@ function restoreState(){
   let page = localStorage.getItem("lastPage") || "generate";
   let storedId = localStorage.getItem("activeResultGroupId");
   let groupId = storedId ? parseInt(storedId) : null;
+
   renderCurrentState(page, groupId);
 }
 
@@ -228,9 +221,9 @@ function navTo(page,groupId=null){
 
 function renderCurrentState(page,groupId){
   if(page==="mySets"){
+    generatePage.style.display="none"
+    mySetsPage.style.display="block"
     if(groupId!=null){
-      generatePage.style.display="none"
-      mySetsPage.style.display="block"
       viewGroup(parseInt(groupId))
     }else{
       showMySets()
@@ -323,7 +316,6 @@ function showGenerate(){
 }
 
 function showMySets(){
-  localStorage.setItem("lastPage", "mySets");
   generatePage.style.display="none"
   mySetsPage.style.display="block"
 
@@ -345,11 +337,13 @@ function showMySets(){
 
 function viewGroup(id){
   let group=savedGroups.find(g=>g.id===id)
-  if(!group) return
+  if(!group) {
+      navTo("mySets");
+      return;
+  }
 
   activeResultGroupId=id
   localStorage.setItem("activeResultGroupId",id)
-  localStorage.setItem("lastPage", "mySets");
 
   let res="-"
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
