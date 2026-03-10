@@ -183,11 +183,15 @@ let activeResultGroupId=null
 let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
 
 window.onload=function(){
-  const perfEntries = performance.getEntriesByType("navigation");
-  if (perfEntries.length > 0 && perfEntries[0].type === "reload") {
-    restoreState();
-  } else {
+  const navEntries = performance.getEntriesByType('navigation');
+  const isNewSession = navEntries.length > 0 && navEntries[0].type === 'navigate';
+
+  if(isNewSession) {
+    localStorage.removeItem("lastPage");
+    localStorage.removeItem("activeResultGroupId");
     renderCurrentState("generate", null);
+  } else {
+    restoreState();
   }
 }
 
@@ -323,6 +327,7 @@ function showMySets(){
   generatePage.style.display="none"
   mySetsPage.style.display="block"
   localStorage.setItem("lastPage", "mySets");
+  localStorage.removeItem("activeResultGroupId");
 
   let html=""
   if(savedGroups.length===0) html="<p>Henüz kayıtlı set yok.</p>"
@@ -342,10 +347,7 @@ function showMySets(){
 
 function viewGroup(id){
   let group=savedGroups.find(g=>g.id===id)
-  if(!group) {
-    showMySets();
-    return;
-  }
+  if(!group) return
 
   activeResultGroupId=id
   localStorage.setItem("activeResultGroupId",id)
