@@ -155,7 +155,6 @@ color:#fff;
 </div>
 
 <div class="container" id="mySetsPage" style="display:none;">
-<h3>Kayıtlı Kolonlarım</h3>
 <div id="savedSets"></div>
 </div>
 
@@ -183,21 +182,28 @@ let activeResultGroupId=null
 let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
 
 window.onload=function(){
-  restoreState()
+  const navEntries = performance.getEntriesByType("navigation");
+  const isReload = navEntries.length > 0 && navEntries[0].type === "reload";
+
+  if (isReload) {
+    restoreState();
+  } else {
+    localStorage.removeItem("lastPage");
+    localStorage.removeItem("activeResultGroupId");
+    navTo("generate");
+  }
 }
 
-document.addEventListener("visibilitychange",function(){
-  if(document.visibilityState==="visible"){
-    restoreState()
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "visible") {
+    restoreState();
   }
-})
+});
 
 function restoreState(){
-  // Navigation type kontrolünü kaldırıyoruz, doğrudan localStorage'a bakıyoruz
   let page = localStorage.getItem("lastPage") || "generate";
   let storedId = localStorage.getItem("activeResultGroupId");
   let groupId = storedId ? parseInt(storedId) : null;
-
   renderCurrentState(page, groupId);
 }
 
@@ -222,9 +228,9 @@ function navTo(page,groupId=null){
 
 function renderCurrentState(page,groupId){
   if(page==="mySets"){
+    generatePage.style.display="none"
+    mySetsPage.style.display="block"
     if(groupId!=null){
-      generatePage.style.display="none"
-      mySetsPage.style.display="block"
       viewGroup(parseInt(groupId))
     }else{
       showMySets()
@@ -272,7 +278,6 @@ function generateSets(){
 
     generatedSets.push({numbers,jokers,max,jokerMax:jMax})
   }
-
   displayGenerated()
 }
 
@@ -310,42 +315,37 @@ function saveGroup(){
 }
 
 function showGenerate(){
-  localStorage.setItem("lastPage", "generate"); // Sayfayı kaydet
-  localStorage.removeItem("activeResultGroupId"); // Eski grup ID'sini temizle
-  generatePage.style.display = "block";
-  mySetsPage.style.display = "none";
+  generatePage.style.display="block"
+  mySetsPage.style.display="none"
 }
 
 function showMySets(){
-  generatePage.style.display="none"
-  mySetsPage.style.display="block"
-
-  let html=""
-  if(savedGroups.length===0) html="<p>Henüz kayıtlı set yok.</p>"
+  let html="<h3>Kayıtlı Kolonlarım</h3>"
+  if(savedGroups.length===0) html+="<p>Henüz kayıtlı set yok.</p>"
 
   savedGroups.forEach(group=>{
     html+=`
       <div class='card'>
-        <b>[${group.id}] ${group.name}</b><br>
+        <b>${group.name}</b><br>
         Kolon Sayısı: ${group.sets.length}<br>
         <button onclick='navTo("mySets",${group.id})'>Görüntüle</button>
         <button onclick='deleteGroup(${group.id})' style="background:#d32f2f;margin-top:5px;">Sil</button>
       </div>`
   })
-
   savedSets.innerHTML=html
 }
 
 function viewGroup(id){
   let group=savedGroups.find(g=>g.id===id)
-  if(!group) return
+  if(!group) {
+    showMySets();
+    return;
+  }
 
   activeResultGroupId=id
-  localStorage.setItem("activeResultGroupId",id)
-
   let res="-"
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
-    res=group.results.main.join(",")+" | "+group.results.joker.join(",")
+    res="Ana: "+group.results.main.join(",")+" | Joker: "+group.results.joker.join(",")
   }
 
   let html=`<h3>${group.name}</h3>`
@@ -363,7 +363,6 @@ function viewGroup(id){
 
   html+=`<button onclick='navTo("mySets")'>Geri Dön</button>`
   savedSets.innerHTML=html
-
   updateMatches(group.id)
 }
 
@@ -387,8 +386,7 @@ function openResultPanel(max,groupId){
   }
   html+="</div>"
 
-  let jokerPerSet=group.jokerPerSet || 0
-  if(jokerPerSet>0){
+  if(group.jokerPerSet>0){
     html+="<h4>Joker Havuzu (1-"+group.jokerMax+")</h4><div class='ball-row'>"
     for(let i=1;i<=group.jokerMax;i++){
       let isSelectedJoker=group.results.joker.includes(i)?"joker result-selected":"joker"
@@ -408,10 +406,6 @@ function closeResultPanel(){
 function toggleMainResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId)
   if(!group) return
-  if(!group.results.main.includes(val) && group.results.main.length>=document.getElementById("perSet").value){
-    alert("Maksimum ana sayı seçildi!")
-    return
-  }
   let index=group.results.main.indexOf(val)
   if(index>-1){
     group.results.main.splice(index,1)
@@ -427,10 +421,6 @@ function toggleMainResult(el,groupId,val){
 function toggleJokerResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId)
   if(!group) return
-  if(!group.results.joker.includes(val) && group.results.joker.length>=group.jokerPerSet){
-    alert("Maksimum joker sayı seçildi!")
-    return
-  }
   let index=group.results.joker.indexOf(val)
   if(index>-1){
     group.results.joker.splice(index,1)
@@ -444,15 +434,12 @@ function toggleJokerResult(el,groupId,val){
 }
 
 function confirmResult(){
-  let groupId=activeResultGroupId
-  let group=savedGroups.find(g=>g.id===groupId)
-  localStorage.setItem("savedGroups",JSON.stringify(savedGroups))
+  let group=savedGroups.find(g=>g.id===activeResultGroupId)
   document.getElementById("resultPanel").style.display="none"
-  let el=document.getElementById(`resultText-${groupId}`)
+  let el=document.getElementById(`resultText-${activeResultGroupId}`)
   if(el){
     el.innerText="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ")
   }
-  updateMatches(groupId)
 }
 
 function updateMatches(groupId){
@@ -465,34 +452,25 @@ function updateMatches(groupId){
     balls.forEach(b=>{
       const val=parseInt(b.innerText)
       if(b.classList.contains("joker")){
-        if(group.results.joker.includes(val)){
-          b.classList.add("result-selected")
-        }else{
-          b.classList.remove("result-selected")
-        }
-      }else{
-        if(group.results.main.includes(val)){
-          b.classList.add("result-selected")
-        }else{
-          b.classList.remove("result-selected")
-        }
+        if(group.results.joker.includes(val)) b.classList.add("result-selected")
+        else b.classList.remove("result-selected")
+      }else if(b.classList.contains("selected")){
+        if(group.results.main.includes(val)) b.classList.add("result-selected")
+        else b.classList.remove("result-selected")
       }
     })
   })
 }
 
 function cleanResult(){
-  let groupId=activeResultGroupId
-  let group=savedGroups.find(g=>g.id===groupId)
+  let group=savedGroups.find(g=>g.id===activeResultGroupId)
   if(!group) return
   group.results={main:[],joker:[]}
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups))
-  document.querySelectorAll("#resultNumbers .ball").forEach(b=>{
-    b.classList.remove("result-selected")
-  })
-  let el=document.getElementById(`resultText-${groupId}`)
+  document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"))
+  let el=document.getElementById(`resultText-${activeResultGroupId}`)
   if(el) el.innerText="-"
-  updateMatches(groupId)
+  updateMatches(activeResultGroupId)
 }
 </script>
 </body>
