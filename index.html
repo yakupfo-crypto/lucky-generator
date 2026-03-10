@@ -183,20 +183,24 @@ let activeResultGroupId=null
 let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
 
 window.onload=function(){
-  restoreState()
+  const perfEntries = performance.getEntriesByType("navigation");
+  if (perfEntries.length > 0 && perfEntries[0].type === "reload") {
+    restoreState();
+  } else {
+    renderCurrentState("generate", null);
+  }
 }
 
 document.addEventListener("visibilitychange",function(){
   if(document.visibilityState==="visible"){
-    restoreState()
+    restoreState();
   }
 })
 
 function restoreState(){
   let page = localStorage.getItem("lastPage") || "generate";
   let storedId = localStorage.getItem("activeResultGroupId");
-  let groupId = (storedId && storedId !== "null") ? parseInt(storedId) : null;
-  
+  let groupId = storedId ? parseInt(storedId) : null;
   renderCurrentState(page, groupId);
 }
 
@@ -210,9 +214,12 @@ window.onpopstate=function(event){
 
 function navTo(page,groupId=null){
   localStorage.setItem("lastPage",page)
-  localStorage.setItem("activeResultGroupId",groupId)
-  
-  history.pushState({page:page,groupId:groupId},"", "#" + page + (groupId ? "-"+groupId : ""))
+  if(groupId!=null){
+    localStorage.setItem("activeResultGroupId",groupId)
+  }else{
+    localStorage.removeItem("activeResultGroupId")
+  }
+  history.pushState({page:page,groupId:groupId},"")
   renderCurrentState(page,groupId)
 }
 
@@ -306,6 +313,8 @@ function saveGroup(){
 }
 
 function showGenerate(){
+  localStorage.setItem("lastPage", "generate");
+  localStorage.removeItem("activeResultGroupId");
   generatePage.style.display = "block";
   mySetsPage.style.display = "none";
 }
@@ -313,6 +322,7 @@ function showGenerate(){
 function showMySets(){
   generatePage.style.display="none"
   mySetsPage.style.display="block"
+  localStorage.setItem("lastPage", "mySets");
 
   let html=""
   if(savedGroups.length===0) html="<p>Henüz kayıtlı set yok.</p>"
@@ -333,11 +343,13 @@ function showMySets(){
 function viewGroup(id){
   let group=savedGroups.find(g=>g.id===id)
   if(!group) {
-      navTo("mySets");
-      return;
+    showMySets();
+    return;
   }
 
   activeResultGroupId=id
+  localStorage.setItem("activeResultGroupId",id)
+  localStorage.setItem("lastPage", "mySets");
 
   let res="-"
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
