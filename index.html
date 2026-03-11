@@ -183,13 +183,29 @@ let activeResultGroupId=null
 let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
 
 window.onload=function(){
+  const navEntries = performance.getEntriesByType('navigation');
+  const isNewSession = navEntries.length > 0 && navEntries[0].type === 'navigate';
+
+  if(isNewSession) {
+    localStorage.removeItem("lastPage");
+    localStorage.removeItem("activeResultGroupId");
+    renderCurrentState("generate", null);
+  } else {
     restoreState();
+  }
 }
 
+document.addEventListener("visibilitychange",function(){
+  if(document.visibilityState==="visible"){
+    restoreState();
+  }
+})
+
 function restoreState(){
-  let page = sessionStorage.getItem("tabStatePage") || "generate";
-  let groupId = sessionStorage.getItem("tabStateGroupId");
-  renderCurrentState(page, groupId ? parseInt(groupId) : null);
+  let page = localStorage.getItem("lastPage") || "generate";
+  let storedId = localStorage.getItem("activeResultGroupId");
+  let groupId = storedId ? parseInt(storedId) : null;
+  renderCurrentState(page, groupId);
 }
 
 window.onpopstate=function(event){
@@ -201,11 +217,11 @@ window.onpopstate=function(event){
 }
 
 function navTo(page,groupId=null){
-  sessionStorage.setItem("tabStatePage", page);
+  localStorage.setItem("lastPage",page)
   if(groupId!=null){
-    sessionStorage.setItem("tabStateGroupId", groupId);
+    localStorage.setItem("activeResultGroupId",groupId)
   }else{
-    sessionStorage.removeItem("tabStateGroupId");
+    localStorage.removeItem("activeResultGroupId")
   }
   history.pushState({page:page,groupId:groupId},"")
   renderCurrentState(page,groupId)
@@ -301,6 +317,8 @@ function saveGroup(){
 }
 
 function showGenerate(){
+  localStorage.setItem("lastPage", "generate");
+  localStorage.removeItem("activeResultGroupId");
   generatePage.style.display = "block";
   mySetsPage.style.display = "none";
 }
@@ -308,7 +326,9 @@ function showGenerate(){
 function showMySets(){
   generatePage.style.display="none"
   mySetsPage.style.display="block"
-  
+  localStorage.setItem("lastPage", "mySets");
+  localStorage.removeItem("activeResultGroupId");
+
   let html=""
   if(savedGroups.length===0) html="<p>Henüz kayıtlı set yok.</p>"
 
@@ -330,6 +350,8 @@ function viewGroup(id){
   if(!group) return
 
   activeResultGroupId=id
+  localStorage.setItem("activeResultGroupId",id)
+  localStorage.setItem("lastPage", "mySets");
 
   let res="-"
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
@@ -396,7 +418,7 @@ function closeResultPanel(){
 function toggleMainResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId)
   if(!group) return
-  if(!group.results.main.includes(val) && group.results.main.length>=5){
+  if(!group.results.main.includes(val) && group.results.main.length>=document.getElementById("perSet").value){
     alert("Maksimum ana sayı seçildi!")
     return
   }
