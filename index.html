@@ -201,20 +201,31 @@ function generateSets(){
     return;
   }
 
-  if(per > max || jPer > jMax) {
-    alert("Seçilecek adet, havuzdaki sayı miktarından büyük olamaz!");
+  // Geliştirilmiş Risk Kontrolü
+  if(max <= 0 || per <= 0 || count <= 0) {
+    alert("Ana grup değerleri ve kolon sayısı 0'dan büyük olmalıdır!");
     return;
   }
-  
-  if(per <= 0 || count <= 0 || max <= 0 || (jPer > 0 && jMax <= 0)) {
-    alert("Lütfen geçerli adetler giriniz!");
+
+  if(per > max) {
+    alert("Seçilecek adet, ana havuzdaki sayı miktarından büyük olamaz!");
+    return;
+  }
+
+  // Joker risk kontrolü
+  if(jPer > 0 && jMax <= 0) {
+    alert("Joker seçebilmek için joker havuzu 0'dan büyük olmalıdır!");
+    return;
+  }
+
+  if(jPer > jMax) {
+    alert("Seçilecek joker adeti, joker havuzundan büyük olamaz!");
     return;
   }
 
   generatedSets=[];
   for(let i=0;i<count;i++){
     let numbers=[];
-    // Ana grup üretimi
     let mainPool = Array.from({length: max}, (_, i) => i + 1);
     for(let n=0; n<per; n++){
         let idx = Math.floor(Math.random() * mainPool.length);
@@ -223,7 +234,6 @@ function generateSets(){
     numbers.sort((a,b)=>a-b);
 
     let jokers=[];
-    // Joker grup üretimi
     if(jPer > 0 && jMax > 0){
         let jokerPool = Array.from({length: jMax}, (_, i) => i + 1);
         for(let j=0; j<jPer; j++){
@@ -326,9 +336,9 @@ function openResultPanel(max,groupId){
   }
   html+="</div>";
   let jokerPerSet=group.jokerPerSet || 0;
-  if(jokerPerSet>0){
+  if(jokerPerSet>0 && group.jokerMax > 0){
     html+="<h4>Joker Havuzu (1-"+group.jokerMax+")</h4><div class='ball-row'>";
-    for(let i=1;i<=group.jokerMax;i++){
+    for(let i=1; i<=group.jokerMax; i++){
       let isSelectedJoker=group.results.joker.includes(i)?"joker result-selected":"joker";
       html+=`<div class="ball ${isSelectedJoker}" onclick="toggleJokerResult(this,${groupId},${i})">${i}</div>`;
     }
