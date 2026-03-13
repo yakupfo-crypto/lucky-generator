@@ -196,12 +196,17 @@ function generateSets(){
   const jPer=parseInt(document.getElementById("jokerCount").value);
   const count=parseInt(document.getElementById("setCount").value);
 
+  if(isNaN(max) || isNaN(per) || isNaN(jMax) || isNaN(jPer) || isNaN(count)) {
+    alert("Lütfen tüm alanları doldurun!");
+    return;
+  }
+
   if(per > max || jPer > jMax) {
     alert("Seçilecek adet, havuzdaki sayı miktarından büyük olamaz!");
     return;
   }
   
-  if(per <= 0 || (jPer < 0) || count <= 0) {
+  if(per <= 0 || count <= 0 || max <= 0) {
     alert("Lütfen geçerli adetler giriniz!");
     return;
   }
@@ -209,17 +214,25 @@ function generateSets(){
   generatedSets=[];
   for(let i=0;i<count;i++){
     let numbers=[];
-    while(numbers.length<per){
-      let n=Math.floor(Math.random()*max)+1;
-      if(!numbers.includes(n)) numbers.push(n);
+    // Ana grup üretimi
+    let mainPool = Array.from({length: max}, (_, i) => i + 1);
+    for(let n=0; n<per; n++){
+        let idx = Math.floor(Math.random() * mainPool.length);
+        numbers.push(mainPool.splice(idx, 1)[0]);
     }
     numbers.sort((a,b)=>a-b);
+
     let jokers=[];
-    while(jokers.length<jPer){
-      let j=Math.floor(Math.random()*jMax)+1;
-      if(!jokers.includes(j)) jokers.push(j);
+    // Joker grup üretimi
+    if(jPer > 0 && jMax > 0){
+        let jokerPool = Array.from({length: jMax}, (_, i) => i + 1);
+        for(let j=0; j<jPer; j++){
+            let idx = Math.floor(Math.random() * jokerPool.length);
+            jokers.push(jokerPool.splice(idx, 1)[0]);
+        }
+        jokers.sort((a,b)=>a-b);
     }
-    jokers.sort((a,b)=>a-b);
+    
     generatedSets.push({numbers,jokers,max,jokerMax:jMax});
   }
   displayGenerated();
