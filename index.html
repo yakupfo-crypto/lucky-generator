@@ -200,6 +200,11 @@ function generateSets(){
     alert("Seçilecek adet, havuzdaki sayı miktarından büyük olamaz!");
     return;
   }
+  
+  if(per <= 0 || (jPer < 0) || count <= 0) {
+    alert("Lütfen geçerli adetler giriniz!");
+    return;
+  }
 
   generatedSets=[];
   for(let i=0;i<count;i++){
