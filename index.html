@@ -206,7 +206,7 @@ function generateSets(){
     return;
   }
   
-  if(per <= 0 || count <= 0 || max <= 0) {
+  if(per <= 0 || count <= 0 || max <= 0 || (jPer > 0 && jMax <= 0)) {
     alert("Lütfen geçerli adetler giriniz!");
     return;
   }
