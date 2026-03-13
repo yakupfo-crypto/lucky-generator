@@ -195,6 +195,12 @@ function generateSets(){
   const jMax=parseInt(document.getElementById("jokerMax").value);
   const jPer=parseInt(document.getElementById("jokerCount").value);
   const count=parseInt(document.getElementById("setCount").value);
+
+  if(per > max || jPer > jMax) {
+    alert("Seçilecek adet, havuzdaki sayı miktarından büyük olamaz!");
+    return;
+  }
+
   generatedSets=[];
   for(let i=0;i<count;i++){
     let numbers=[];
@@ -319,7 +325,8 @@ function closeResultPanel(){
 function toggleMainResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId);
   if(!group) return;
-  if(!group.results.main.includes(val) && group.results.main.length>=5){
+  let maxPerSet = group.sets[0] ? group.sets[0].numbers.length : 5;
+  if(!group.results.main.includes(val) && group.results.main.length >= maxPerSet){
     alert("Maksimum ana sayı seçildi!");
     return;
   }
