@@ -241,13 +241,24 @@ function displayGenerated(){
     html+=`<div class='card'><b>${i+1}. Kolon</b>${createBalls(set)}</div>`;
   });
   if(generatedSets.length>0){
-    html+=`<button onclick='saveGroup()'>Kaydet</button>`;
+    html+=`
+    <div class="card">
+      <label><b>Grup Adı</b></label>
+      <input type="text" id="groupNameInput" placeholder="Örn: Pazartesi Çekilişi">
+      <button onclick='saveGroup()'>Grubu Kaydet</button>
+    </div>`;
   }
   results.innerHTML=html;
 }
 function saveGroup(){
-  let name=prompt("Grup adı:");
-  if(!name) return;
+  let nameInput=document.getElementById("groupNameInput");
+  let name=nameInput ? nameInput.value : "";
+  
+  if(!name.trim()) {
+    alert("Lütfen bir grup adı girin!");
+    return;
+  }
+
   const maxVal=parseInt(document.getElementById("maxNumber").value);
   const perVal=parseInt(document.getElementById("perSet").value);
   const jMaxVal=parseInt(document.getElementById("jokerMax").value);
@@ -265,6 +276,8 @@ function saveGroup(){
   });
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
   alert("Kaydedildi");
+  results.innerHTML="";
+  navTo('mySets');
 }
 function showGenerate(){
   generatePage.style.display = "block";
