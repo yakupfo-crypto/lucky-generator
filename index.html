@@ -214,7 +214,6 @@ function generateSets(){
   generatedSets=[];
   for(let i=0;i<count;i++){
     let numbers=[];
-    // Ana grup üretimi
     let mainPool = Array.from({length: max}, (_, i) => i + 1);
     for(let n=0; n<per; n++){
         let idx = Math.floor(Math.random() * mainPool.length);
@@ -223,7 +222,6 @@ function generateSets(){
     numbers.sort((a,b)=>a-b);
 
     let jokers=[];
-    // Joker grup üretimi
     if(jPer > 0 && jMax > 0){
         let jokerPool = Array.from({length: jMax}, (_, i) => i + 1);
         for(let j=0; j<jPer; j++){
@@ -251,6 +249,7 @@ function saveGroup(){
   let name=prompt("Grup adı:");
   if(!name) return;
   const maxVal=parseInt(document.getElementById("maxNumber").value);
+  const perVal=parseInt(document.getElementById("perSet").value);
   const jMaxVal=parseInt(document.getElementById("jokerMax").value);
   const jPerVal=parseInt(document.getElementById("jokerCount").value);
   savedGroups.push({
@@ -258,6 +257,8 @@ function saveGroup(){
     name:name,
     sets:[...generatedSets],
     max:maxVal,
+    perSet:perVal,
+    jMax:jMaxVal,
     jokerMax:jMaxVal,
     jokerPerSet:jPerVal,
     results:{main:[],joker:[]}
@@ -343,16 +344,18 @@ function closeResultPanel(){
 function toggleMainResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId);
   if(!group) return;
-  let maxPerSet = group.sets[0] ? group.sets[0].numbers.length : 5;
-  if(!group.results.main.includes(val) && group.results.main.length >= maxPerSet){
-    alert("Maksimum ana sayı seçildi!");
-    return;
-  }
+  // Dinamik sınır: Kaydedilen perSet değerini kullan, yoksa kolondaki sayı adedine bak
+  let limit = group.perSet || (group.sets[0] ? group.sets[0].numbers.length : 5);
+  
   let index=group.results.main.indexOf(val);
   if(index>-1){
     group.results.main.splice(index,1);
     el.classList.remove("result-selected");
   }else{
+    if(group.results.main.length >= limit){
+      alert("Maksimum ana sayı (" + limit + ") seçildi!");
+      return;
+    }
     group.results.main.push(val);
     el.classList.add("result-selected");
   }
@@ -362,15 +365,15 @@ function toggleMainResult(el,groupId,val){
 function toggleJokerResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId);
   if(!group) return;
-  if(!group.results.joker.includes(val) && group.results.joker.length>=group.jokerPerSet){
-    alert("Maksimum joker sayı seçildi!");
-    return;
-  }
   let index=group.results.joker.indexOf(val);
   if(index>-1){
     group.results.joker.splice(index,1);
     el.classList.remove("result-selected");
   }else{
+    if(group.results.joker.length>=group.jokerPerSet){
+      alert("Maksimum joker sayı (" + group.jokerPerSet + ") seçildi!");
+      return;
+    }
     group.results.joker.push(val);
     el.classList.add("result-selected");
   }
