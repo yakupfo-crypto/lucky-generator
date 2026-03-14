@@ -100,7 +100,7 @@ margin-bottom:10px;
 color:#1976d2;
 }
 .ball.result-selected{
-background:#4caf50;
+background:#1976d2;
 color:#fff;
 }
 </style>
@@ -344,7 +344,6 @@ function closeResultPanel(){
 function toggleMainResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId);
   if(!group) return;
-  // Dinamik sınır: Kaydedilen perSet değerini kullan, yoksa kolondaki sayı adedine bak
   let limit = group.perSet || (group.sets[0] ? group.sets[0].numbers.length : 5);
   
   let index=group.results.main.indexOf(val);
