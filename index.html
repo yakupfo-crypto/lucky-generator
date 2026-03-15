@@ -155,7 +155,6 @@ window.onload=function(){
 
 window.onpopstate=function(event){
   const state = event.state || {page:"generate", groupId:null};
-  // Eğer geri tuşuna basıldığında gelen state panel değilse paneli kapat
   if(state.page !== "panel") {
     closeResultPanel(false);
   }
@@ -168,9 +167,11 @@ function navTo(page,groupId=null){
 }
 
 function renderCurrentState(page,groupId){
-  // renderCurrentState sadece gerçek sayfa değişimlerinde çalışmalı, panel içindeyken değil
   if(page === "panel") return;
 
+  // Veri Senkronizasyonu: State her değiştiğinde veriyi tekrar çek
+  savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
+  
   closeResultPanel(false);
   savedSets.innerHTML = "";
   
@@ -306,7 +307,7 @@ function showMySets(){
 }
 
 function viewGroup(id){
-  let group=savedGroups.find(g=>g.id===id);
+  let group=savedGroups.find(g=>g.id===Number(id));
   if(!group){
     showMySets();
     return;
@@ -360,14 +361,12 @@ function openResultPanel(max,groupId){
   }
   resultDiv.innerHTML=html;
   
-  // Panel açıldığında history'ye yeni bir durum ekle
   history.pushState({page: "panel", groupId: groupId}, "");
   document.getElementById("resultPanel").style.display="block";
 }
 
 function closeResultPanel(shouldGoBack = false){
   document.getElementById("resultPanel").style.display="none";
-  // Eğer çarpı tuşuyla kapatıldıysa history'den panel durumunu çıkar
   if(shouldGoBack && history.state && history.state.page === "panel") {
     history.back();
   }
