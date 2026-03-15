@@ -162,30 +162,26 @@ window.onpopstate=function(event){
 }
 
 function navTo(page,groupId=null){
-  history.pushState({page:page, groupId:groupId}, "");
-  renderCurrentState(page, groupId);
+  const cleanId = groupId !== null ? Number(groupId) : null;
+  history.pushState({page:page, groupId:cleanId}, "");
+  renderCurrentState(page, cleanId);
 }
 
 function renderCurrentState(page,groupId){
   if(page === "panel") return;
-
-  // En kritik nokta: Veriyi her render'da tazeleyip, tip güvenliğini sağlıyoruz.
   savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
-  
   closeResultPanel(false);
   savedSets.innerHTML = "";
   
   if(page==="mySets"){
     generatePage.style.display="none";
     mySetsPage.style.display="block";
-    
-    // groupId varlığı ve geçerli bir veri eşleşmesi kontrolü
     if(groupId !== null && groupId !== undefined){
-      const groupExists = savedGroups.find(g => g.id === Number(groupId));
+      const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
       if(groupExists) {
         viewGroup(Number(groupId));
       } else {
-        showMySets(); // Veri bulunamazsa ana listeye düşür
+        showMySets();
       }
     }else{
       showMySets();
@@ -279,7 +275,7 @@ function saveGroup(){
   const jMaxVal=parseInt(document.getElementById("jokerMax").value);
   const jPerVal=parseInt(document.getElementById("jokerCount").value);
   
-  const newId = groupCounter++;
+  const newId = Number(groupCounter++);
   savedGroups.push({
     id:newId,
     name:name,
@@ -314,13 +310,12 @@ function showMySets(){
 }
 
 function viewGroup(id){
-  // renderCurrentState zaten savedGroups'u tazelediği için burada güvenle find yapabiliriz
-  let group=savedGroups.find(g=>g.id===Number(id));
+  let group=savedGroups.find(g=>Number(g.id)===Number(id));
   if(!group){
     showMySets();
     return;
   }
-  activeResultGroupId=id;
+  activeResultGroupId=Number(id);
   let resText = "Henüz girilmedi";
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
     resText = "Ana: " + group.results.main.join(",") + " | Joker: " + group.results.joker.join(",");
@@ -344,14 +339,14 @@ function viewGroup(id){
 
 function deleteGroup(id){
   if(!confirm("Silmek istediğinize emin misiniz?")) return;
-  savedGroups=savedGroups.filter(g=>g.id!==id);
+  savedGroups=savedGroups.filter(g=>Number(g.id)!==Number(id));
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
   showMySets();
 }
 
 function openResultPanel(max,groupId){
-  activeResultGroupId=groupId;
-  let group=savedGroups.find(g=>g.id===groupId);
+  activeResultGroupId=Number(groupId);
+  let group=savedGroups.find(g=>Number(g.id)===Number(groupId));
   const resultDiv=document.getElementById("resultNumbers");
   let html="<h4>Ana Sayı Havuzu (1-"+max+")</h4><div class='ball-row'>";
   for(let i=1;i<=max;i++){
@@ -369,7 +364,7 @@ function openResultPanel(max,groupId){
   }
   resultDiv.innerHTML=html;
   
-  history.pushState({page: "panel", groupId: groupId}, "");
+  history.pushState({page: "panel", groupId: Number(groupId)}, "");
   document.getElementById("resultPanel").style.display="block";
 }
 
@@ -381,7 +376,7 @@ function closeResultPanel(shouldGoBack = false){
 }
 
 function toggleMainResult(el,groupId,val){
-  let group=savedGroups.find(g=>g.id===groupId);
+  let group=savedGroups.find(g=>Number(g.id)===Number(groupId));
   let limit = group.perSet || 5;
   let index=group.results.main.indexOf(val);
   if(index>-1){
@@ -399,7 +394,7 @@ function toggleMainResult(el,groupId,val){
 }
 
 function toggleJokerResult(el,groupId,val){
-  let group=savedGroups.find(g=>g.id===groupId);
+  let group=savedGroups.find(g=>Number(g.id)===Number(groupId));
   let index=group.results.joker.indexOf(val);
   if(index>-1){
     group.results.joker.splice(index,1);
@@ -416,7 +411,7 @@ function toggleJokerResult(el,groupId,val){
 }
 
 function confirmResult(){
-  let group=savedGroups.find(g=>g.id===activeResultGroupId);
+  let group=savedGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
   closeResultPanel(true);
   let el=document.getElementById(`resultText-${activeResultGroupId}`);
   if(el){
@@ -426,7 +421,7 @@ function confirmResult(){
 }
 
 function updateMatches(groupId){
-  let group=savedGroups.find(g=>g.id===groupId);
+  let group=savedGroups.find(g=>Number(g.id)===Number(groupId));
   if(!group) return;
   const cards=savedSets.querySelectorAll(".card");
   cards.forEach(card=>{
@@ -445,7 +440,7 @@ function updateMatches(groupId){
 }
 
 function cleanResult(){
-  let group=savedGroups.find(g=>g.id===activeResultGroupId);
+  let group=savedGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
   if(!group) return;
   group.results={main:[],joker:[]};
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
