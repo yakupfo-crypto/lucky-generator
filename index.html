@@ -144,7 +144,7 @@ const generatePage=document.getElementById("generatePage")
 const mySetsPage=document.getElementById("mySetsPage")
 const results=document.getElementById("results")
 const savedSets=document.getElementById("savedSets")
-let generatedSets=[]
+let generatedSets=JSON.parse(sessionStorage.getItem("tempGeneratedSets"))||[]
 let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[]
 let activeResultGroupId=null
 let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
@@ -153,6 +153,9 @@ window.onload=function(){
     history.replaceState({page:"generate", groupId:null}, "");
   }
   renderCurrentState(history.state.page, history.state.groupId);
+  if(generatedSets.length > 0) {
+    displayGenerated();
+  }
 }
 window.onpopstate=function(event){
   if(event.state){
@@ -176,6 +179,7 @@ function renderCurrentState(page,groupId){
     }
   }else{
     showGenerate();
+    if(generatedSets.length > 0) displayGenerated();
   }
 }
 function createBalls(set){
@@ -233,6 +237,7 @@ function generateSets(){
     
     generatedSets.push({numbers,jokers,max,jokerMax:jMax});
   }
+  sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
   displayGenerated();
 }
 function displayGenerated(){
@@ -275,6 +280,8 @@ function saveGroup(){
     results:{main:[],joker:[]}
   });
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
+  sessionStorage.removeItem("tempGeneratedSets");
+  generatedSets=[];
   alert("Kaydedildi");
   results.innerHTML="";
   navTo('mySets');
