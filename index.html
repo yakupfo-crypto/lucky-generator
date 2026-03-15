@@ -153,7 +153,8 @@ window.onload=function(){
   if(!history.state){
     history.replaceState(initialState, "");
   }
-  renderCurrentState(history.state?.page || "generate", history.state?.groupId);
+  const s = history.state || initialState;
+  renderCurrentState(s.page, s.groupId);
 }
 
 window.onpopstate=function(event){
@@ -174,7 +175,7 @@ function renderCurrentState(page,groupId){
     generatePage.style.display="none";
     mySetsPage.style.display="block";
     if(groupId !== null && groupId !== undefined){
-      viewGroup(parseInt(groupId));
+      viewGroup(Number(groupId));
     }else{
       showMySets();
     }
@@ -267,8 +268,9 @@ function saveGroup(){
   const jMaxVal=parseInt(document.getElementById("jokerMax").value);
   const jPerVal=parseInt(document.getElementById("jokerCount").value);
   
+  const newId = groupCounter++;
   savedGroups.push({
-    id:groupCounter++,
+    id:newId,
     name:name,
     sets:[...generatedSets],
     max:maxVal,
@@ -282,7 +284,7 @@ function saveGroup(){
   sessionStorage.removeItem("tempGeneratedSets");
   generatedSets=[];
   alert("Kaydedildi");
-  navTo('mySets');
+  navTo('mySets', newId);
 }
 
 function showMySets(){
