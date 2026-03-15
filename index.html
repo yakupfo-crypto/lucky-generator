@@ -166,19 +166,19 @@ function navTo(page,groupId=null){
 }
 
 function renderCurrentState(page,groupId){
-  generatePage.style.display="none";
-  mySetsPage.style.display="none";
-
+  closeResultPanel();
   if(page==="mySets"){
+    generatePage.style.display="none";
     mySetsPage.style.display="block";
-    if(groupId!==null){
+    if(groupId!=null){
       viewGroup(parseInt(groupId));
     }else{
       showMySets();
     }
   }else{
     generatePage.style.display="block";
-    displayGenerated();
+    mySetsPage.style.display="none";
+    if(generatedSets.length > 0) displayGenerated();
   }
 }
 
@@ -209,7 +209,11 @@ function generateSets(){
     alert("Seçilecek adet, havuzdaki sayı miktarından büyük olamaz!");
     return;
   }
-  
+  if(per <= 0 || count <= 0 || max <= 0 || jPer < 0 || (jPer > 0 && jMax <= 0)) {
+    alert("Lütfen geçerli adetler giriniz!");
+    return;
+  }
+
   generatedSets=[];
   for(let i=0;i<count;i++){
     let numbers=[];
@@ -219,7 +223,6 @@ function generateSets(){
         numbers.push(mainPool.splice(idx, 1)[0]);
     }
     numbers.sort((a,b)=>a-b);
-
     let jokers=[];
     if(jPer > 0 && jMax > 0){
         let jokerPool = Array.from({length: jMax}, (_, i) => i + 1);
@@ -254,14 +257,16 @@ function displayGenerated(){
 function saveGroup(){
   let nameInput=document.getElementById("groupNameInput");
   let name=nameInput ? nameInput.value : "";
-  if(!name.trim()) { alert("Lütfen bir grup adı girin!"); return; }
-
+  if(!name.trim()) {
+    alert("Lütfen bir grup adı girin!");
+    return;
+  }
   const maxVal=parseInt(document.getElementById("maxNumber").value);
   const perVal=parseInt(document.getElementById("perSet").value);
   const jMaxVal=parseInt(document.getElementById("jokerMax").value);
   const jPerVal=parseInt(document.getElementById("jokerCount").value);
   
-  savedGroups.push({
+  const newGroup = {
     id:groupCounter++,
     name:name,
     sets:[...generatedSets],
@@ -271,12 +276,14 @@ function saveGroup(){
     jokerMax:jMaxVal,
     jokerPerSet:jPerVal,
     results:{main:[],joker:[]}
-  });
+  };
+  
+  savedGroups.push(newGroup);
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
   sessionStorage.removeItem("tempGeneratedSets");
   generatedSets=[];
   results.innerHTML="";
-  navTo('mySets');
+  navTo('mySets', newGroup.id);
 }
 
 function showMySets(){
@@ -285,7 +292,7 @@ function showMySets(){
   savedGroups.forEach(group=>{
     html+=`
       <div class='card'>
-        <b>${group.name}</b><br>
+        <b>${group.name}</b>
         Kolon Sayısı: ${group.sets.length}<br>
         <button onclick='navTo("mySets",${group.id})'>Görüntüle</button>
         <button onclick='deleteGroup(${group.id})' style="background:#d32f2f;margin-top:5px;">Sil</button>
@@ -296,23 +303,27 @@ function showMySets(){
 
 function viewGroup(id){
   let group=savedGroups.find(g=>g.id===id);
-  if(!group) { navTo('mySets'); return; }
-  activeResultGroupId=id;
-  let res="-";
-  if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
-    res="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ");
+  if(!group) {
+    navTo('mySets');
+    return;
   }
-  let html=`<h3><button onclick='navTo("mySets")' style="width:auto; padding:5px 10px; margin-right:10px;"><</button>${group.name}</h3>`;
+  activeResultGroupId=id;
+  let resText="-";
+  if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
+    resText="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ");
+  }
+  let html=`<h3>${group.name}</h3>`;
   html+=`
     <div class="card">
       <b>Sonuçlar:</b>
-      <span id="resultText-${group.id}">${res}</span>
+      <span id="resultText-${group.id}">${resText}</span>
       <br>
       <button onclick="openResultPanel(${group.max},${group.id})">Sonuç Gir (Kıyasla)</button>
     </div>`;
   group.sets.forEach((set,i)=>{
     html+=`<div class='card'><b>${i+1}. Kolon</b>${createBalls(set)}</div>`;
   });
+  html+=`<button onclick='navTo("mySets")' style="background:#999;">Geri Dön</button>`;
   savedSets.innerHTML=html;
   updateMatches(group.id);
 }
@@ -335,7 +346,8 @@ function openResultPanel(max,groupId){
     html+=`<div class="ball ${isSelected}" onclick="toggleMainResult(this,${groupId},${i})">${i}</div>`;
   }
   html+="</div>";
-  if(group.jokerPerSet>0){
+  let jokerPerSet=group.jokerPerSet || 0;
+  if(jokerPerSet>0){
     html+="<h4>Joker Havuzu (1-"+group.jokerMax+")</h4><div class='ball-row'>";
     for(let i=1;i<=group.jokerMax;i++){
       let isSelectedJoker=group.results.joker.includes(i)?"joker result-selected":"joker";
@@ -360,7 +372,10 @@ function toggleMainResult(el,groupId,val){
     group.results.main.splice(index,1);
     el.classList.remove("result-selected");
   }else{
-    if(group.results.main.length >= limit){ alert("Limit aşıldı!"); return; }
+    if(group.results.main.length >= limit){
+      alert("Maksimum " + limit + " sayı seçebilirsiniz!");
+      return;
+    }
     group.results.main.push(val);
     el.classList.add("result-selected");
   }
@@ -376,7 +391,10 @@ function toggleJokerResult(el,groupId,val){
     group.results.joker.splice(index,1);
     el.classList.remove("result-selected");
   }else{
-    if(group.results.joker.length>=group.jokerPerSet){ alert("Limit aşıldı!"); return; }
+    if(group.results.joker.length >= group.jokerPerSet){
+      alert("Maksimum " + group.jokerPerSet + " joker seçebilirsiniz!");
+      return;
+    }
     group.results.joker.push(val);
     el.classList.add("result-selected");
   }
@@ -385,24 +403,29 @@ function toggleJokerResult(el,groupId,val){
 }
 
 function confirmResult(){
-  let group=savedGroups.find(g=>g.id===activeResultGroupId);
+  let groupId=activeResultGroupId;
+  let group=savedGroups.find(g=>g.id===groupId);
+  if(group){
+    let el=document.getElementById(`resultText-${groupId}`);
+    if(el) el.innerText="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ");
+  }
   closeResultPanel();
-  let el=document.getElementById(`resultText-${activeResultGroupId}`);
-  if(el) el.innerText="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ");
 }
 
 function updateMatches(groupId){
   let group=savedGroups.find(g=>g.id===groupId);
   if(!group || !group.results) return;
-  const cards=document.querySelectorAll("#savedSets .card");
+  const cards=savedSets.querySelectorAll(".card");
   cards.forEach(card=>{
     const balls=card.querySelectorAll(".ball");
     balls.forEach(b=>{
       const val=parseInt(b.innerText);
       if(b.classList.contains("joker")){
-        group.results.joker.includes(val) ? b.classList.add("result-selected") : b.classList.remove("result-selected");
+        if(group.results.joker.includes(val)) b.classList.add("result-selected");
+        else b.classList.remove("result-selected");
       }else{
-        group.results.main.includes(val) ? b.classList.add("result-selected") : b.classList.remove("result-selected");
+        if(group.results.main.includes(val)) b.classList.add("result-selected");
+        else b.classList.remove("result-selected");
       }
     });
   });
