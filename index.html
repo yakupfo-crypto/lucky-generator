@@ -166,11 +166,12 @@ function navTo(page,groupId=null){
 }
 
 function renderCurrentState(page,groupId){
+  closeResultPanel();
   if(page==="mySets"){
     generatePage.style.display="none";
     mySetsPage.style.display="block";
-    if(groupId !== null && groupId !== undefined){
-      viewGroup(Number(groupId));
+    if(groupId!=null){
+      viewGroup(parseInt(groupId));
     }else{
       showMySets();
     }
@@ -178,6 +179,7 @@ function renderCurrentState(page,groupId){
     generatePage.style.display = "block";
     mySetsPage.style.display = "none";
     if(generatedSets.length > 0) displayGenerated();
+    else results.innerHTML="";
   }
 }
 
@@ -208,11 +210,7 @@ function generateSets(){
     alert("Seçilecek adet, havuzdaki sayı miktarından büyük olamaz!");
     return;
   }
-  if(per <= 0 || count <= 0 || max <= 0 || jPer < 0 || (jPer > 0 && jMax <= 0)) {
-    alert("Lütfen geçerli adetler giriniz!");
-    return;
-  }
-
+  
   generatedSets=[];
   for(let i=0;i<count;i++){
     let numbers=[];
@@ -222,6 +220,7 @@ function generateSets(){
         numbers.push(mainPool.splice(idx, 1)[0]);
     }
     numbers.sort((a,b)=>a-b);
+
     let jokers=[];
     if(jPer > 0 && jMax > 0){
         let jokerPool = Array.from({length: jMax}, (_, i) => i + 1);
@@ -264,6 +263,7 @@ function saveGroup(){
   const perVal=parseInt(document.getElementById("perSet").value);
   const jMaxVal=parseInt(document.getElementById("jokerMax").value);
   const jPerVal=parseInt(document.getElementById("jokerCount").value);
+  
   savedGroups.push({
     id:groupCounter++,
     name:name,
@@ -278,7 +278,7 @@ function saveGroup(){
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
   sessionStorage.removeItem("tempGeneratedSets");
   generatedSets=[];
-  results.innerHTML="";
+  alert("Kaydedildi");
   navTo('mySets');
 }
 
@@ -288,7 +288,7 @@ function showMySets(){
   savedGroups.forEach(group=>{
     html+=`
       <div class='card'>
-        <b>[${group.id}] ${group.name}</b><br>
+        <b>${group.name}</b><br>
         Kolon Sayısı: ${group.sets.length}<br>
         <button onclick='navTo("mySets",${group.id})'>Görüntüle</button>
         <button onclick='deleteGroup(${group.id})' style="background:#d32f2f;margin-top:5px;">Sil</button>
@@ -299,27 +299,28 @@ function showMySets(){
 
 function viewGroup(id){
   let group=savedGroups.find(g=>g.id===id);
-  if(!group) {
-    showMySets();
+  if(!group){
+    navTo('mySets');
     return;
   }
   activeResultGroupId=id;
-  let res="-";
+  let resText = "Henüz girilmedi";
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
-    res="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ");
+    resText = "Ana: " + group.results.main.join(",") + " | Joker: " + group.results.joker.join(",");
   }
+  
   let html=`<h3>${group.name}</h3>`;
   html+=`
     <div class="card">
       <b>Sonuçlar:</b>
-      <span id="resultText-${group.id}">${res}</span>
+      <span id="resultText-${group.id}">${resText}</span>
       <br>
       <button onclick="openResultPanel(${group.max},${group.id})">Sonuç Gir (Kıyasla)</button>
     </div>`;
   group.sets.forEach((set,i)=>{
-    html+=`<div class='card'><b>${i+1}. Kolon</b>${createBalls(set)}</div>`;
+    html+=`<div class='card'><b>${i+1}.</b>${createBalls(set)}</div>`;
   });
-  html+=`<button onclick='navTo("mySets")'>Geri Dön</button>`;
+  html+=`<button onclick='navTo("mySets")' style="background:#666;">Listeye Dön</button>`;
   savedSets.innerHTML=html;
   updateMatches(group.id);
 }
@@ -334,7 +335,6 @@ function deleteGroup(id){
 function openResultPanel(max,groupId){
   activeResultGroupId=groupId;
   let group=savedGroups.find(g=>g.id===groupId);
-  if(!group.results) group.results={main:[],joker:[]};
   const resultDiv=document.getElementById("resultNumbers");
   let html="<h4>Ana Sayı Havuzu (1-"+max+")</h4><div class='ball-row'>";
   for(let i=1;i<=max;i++){
@@ -342,8 +342,7 @@ function openResultPanel(max,groupId){
     html+=`<div class="ball ${isSelected}" onclick="toggleMainResult(this,${groupId},${i})">${i}</div>`;
   }
   html+="</div>";
-  let jokerPerSet=group.jokerPerSet || 0;
-  if(jokerPerSet>0){
+  if(group.jokerPerSet>0){
     html+="<h4>Joker Havuzu (1-"+group.jokerMax+")</h4><div class='ball-row'>";
     for(let i=1;i<=group.jokerMax;i++){
       let isSelectedJoker=group.results.joker.includes(i)?"joker result-selected":"joker";
@@ -361,8 +360,7 @@ function closeResultPanel(){
 
 function toggleMainResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId);
-  if(!group) return;
-  let limit = group.perSet || (group.sets[0] ? group.sets[0].numbers.length : 5);
+  let limit = group.perSet || 5;
   let index=group.results.main.indexOf(val);
   if(index>-1){
     group.results.main.splice(index,1);
@@ -376,12 +374,10 @@ function toggleMainResult(el,groupId,val){
     el.classList.add("result-selected");
   }
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
-  updateMatches(groupId);
 }
 
 function toggleJokerResult(el,groupId,val){
   let group=savedGroups.find(g=>g.id===groupId);
-  if(!group) return;
   let index=group.results.joker.indexOf(val);
   if(index>-1){
     group.results.joker.splice(index,1);
@@ -395,25 +391,22 @@ function toggleJokerResult(el,groupId,val){
     el.classList.add("result-selected");
   }
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
-  updateMatches(groupId);
 }
 
 function confirmResult(){
-  let groupId=activeResultGroupId;
-  let group=savedGroups.find(g=>g.id===groupId);
-  localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
-  document.getElementById("resultPanel").style.display="none";
-  let el=document.getElementById(`resultText-${groupId}`);
+  let group=savedGroups.find(g=>g.id===activeResultGroupId);
+  closeResultPanel();
+  let el=document.getElementById(`resultText-${activeResultGroupId}`);
   if(el){
     el.innerText="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ");
   }
-  updateMatches(groupId);
+  updateMatches(activeResultGroupId);
 }
 
 function updateMatches(groupId){
   let group=savedGroups.find(g=>g.id===groupId);
-  if(!group || !group.results) return;
-  const cards=document.querySelectorAll("#savedSets .card");
+  if(!group) return;
+  const cards=savedSets.querySelectorAll(".card");
   cards.forEach(card=>{
     const balls=card.querySelectorAll(".ball");
     balls.forEach(b=>{
@@ -430,17 +423,14 @@ function updateMatches(groupId){
 }
 
 function cleanResult(){
-  let groupId=activeResultGroupId;
-  let group=savedGroups.find(g=>g.id===groupId);
+  let group=savedGroups.find(g=>g.id===activeResultGroupId);
   if(!group) return;
   group.results={main:[],joker:[]};
   localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
-  document.querySelectorAll("#resultNumbers .ball").forEach(b=>{
-    b.classList.remove("result-selected");
-  });
-  let el=document.getElementById(`resultText-${groupId}`);
-  if(el) el.innerText="-";
-  updateMatches(groupId);
+  document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
+  let el=document.getElementById(`resultText-${activeResultGroupId}`);
+  if(el) el.innerText="Henüz girilmedi";
+  updateMatches(activeResultGroupId);
 }
 </script>
 </body>
