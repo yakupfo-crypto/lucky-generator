@@ -149,11 +149,7 @@ let activeResultGroupId=null
 let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
 
 window.onload=function(){
-  const initialState = {page:"generate", groupId:null};
-  if(!history.state){
-    history.replaceState(initialState, "");
-  }
-  const s = history.state || initialState;
+  const s = history.state || {page:"generate", groupId:null};
   renderCurrentState(s.page, s.groupId);
 }
 
