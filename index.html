@@ -149,10 +149,11 @@ let activeResultGroupId=null
 let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
 
 window.onload=function(){
+  const initialState = {page:"generate", groupId:null};
   if(!history.state){
-    history.replaceState({page:"generate", groupId:null}, "");
+    history.replaceState(initialState, "");
   }
-  renderCurrentState(history.state.page, history.state.groupId);
+  renderCurrentState(history.state?.page || "generate", history.state?.groupId);
 }
 
 window.onpopstate=function(event){
@@ -167,10 +168,12 @@ function navTo(page,groupId=null){
 
 function renderCurrentState(page,groupId){
   closeResultPanel();
+  savedSets.innerHTML = "";
+  
   if(page==="mySets"){
     generatePage.style.display="none";
     mySetsPage.style.display="block";
-    if(groupId!=null){
+    if(groupId !== null && groupId !== undefined){
       viewGroup(parseInt(groupId));
     }else{
       showMySets();
@@ -300,7 +303,7 @@ function showMySets(){
 function viewGroup(id){
   let group=savedGroups.find(g=>g.id===id);
   if(!group){
-    navTo('mySets');
+    showMySets();
     return;
   }
   activeResultGroupId=id;
