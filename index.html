@@ -169,7 +169,7 @@ function navTo(page,groupId=null){
 function renderCurrentState(page,groupId){
   if(page === "panel") return;
 
-  // Veri Senkronizasyonu: State her değiştiğinde veriyi tekrar çek
+  // En kritik nokta: Veriyi her render'da tazeleyip, tip güvenliğini sağlıyoruz.
   savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
   
   closeResultPanel(false);
@@ -178,8 +178,15 @@ function renderCurrentState(page,groupId){
   if(page==="mySets"){
     generatePage.style.display="none";
     mySetsPage.style.display="block";
+    
+    // groupId varlığı ve geçerli bir veri eşleşmesi kontrolü
     if(groupId !== null && groupId !== undefined){
-      viewGroup(Number(groupId));
+      const groupExists = savedGroups.find(g => g.id === Number(groupId));
+      if(groupExists) {
+        viewGroup(Number(groupId));
+      } else {
+        showMySets(); // Veri bulunamazsa ana listeye düşür
+      }
     }else{
       showMySets();
     }
@@ -307,6 +314,7 @@ function showMySets(){
 }
 
 function viewGroup(id){
+  // renderCurrentState zaten savedGroups'u tazelediği için burada güvenle find yapabiliriz
   let group=savedGroups.find(g=>g.id===Number(id));
   if(!group){
     showMySets();
