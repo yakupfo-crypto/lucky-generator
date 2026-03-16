@@ -143,6 +143,8 @@ const generatePage=document.getElementById("generatePage")
 const mySetsPage=document.getElementById("mySetsPage")
 const results=document.getElementById("results")
 const savedSets=document.getElementById("savedSets")
+const resultPanel=document.getElementById("resultPanel")
+
 let generatedSets=JSON.parse(sessionStorage.getItem("tempGeneratedSets"))||[]
 let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[]
 let activeResultGroupId=null
@@ -155,8 +157,9 @@ window.onload=function(){
 
 window.onpopstate=function(event){
   const state = event.state || {page:"generate", groupId:null};
+  // Eğer panel açıktıysa ve geri gelindiyse sadece paneli kapat, render'ı state'e göre yap
   if(state.page !== "panel") {
-    closeResultPanel(false);
+    resultPanel.style.display="none";
   }
   renderCurrentState(state.page, state.groupId);
 }
@@ -168,9 +171,11 @@ function navTo(page,groupId=null){
 }
 
 function renderCurrentState(page,groupId){
+  // Panel state'indeysek render'ı bozma, panel zaten openResultPanel ile açıldı
   if(page === "panel") return;
+
   savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
-  closeResultPanel(false);
+  resultPanel.style.display="none";
   savedSets.innerHTML = "";
   
   if(page==="mySets"){
@@ -365,11 +370,11 @@ function openResultPanel(max,groupId){
   resultDiv.innerHTML=html;
   
   history.pushState({page: "panel", groupId: Number(groupId)}, "");
-  document.getElementById("resultPanel").style.display="block";
+  resultPanel.style.display="block";
 }
 
 function closeResultPanel(shouldGoBack = false){
-  document.getElementById("resultPanel").style.display="none";
+  resultPanel.style.display="none";
   if(shouldGoBack && history.state && history.state.page === "panel") {
     history.back();
   }
