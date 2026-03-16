@@ -157,14 +157,11 @@ window.onload=function(){
 
 window.onpopstate=function(event){
   const state = event.state || {page:"generate", groupId:null};
-  let safeGroupId = state.groupId !== null && state.groupId !== undefined ? Number(state.groupId) : null;
-  if (isNaN(safeGroupId)) safeGroupId = null;
-
-  renderCurrentState(state.page, safeGroupId);
+  renderCurrentState(state.page, state.groupId);
 }
 
 function navTo(page,groupId=null){
-  let cleanId = groupId !== null && groupId !== undefined ? Number(groupId) : null;
+  let cleanId = (groupId !== null && groupId !== undefined) ? Number(groupId) : null;
   if (isNaN(cleanId)) cleanId = null;
   
   history.pushState({page:page, groupId:cleanId}, "");
@@ -189,7 +186,9 @@ function renderCurrentState(page, groupId) {
   if (page === "mySets") {
     generatePage.style.display = "none";
     mySetsPage.style.display = "block";
-    if (groupId !== null && groupId !== undefined) {
+    
+    // Mantıksal Boşluk Giderildi: groupId varlığı daha sıkı kontrol ediliyor
+    if (groupId !== null && groupId !== undefined && String(groupId).trim() !== "") {
       const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
       if (groupExists) {
         viewGroup(Number(groupId));
