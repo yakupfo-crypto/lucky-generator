@@ -169,28 +169,17 @@ function navTo(page,groupId=null){
 }
 
 function renderCurrentState(page, groupId) {
-  if (page === "panel") {
-    resultPanel.style.display = "block";
-    page = "mySets"; 
-  } else {
-    resultPanel.style.display = "none";
-  }
-
-  if (generatedSets.length === 0) {
-    generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
-  }
-
   savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
-  savedSets.innerHTML = "";
-
-  if (page === "mySets") {
+  
+  // Önce sayfaları gizle/göster ayarlarını yapalım
+  if (page === "mySets" || page === "panel") {
     generatePage.style.display = "none";
     mySetsPage.style.display = "block";
     
-    // Mantıksal Boşluk Giderildi: groupId varlığı daha sıkı kontrol ediliyor
     if (groupId !== null && groupId !== undefined && String(groupId).trim() !== "") {
       const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
       if (groupExists) {
+        activeResultGroupId = Number(groupId); // Global ID'yi güncelle
         viewGroup(Number(groupId));
       } else {
         showMySets();
@@ -201,8 +190,23 @@ function renderCurrentState(page, groupId) {
   } else {
     generatePage.style.display = "block";
     mySetsPage.style.display = "none";
-    if (generatedSets.length > 0) displayGenerated();
-    else results.innerHTML = "";
+    if (generatedSets.length > 0 || sessionStorage.getItem("tempGeneratedSets")) {
+      generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
+      displayGenerated();
+    } else {
+      results.innerHTML = "";
+    }
+  }
+
+  // Panel durumunu en son kontrol et (activeResultGroupId set edildikten sonra)
+  if (page === "panel") {
+    activeResultGroupId = Number(groupId);
+    const group = savedGroups.find(g => Number(g.id) === activeResultGroupId);
+    if(group) {
+        openResultPanel(group.max, group.id, false); 
+    }
+  } else {
+    resultPanel.style.display = "none";
   }
 }
 
@@ -360,9 +364,11 @@ function deleteGroup(id){
   showMySets();
 }
 
-function openResultPanel(max,groupId){
+function openResultPanel(max,groupId, shouldPushState = true){
   activeResultGroupId=Number(groupId);
   let group=savedGroups.find(g=>Number(g.id)===Number(groupId));
+  if(!group) return;
+
   const resultDiv=document.getElementById("resultNumbers");
   let html="<h4>Ana Sayı Havuzu (1-"+max+")</h4><div class='ball-row'>";
   for(let i=1;i<=max;i++){
@@ -380,7 +386,9 @@ function openResultPanel(max,groupId){
   }
   resultDiv.innerHTML=html;
   
-  history.pushState({page: "panel", groupId: Number(groupId)}, "");
+  if(shouldPushState) {
+    history.pushState({page: "panel", groupId: Number(groupId)}, "");
+  }
   resultPanel.style.display="block";
 }
 
@@ -429,6 +437,7 @@ function toggleJokerResult(el,groupId,val){
 
 function confirmResult(){
   let group=savedGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
+  if(!group) return;
   closeResultPanel(true);
   let el=document.getElementById(`resultText-${activeResultGroupId}`);
   if(el){
