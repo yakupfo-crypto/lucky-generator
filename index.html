@@ -157,7 +157,6 @@ window.onload=function(){
 
 window.onpopstate=function(event){
   const state = event.state || {page:"generate", groupId:null};
-  // Eğer panel açıktıysa ve geri gelindiyse sadece paneli kapat, render'ı state'e göre yap
   if(state.page !== "panel") {
     resultPanel.style.display="none";
   }
@@ -171,8 +170,12 @@ function navTo(page,groupId=null){
 }
 
 function renderCurrentState(page,groupId){
-  // Panel state'indeysek render'ı bozma, panel zaten openResultPanel ile açıldı
   if(page === "panel") return;
+  
+  // Sayfa refresh edildiyse bellek boşalmış olabilir, sessionStorage'dan geri yükle
+  if(generatedSets.length === 0) {
+    generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
+  }
 
   savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
   resultPanel.style.display="none";
