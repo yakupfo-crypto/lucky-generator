@@ -157,11 +157,6 @@ window.onload=function(){
 
 window.onpopstate=function(event){
   const state = event.state || {page:"generate", groupId:null};
-  if(state.page !== "panel") {
-    resultPanel.style.display="none";
-  }
-  
-  // groupId tip kontrolü ve NaN temizliği
   let safeGroupId = state.groupId !== null && state.groupId !== undefined ? Number(state.groupId) : null;
   if (isNaN(safeGroupId)) safeGroupId = null;
 
@@ -176,35 +171,39 @@ function navTo(page,groupId=null){
   renderCurrentState(page, cleanId);
 }
 
-function renderCurrentState(page,groupId){
-  if(page === "panel") return;
-  
-  if(generatedSets.length === 0) {
+function renderCurrentState(page, groupId) {
+  if (page === "panel") {
+    resultPanel.style.display = "block";
+    page = "mySets"; 
+  } else {
+    resultPanel.style.display = "none";
+  }
+
+  if (generatedSets.length === 0) {
     generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
   }
 
   savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
-  resultPanel.style.display="none";
   savedSets.innerHTML = "";
-  
-  if(page==="mySets"){
-    generatePage.style.display="none";
-    mySetsPage.style.display="block";
-    if(groupId !== null && groupId !== undefined){
+
+  if (page === "mySets") {
+    generatePage.style.display = "none";
+    mySetsPage.style.display = "block";
+    if (groupId !== null && groupId !== undefined) {
       const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
-      if(groupExists) {
+      if (groupExists) {
         viewGroup(Number(groupId));
       } else {
         showMySets();
       }
-    }else{
+    } else {
       showMySets();
     }
-  }else{
+  } else {
     generatePage.style.display = "block";
     mySetsPage.style.display = "none";
-    if(generatedSets.length > 0) displayGenerated();
-    else results.innerHTML="";
+    if (generatedSets.length > 0) displayGenerated();
+    else results.innerHTML = "";
   }
 }
 
@@ -324,7 +323,6 @@ function showMySets(){
 }
 
 function viewGroup(id){
-  // id kontrolü
   if (id === null || isNaN(Number(id))) {
     showMySets();
     return;
@@ -388,9 +386,10 @@ function openResultPanel(max,groupId){
 }
 
 function closeResultPanel(shouldGoBack = false){
-  resultPanel.style.display="none";
   if(shouldGoBack && history.state && history.state.page === "panel") {
     history.back();
+  } else {
+    resultPanel.style.display="none";
   }
 }
 
