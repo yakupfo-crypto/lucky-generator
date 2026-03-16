@@ -160,11 +160,18 @@ window.onpopstate=function(event){
   if(state.page !== "panel") {
     resultPanel.style.display="none";
   }
-  renderCurrentState(state.page, state.groupId);
+  
+  // groupId tip kontrolü ve NaN temizliği
+  let safeGroupId = state.groupId !== null && state.groupId !== undefined ? Number(state.groupId) : null;
+  if (isNaN(safeGroupId)) safeGroupId = null;
+
+  renderCurrentState(state.page, safeGroupId);
 }
 
 function navTo(page,groupId=null){
-  const cleanId = groupId !== null ? Number(groupId) : null;
+  let cleanId = groupId !== null && groupId !== undefined ? Number(groupId) : null;
+  if (isNaN(cleanId)) cleanId = null;
+  
   history.pushState({page:page, groupId:cleanId}, "");
   renderCurrentState(page, cleanId);
 }
@@ -172,7 +179,6 @@ function navTo(page,groupId=null){
 function renderCurrentState(page,groupId){
   if(page === "panel") return;
   
-  // Sayfa refresh edildiyse bellek boşalmış olabilir, sessionStorage'dan geri yükle
   if(generatedSets.length === 0) {
     generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
   }
@@ -318,6 +324,11 @@ function showMySets(){
 }
 
 function viewGroup(id){
+  // id kontrolü
+  if (id === null || isNaN(Number(id))) {
+    showMySets();
+    return;
+  }
   let group=savedGroups.find(g=>Number(g.id)===Number(id));
   if(!group){
     showMySets();
