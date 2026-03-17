@@ -178,8 +178,7 @@ function renderCurrentState(page, groupId) {
   
   const savedGroups = getLatestSavedGroups();
 
-  switch(page) {
-    case "generate":
+  if (page === "generate") {
       generatePage.style.display = "block";
       if (generatedSets.length > 0 || sessionStorage.getItem("tempGeneratedSets")) {
         generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
@@ -187,9 +186,7 @@ function renderCurrentState(page, groupId) {
       } else {
         results.innerHTML = "";
       }
-      break;
-
-    case "mySets":
+  } else if (page === "mySets") {
       mySetsPage.style.display = "block";
       if (groupId !== null) {
         const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
@@ -202,9 +199,7 @@ function renderCurrentState(page, groupId) {
       } else {
         showMySets();
       }
-      break;
-
-    case "panel":
+  } else if (page === "panel") {
       mySetsPage.style.display = "block";
       activeResultGroupId = Number(groupId);
       const group = savedGroups.find(g => Number(g.id) === Number(activeResultGroupId));
@@ -214,9 +209,7 @@ function renderCurrentState(page, groupId) {
       } else {
         showMySets();
       }
-      break;
-
-    default:
+  } else {
       generatePage.style.display = "block";
   }
 }
@@ -341,10 +334,6 @@ function showMySets(){
 }
 
 function viewGroup(id){
-  if (id === null || isNaN(Number(id))) {
-    showMySets();
-    return;
-  }
   const currentGroups = getLatestSavedGroups();
   let group=currentGroups.find(g=>Number(g.id)===Number(id));
   if(!group){
@@ -462,16 +451,7 @@ function toggleJokerResult(el,groupId,val){
 }
 
 function confirmResult(){
-  const currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
-  if(!group) return;
-  
   closeResultPanel(true);
-  let el=document.getElementById(`resultText-${activeResultGroupId}`);
-  if(el){
-    el.innerText="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ");
-  }
-  updateMatches(activeResultGroupId);
 }
 
 function updateMatches(groupId){
