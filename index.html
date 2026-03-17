@@ -171,42 +171,50 @@ function navTo(page,groupId=null){
 function renderCurrentState(page, groupId) {
   savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
   
-  // Önce sayfaları gizle/göster ayarlarını yapalım
+  // Görünürlük ayarları
   if (page === "mySets" || page === "panel") {
     generatePage.style.display = "none";
     mySetsPage.style.display = "block";
-    
-    if (groupId !== null && groupId !== undefined && String(groupId).trim() !== "") {
-      const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
-      if (groupExists) {
-        activeResultGroupId = Number(groupId); // Global ID'yi güncelle
-        viewGroup(Number(groupId));
-      } else {
-        showMySets();
-      }
-    } else {
-      showMySets();
-    }
   } else {
     generatePage.style.display = "block";
     mySetsPage.style.display = "none";
+  }
+
+  resultPanel.style.display = "none";
+
+  if (page === "mySets") {
+    // groupId açıkça null ise veya mevcut değilse her zaman listeyi göster
+    if (groupId !== null && groupId !== undefined) {
+      const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
+      if (groupExists) {
+        activeResultGroupId = Number(groupId);
+        viewGroup(activeResultGroupId);
+      } else {
+        activeResultGroupId = null;
+        showMySets();
+      }
+    } else {
+      activeResultGroupId = null;
+      showMySets();
+    }
+  } else if (page === "generate") {
+    activeResultGroupId = null;
     if (generatedSets.length > 0 || sessionStorage.getItem("tempGeneratedSets")) {
       generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
       displayGenerated();
     } else {
       results.innerHTML = "";
     }
-  }
-
-  // Panel durumunu en son kontrol et (activeResultGroupId set edildikten sonra)
-  if (page === "panel") {
-    activeResultGroupId = Number(groupId);
-    const group = savedGroups.find(g => Number(g.id) === activeResultGroupId);
+  } else if (page === "panel" && groupId !== null) {
+    const group = savedGroups.find(g => Number(g.id) === Number(groupId));
     if(group) {
+        activeResultGroupId = Number(groupId);
+        viewGroup(activeResultGroupId); 
         openResultPanel(group.max, group.id, false); 
+    } else {
+        activeResultGroupId = null;
+        showMySets();
     }
-  } else {
-    resultPanel.style.display = "none";
   }
 }
 
