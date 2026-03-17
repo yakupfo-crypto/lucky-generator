@@ -104,6 +104,10 @@ color:#1976d2;
 background:#1976d2;
 color:#fff;
 }
+#copyBtn {
+    background: #4caf50;
+    margin-bottom: 10px;
+}
 </style>
 </head>
 <body>
@@ -180,8 +184,9 @@ function renderCurrentState(page, groupId) {
 
   if (page === "generate") {
       generatePage.style.display = "block";
-      if (generatedSets.length > 0 || sessionStorage.getItem("tempGeneratedSets")) {
-        generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
+      const temp = sessionStorage.getItem("tempGeneratedSets");
+      if (temp) {
+        generatedSets = JSON.parse(temp);
         displayGenerated();
       } else {
         results.innerHTML = "";
@@ -201,9 +206,9 @@ function renderCurrentState(page, groupId) {
       }
   } else if (page === "panel") {
       mySetsPage.style.display = "block";
-      activeResultGroupId = Number(groupId);
-      const group = savedGroups.find(g => Number(g.id) === Number(activeResultGroupId));
+      const group = savedGroups.find(g => Number(g.id) === Number(groupId));
       if(group) {
+        activeResultGroupId = Number(groupId);
         viewGroup(activeResultGroupId);
         openResultPanel(group.max, group.id, false);
       } else {
@@ -333,6 +338,12 @@ function showMySets(){
   savedSets.innerHTML=html;
 }
 
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert("Kolonlar panoya kopyalandı!");
+    });
+}
+
 function viewGroup(id){
   const currentGroups = getLatestSavedGroups();
   let group=currentGroups.find(g=>Number(g.id)===Number(id));
@@ -341,12 +352,19 @@ function viewGroup(id){
     return;
   }
   activeResultGroupId=Number(id);
+  
+  let copyText = group.name + "\\n";
+  group.sets.forEach((s, i) => {
+    copyText += `${i+1}. Kolon: ${s.numbers.join("-")}${s.jokers.length ? " + Joker: " + s.jokers.join("-") : ""}\\n`;
+  });
+
   let resText = "Henüz girilmedi";
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
     resText = "Ana: " + group.results.main.join(",") + " | Joker: " + group.results.joker.join(",");
   }
   
   let html=`<h3>${group.name}</h3>`;
+  html += `<button id="copyBtn" onclick="copyToClipboard(\`${copyText}\`)">Kolonları Kopyala</button>`;
   html+=`
     <div class="card">
       <b>Sonuçlar:</b>
@@ -367,7 +385,7 @@ function deleteGroup(id){
   let currentGroups = getLatestSavedGroups();
   currentGroups=currentGroups.filter(g=>Number(g.id)!==Number(id));
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
-  showMySets();
+  navTo('mySets');
 }
 
 function openResultPanel(max,groupId, shouldPushState = true){
@@ -406,6 +424,7 @@ function closeResultPanel(shouldGoBack = false){
     history.back();
   } else {
     resultPanel.style.display="none";
+    if(activeResultGroupId) viewGroup(activeResultGroupId);
   }
 }
 
