@@ -163,58 +163,60 @@ window.onpopstate=function(event){
 function navTo(page,groupId=null){
   let cleanId = (groupId !== null && groupId !== undefined) ? Number(groupId) : null;
   if (isNaN(cleanId)) cleanId = null;
-  
   history.pushState({page:page, groupId:cleanId}, "");
   renderCurrentState(page, cleanId);
 }
 
 function renderCurrentState(page, groupId) {
-  savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
-  
-  // Görünürlük ayarları
-  if (page === "mySets" || page === "panel") {
-    generatePage.style.display = "none";
-    mySetsPage.style.display = "block";
-  } else {
-    generatePage.style.display = "block";
-    mySetsPage.style.display = "none";
-  }
-
+  // 1. RESET: Tüm görünümleri sıfırla
+  generatePage.style.display = "none";
+  mySetsPage.style.display = "none";
   resultPanel.style.display = "none";
+  
+  savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
 
-  if (page === "mySets") {
-    // groupId açıkça null ise veya mevcut değilse her zaman listeyi göster
-    if (groupId !== null && groupId !== undefined) {
-      const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
-      if (groupExists) {
-        activeResultGroupId = Number(groupId);
-        viewGroup(activeResultGroupId);
+  // 2. ROUTING LOGIC
+  switch(page) {
+    case "generate":
+      generatePage.style.display = "block";
+      if (generatedSets.length > 0 || sessionStorage.getItem("tempGeneratedSets")) {
+        generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
+        displayGenerated();
       } else {
-        activeResultGroupId = null;
+        results.innerHTML = "";
+      }
+      break;
+
+    case "mySets":
+      mySetsPage.style.display = "block";
+      if (groupId !== null) {
+        const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
+        if (groupExists) {
+          activeResultGroupId = Number(groupId);
+          viewGroup(Number(groupId));
+        } else {
+          showMySets();
+        }
+      } else {
         showMySets();
       }
-    } else {
-      activeResultGroupId = null;
-      showMySets();
-    }
-  } else if (page === "generate") {
-    activeResultGroupId = null;
-    if (generatedSets.length > 0 || sessionStorage.getItem("tempGeneratedSets")) {
-      generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
-      displayGenerated();
-    } else {
-      results.innerHTML = "";
-    }
-  } else if (page === "panel" && groupId !== null) {
-    const group = savedGroups.find(g => Number(g.id) === Number(groupId));
-    if(group) {
-        activeResultGroupId = Number(groupId);
-        viewGroup(activeResultGroupId); 
-        openResultPanel(group.max, group.id, false); 
-    } else {
-        activeResultGroupId = null;
+      break;
+
+    case "panel":
+      // Panel sayfası aslında mySets üzerinde açılır
+      mySetsPage.style.display = "block";
+      activeResultGroupId = Number(groupId);
+      const group = savedGroups.find(g => Number(g.id) === activeResultGroupId);
+      if(group) {
+        viewGroup(activeResultGroupId); // Alttaki görünümü hazırla
+        openResultPanel(group.max, group.id, false); // Paneli aç
+      } else {
         showMySets();
-    }
+      }
+      break;
+
+    default:
+      generatePage.style.display = "block";
   }
 }
 
