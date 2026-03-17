@@ -138,7 +138,7 @@ color:#fff;
 <button onclick="navTo('mySets')">Kayıtlarım</button>
 </div>
 <div id="resultPanel" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,0.2); max-height:70%; overflow:auto; z-index:1000; border-radius: 20px 20px 0 0;">
-<h3>Sonuç Gir <span onclick="closeResultPanel(true)" style="float:right;cursor:pointer;padding:0 10px;">×</span></h3>
+<h3>Sonuç Gir <span onclick="closeResultPanel()" style="float:right;cursor:pointer;padding:0 10px;">×</span></h3>
 <div id="resultNumbers" class="ball-row"></div>
 <button onclick="confirmResult()">Onayla</button>
 <button onclick="cleanResult()" style="background:#999;margin-top:8px;">Temizle</button>
@@ -152,6 +152,7 @@ const resultPanel=document.getElementById("resultPanel")
 
 let generatedSets=JSON.parse(sessionStorage.getItem("tempGeneratedSets"))||[]
 let activeResultGroupId=null
+let isPanelOpen = false;
 
 function getLatestSavedGroups() {
     return JSON.parse(localStorage.getItem("savedGroups")) || [];
@@ -164,6 +165,7 @@ window.onload=function(){
 
 window.onpopstate=function(event){
   const state = event.state || {page:"generate", groupId:null};
+  if(isPanelOpen) closeResultPanel();
   renderCurrentState(state.page, state.groupId);
 }
 
@@ -177,8 +179,6 @@ function navTo(page,groupId=null){
 function renderCurrentState(page, groupId) {
   generatePage.style.display = "none";
   mySetsPage.style.display = "none";
-  resultPanel.style.display = "none";
-  document.body.style.overflow = "auto";
   
   const savedGroups = getLatestSavedGroups();
 
@@ -201,16 +201,6 @@ function renderCurrentState(page, groupId) {
         } else {
           showMySets();
         }
-      } else {
-        showMySets();
-      }
-  } else if (page === "panel") {
-      mySetsPage.style.display = "block";
-      const group = savedGroups.find(g => Number(g.id) === Number(groupId));
-      if(group) {
-        activeResultGroupId = Number(groupId);
-        viewGroup(activeResultGroupId);
-        openResultPanel(group.max, group.id, false);
       } else {
         showMySets();
       }
@@ -353,9 +343,9 @@ function viewGroup(id){
   }
   activeResultGroupId=Number(id);
   
-  let copyText = group.name + "\\n";
+  let copyText = group.name + "\n";
   group.sets.forEach((s, i) => {
-    copyText += `${i+1}. Kolon: ${s.numbers.join("-")}${s.jokers.length ? " + Joker: " + s.jokers.join("-") : ""}\\n`;
+    copyText += `${i+1}. Kolon: ${s.numbers.join("-")}${s.jokers.length ? " + Joker: " + s.jokers.join("-") : ""}\n`;
   });
 
   let resText = "Henüz girilmedi";
@@ -388,7 +378,7 @@ function deleteGroup(id){
   navTo('mySets');
 }
 
-function openResultPanel(max,groupId, shouldPushState = true){
+function openResultPanel(max,groupId){
   activeResultGroupId=Number(groupId);
   const currentGroups = getLatestSavedGroups();
   let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
@@ -411,21 +401,16 @@ function openResultPanel(max,groupId, shouldPushState = true){
   }
   resultDiv.innerHTML=html;
   
-  if(shouldPushState) {
-    history.pushState({page: "panel", groupId: Number(groupId)}, "");
-  }
+  isPanelOpen = true;
   resultPanel.style.display="block";
   document.body.style.overflow = "hidden";
 }
 
-function closeResultPanel(shouldGoBack = false){
+function closeResultPanel(){
+  isPanelOpen = false;
+  resultPanel.style.display="none";
   document.body.style.overflow = "auto";
-  if(shouldGoBack && history.state && history.state.page === "panel") {
-    history.back();
-  } else {
-    resultPanel.style.display="none";
-    if(activeResultGroupId) viewGroup(activeResultGroupId);
-  }
+  if(activeResultGroupId) viewGroup(activeResultGroupId);
 }
 
 function toggleMainResult(el,groupId,val){
@@ -470,7 +455,7 @@ function toggleJokerResult(el,groupId,val){
 }
 
 function confirmResult(){
-  closeResultPanel(true);
+  closeResultPanel();
 }
 
 function updateMatches(groupId){
