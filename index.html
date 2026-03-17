@@ -146,9 +146,11 @@ const savedSets=document.getElementById("savedSets")
 const resultPanel=document.getElementById("resultPanel")
 
 let generatedSets=JSON.parse(sessionStorage.getItem("tempGeneratedSets"))||[]
-let savedGroups=JSON.parse(localStorage.getItem("savedGroups"))||[]
 let activeResultGroupId=null
-let groupCounter=savedGroups.length>0?Math.max(...savedGroups.map(g=>g.id))+1:1
+
+function getLatestSavedGroups() {
+    return JSON.parse(localStorage.getItem("savedGroups")) || [];
+}
 
 window.onload=function(){
   const s = history.state || {page:"generate", groupId:null};
@@ -168,14 +170,12 @@ function navTo(page,groupId=null){
 }
 
 function renderCurrentState(page, groupId) {
-  // 1. RESET: Tüm görünümleri sıfırla
   generatePage.style.display = "none";
   mySetsPage.style.display = "none";
   resultPanel.style.display = "none";
   
-  savedGroups = JSON.parse(localStorage.getItem("savedGroups")) || [];
+  const savedGroups = getLatestSavedGroups();
 
-  // 2. ROUTING LOGIC
   switch(page) {
     case "generate":
       generatePage.style.display = "block";
@@ -203,13 +203,12 @@ function renderCurrentState(page, groupId) {
       break;
 
     case "panel":
-      // Panel sayfası aslında mySets üzerinde açılır
       mySetsPage.style.display = "block";
       activeResultGroupId = Number(groupId);
-      const group = savedGroups.find(g => Number(g.id) === activeResultGroupId);
+      const group = savedGroups.find(g => Number(g.id) === Number(activeResultGroupId));
       if(group) {
-        viewGroup(activeResultGroupId); // Alttaki görünümü hazırla
-        openResultPanel(group.max, group.id, false); // Paneli aç
+        viewGroup(activeResultGroupId);
+        openResultPanel(group.max, group.id, false);
       } else {
         showMySets();
       }
@@ -301,8 +300,10 @@ function saveGroup(){
   const jMaxVal=parseInt(document.getElementById("jokerMax").value);
   const jPerVal=parseInt(document.getElementById("jokerCount").value);
   
-  const newId = Number(groupCounter++);
-  savedGroups.push({
+  const currentGroups = getLatestSavedGroups();
+  const newId = Date.now(); 
+  
+  currentGroups.push({
     id:newId,
     name:name,
     sets:[...generatedSets],
@@ -313,7 +314,8 @@ function saveGroup(){
     jokerPerSet:jPerVal,
     results:{main:[],joker:[]}
   });
-  localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
+  
+  localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   sessionStorage.removeItem("tempGeneratedSets");
   generatedSets=[];
   alert("Kaydedildi");
@@ -321,9 +323,10 @@ function saveGroup(){
 }
 
 function showMySets(){
+  const currentGroups = getLatestSavedGroups();
   let html="<h3>Kayıtlı Kolonlarım</h3>";
-  if(savedGroups.length===0) html+="<p>Henüz kayıtlı set yok.</p>";
-  savedGroups.forEach(group=>{
+  if(currentGroups.length===0) html+="<p>Henüz kayıtlı set yok.</p>";
+  currentGroups.forEach(group=>{
     html+=`
       <div class='card'>
         <b>${group.name}</b><br>
@@ -340,7 +343,8 @@ function viewGroup(id){
     showMySets();
     return;
   }
-  let group=savedGroups.find(g=>Number(g.id)===Number(id));
+  const currentGroups = getLatestSavedGroups();
+  let group=currentGroups.find(g=>Number(g.id)===Number(id));
   if(!group){
     showMySets();
     return;
@@ -369,14 +373,16 @@ function viewGroup(id){
 
 function deleteGroup(id){
   if(!confirm("Silmek istediğinize emin misiniz?")) return;
-  savedGroups=savedGroups.filter(g=>Number(g.id)!==Number(id));
-  localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
+  let currentGroups = getLatestSavedGroups();
+  currentGroups=currentGroups.filter(g=>Number(g.id)!==Number(id));
+  localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   showMySets();
 }
 
 function openResultPanel(max,groupId, shouldPushState = true){
   activeResultGroupId=Number(groupId);
-  let group=savedGroups.find(g=>Number(g.id)===Number(groupId));
+  const currentGroups = getLatestSavedGroups();
+  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
   if(!group) return;
 
   const resultDiv=document.getElementById("resultNumbers");
@@ -411,7 +417,10 @@ function closeResultPanel(shouldGoBack = false){
 }
 
 function toggleMainResult(el,groupId,val){
-  let group=savedGroups.find(g=>Number(g.id)===Number(groupId));
+  let currentGroups = getLatestSavedGroups();
+  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
+  if(!group) return;
+  
   let limit = group.perSet || 5;
   let index=group.results.main.indexOf(val);
   if(index>-1){
@@ -425,11 +434,14 @@ function toggleMainResult(el,groupId,val){
     group.results.main.push(val);
     el.classList.add("result-selected");
   }
-  localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
+  localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
 }
 
 function toggleJokerResult(el,groupId,val){
-  let group=savedGroups.find(g=>Number(g.id)===Number(groupId));
+  let currentGroups = getLatestSavedGroups();
+  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
+  if(!group) return;
+
   let index=group.results.joker.indexOf(val);
   if(index>-1){
     group.results.joker.splice(index,1);
@@ -442,12 +454,14 @@ function toggleJokerResult(el,groupId,val){
     group.results.joker.push(val);
     el.classList.add("result-selected");
   }
-  localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
+  localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
 }
 
 function confirmResult(){
-  let group=savedGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
+  const currentGroups = getLatestSavedGroups();
+  let group=currentGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
   if(!group) return;
+  
   closeResultPanel(true);
   let el=document.getElementById(`resultText-${activeResultGroupId}`);
   if(el){
@@ -457,8 +471,10 @@ function confirmResult(){
 }
 
 function updateMatches(groupId){
-  let group=savedGroups.find(g=>Number(g.id)===Number(groupId));
+  const currentGroups = getLatestSavedGroups();
+  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
   if(!group) return;
+  
   const cards=savedSets.querySelectorAll(".card");
   cards.forEach(card=>{
     const balls=card.querySelectorAll(".ball");
@@ -476,10 +492,12 @@ function updateMatches(groupId){
 }
 
 function cleanResult(){
-  let group=savedGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
+  let currentGroups = getLatestSavedGroups();
+  let group=currentGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
   if(!group) return;
+  
   group.results={main:[],joker:[]};
-  localStorage.setItem("savedGroups",JSON.stringify(savedGroups));
+  localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
   let el=document.getElementById(`resultText-${activeResultGroupId}`);
   if(el) el.innerText="Henüz girilmedi";
