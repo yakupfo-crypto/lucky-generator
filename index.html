@@ -180,8 +180,6 @@ function renderCurrentState(page, groupId) {
   resultPanel.style.display = "none";
   document.body.style.overflow = "auto";
   
-  const savedGroups = getLatestSavedGroups();
-
   if (page === "generate") {
       generatePage.style.display = "block";
       const temp = sessionStorage.getItem("tempGeneratedSets");
@@ -194,18 +192,11 @@ function renderCurrentState(page, groupId) {
   } else if (page === "mySets") {
       mySetsPage.style.display = "block";
       if (groupId !== null) {
-        const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
-        if (groupExists) {
-          activeResultGroupId = Number(groupId);
-          viewGroup(Number(groupId));
-        } else {
-          showMySets();
-        }
+        activeResultGroupId = Number(groupId);
+        viewGroup(activeResultGroupId);
       } else {
         showMySets();
       }
-  } else {
-      generatePage.style.display = "block";
   }
 }
 
@@ -228,14 +219,8 @@ function generateSets(){
   const jPer=parseInt(document.getElementById("jokerCount").value);
   const count=parseInt(document.getElementById("setCount").value);
 
-  if(isNaN(max) || isNaN(per) || isNaN(jMax) || isNaN(jPer) || isNaN(count)) {
-    alert("Lütfen tüm alanları doldurun!");
-    return;
-  }
-  if(per > max || jPer > jMax) {
-    alert("Seçilecek adet, havuzdaki sayı miktarından büyük olamaz!");
-    return;
-  }
+  if(isNaN(max) || isNaN(per) || isNaN(jMax) || isNaN(jPer) || isNaN(count)) return alert("Lütfen tüm alanları doldurun!");
+  if(per > max || jPer > jMax) return alert("Seçilecek adet, havuzdaki sayı miktarından büyük olamaz!");
   
   generatedSets=[];
   for(let i=0;i<count;i++){
@@ -281,10 +266,8 @@ function displayGenerated(){
 function saveGroup(){
   let nameInput=document.getElementById("groupNameInput");
   let name=nameInput ? nameInput.value : "";
-  if(!name.trim()) {
-    alert("Lütfen bir grup adı girin!");
-    return;
-  }
+  if(!name.trim()) return alert("Lütfen bir grup adı girin!");
+  
   const maxVal=parseInt(document.getElementById("maxNumber").value);
   const perVal=parseInt(document.getElementById("perSet").value);
   const jMaxVal=parseInt(document.getElementById("jokerMax").value);
@@ -308,7 +291,6 @@ function saveGroup(){
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   sessionStorage.removeItem("tempGeneratedSets");
   generatedSets=[];
-  alert("Kaydedildi");
   navTo('mySets', newId);
 }
 
@@ -337,12 +319,8 @@ function copyToClipboard(text) {
 function viewGroup(id){
   const currentGroups = getLatestSavedGroups();
   let group=currentGroups.find(g=>Number(g.id)===Number(id));
-  if(!group){
-    showMySets();
-    return;
-  }
-  activeResultGroupId=Number(id);
-  
+  if(!group) return showMySets();
+
   let copyText = group.name + "\n";
   group.sets.forEach((s, i) => {
     copyText += `${i+1}. Kolon: ${s.numbers.join("-")}${s.jokers.length ? " + Joker: " + s.jokers.join("-") : ""}\n`;
@@ -372,19 +350,16 @@ function viewGroup(id){
 
 function deleteGroup(id){
   if(!confirm("Silmek istediğinize emin misiniz?")) return;
-  let currentGroups = getLatestSavedGroups();
-  currentGroups=currentGroups.filter(g=>Number(g.id)!==Number(id));
+  let currentGroups = getLatestSavedGroups().filter(g=>Number(g.id)!==Number(id));
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   navTo('mySets');
 }
 
 function openResultPanel(max, groupId){
   activeResultGroupId=Number(groupId);
-  const currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
+  const group = getLatestSavedGroups().find(g=>Number(g.id)===Number(groupId));
   if(!group) return;
 
-  const resultDiv=document.getElementById("resultNumbers");
   let html="<h4>Ana Sayı Havuzu (1-"+max+")</h4><div class='ball-row'>";
   for(let i=1;i<=max;i++){
     let isSelected=group.results.main.includes(i)?"result-selected":"";
@@ -399,15 +374,14 @@ function openResultPanel(max, groupId){
     }
     html+="</div>";
   }
-  resultDiv.innerHTML=html;
-  
+  document.getElementById("resultNumbers").innerHTML=html;
   resultPanel.style.display="block";
   document.body.style.overflow = "hidden";
 }
 
 function closeResultPanel(){
-  document.body.style.overflow = "auto";
   resultPanel.style.display="none";
+  document.body.style.overflow = "auto";
   if(activeResultGroupId) viewGroup(activeResultGroupId);
 }
 
@@ -422,10 +396,7 @@ function toggleMainResult(el,groupId,val){
     group.results.main.splice(index,1);
     el.classList.remove("result-selected");
   }else{
-    if(group.results.main.length >= limit){
-      alert("Maksimum ana sayı (" + limit + ") seçildi!");
-      return;
-    }
+    if(group.results.main.length >= limit) return alert("Maksimum ana sayı (" + limit + ") seçildi!");
     group.results.main.push(val);
     el.classList.add("result-selected");
   }
@@ -442,10 +413,7 @@ function toggleJokerResult(el,groupId,val){
     group.results.joker.splice(index,1);
     el.classList.remove("result-selected");
   }else{
-    if(group.results.joker.length>=group.jokerPerSet){
-      alert("Maksimum joker sayı (" + group.jokerPerSet + ") seçildi!");
-      return;
-    }
+    if(group.results.joker.length>=group.jokerPerSet) return alert("Maksimum joker sayı (" + group.jokerPerSet + ") seçildi!");
     group.results.joker.push(val);
     el.classList.add("result-selected");
   }
@@ -457,22 +425,15 @@ function confirmResult(){
 }
 
 function updateMatches(groupId){
-  const currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
+  const group = getLatestSavedGroups().find(g=>Number(g.id)===Number(groupId));
   if(!group) return;
   
-  const cards=savedSets.querySelectorAll(".card");
-  cards.forEach(card=>{
-    const balls=card.querySelectorAll(".ball");
-    balls.forEach(b=>{
+  savedSets.querySelectorAll(".card").forEach(card=>{
+    card.querySelectorAll(".ball").forEach(b=>{
       const val=parseInt(b.innerText);
-      if(b.classList.contains("joker")){
-        if(group.results.joker.includes(val)) b.classList.add("result-selected");
-        else b.classList.remove("result-selected");
-      }else{
-        if(group.results.main.includes(val)) b.classList.add("result-selected");
-        else b.classList.remove("result-selected");
-      }
+      const isJoker = b.classList.contains("joker");
+      const isHit = isJoker ? group.results.joker.includes(val) : group.results.main.includes(val);
+      b.classList.toggle("result-selected", isHit);
     });
   });
 }
@@ -481,12 +442,10 @@ function cleanResult(){
   let currentGroups = getLatestSavedGroups();
   let group=currentGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
   if(!group) return;
-  
   group.results={main:[],joker:[]};
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
-  let el=document.getElementById(`resultText-${activeResultGroupId}`);
-  if(el) el.innerText="Henüz girilmedi";
+  if(document.getElementById(`resultText-${activeResultGroupId}`)) document.getElementById(`resultText-${activeResultGroupId}`).innerText="Henüz girilmedi";
   updateMatches(activeResultGroupId);
 }
 </script>
