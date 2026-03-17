@@ -152,7 +152,6 @@ const resultPanel=document.getElementById("resultPanel")
 
 let generatedSets=JSON.parse(sessionStorage.getItem("tempGeneratedSets"))||[]
 let activeResultGroupId=null
-let isPanelOpen = false;
 
 function getLatestSavedGroups() {
     return JSON.parse(localStorage.getItem("savedGroups")) || [];
@@ -165,7 +164,6 @@ window.onload=function(){
 
 window.onpopstate=function(event){
   const state = event.state || {page:"generate", groupId:null};
-  if(isPanelOpen) closeResultPanel();
   renderCurrentState(state.page, state.groupId);
 }
 
@@ -179,6 +177,8 @@ function navTo(page,groupId=null){
 function renderCurrentState(page, groupId) {
   generatePage.style.display = "none";
   mySetsPage.style.display = "none";
+  resultPanel.style.display = "none";
+  document.body.style.overflow = "auto";
   
   const savedGroups = getLatestSavedGroups();
 
@@ -378,7 +378,7 @@ function deleteGroup(id){
   navTo('mySets');
 }
 
-function openResultPanel(max,groupId){
+function openResultPanel(max, groupId){
   activeResultGroupId=Number(groupId);
   const currentGroups = getLatestSavedGroups();
   let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
@@ -401,15 +401,13 @@ function openResultPanel(max,groupId){
   }
   resultDiv.innerHTML=html;
   
-  isPanelOpen = true;
   resultPanel.style.display="block";
   document.body.style.overflow = "hidden";
 }
 
 function closeResultPanel(){
-  isPanelOpen = false;
-  resultPanel.style.display="none";
   document.body.style.overflow = "auto";
+  resultPanel.style.display="none";
   if(activeResultGroupId) viewGroup(activeResultGroupId);
 }
 
