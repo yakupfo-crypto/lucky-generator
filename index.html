@@ -170,15 +170,18 @@ function navTo(page,groupId=null){
 }
 
 function renderCurrentState(page, groupId) {
+  // Reset initial visibility
   generatePage.style.display = "none";
   mySetsPage.style.display = "none";
   resultPanel.style.display = "none";
   
   const savedGroups = getLatestSavedGroups();
+  const cleanGroupId = groupId !== null ? Number(groupId) : null;
 
   switch(page) {
     case "generate":
       generatePage.style.display = "block";
+      activeResultGroupId = null;
       if (generatedSets.length > 0 || sessionStorage.getItem("tempGeneratedSets")) {
         generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
         displayGenerated();
@@ -189,28 +192,32 @@ function renderCurrentState(page, groupId) {
 
     case "mySets":
       mySetsPage.style.display = "block";
-      if (groupId !== null) {
-        const groupExists = savedGroups.find(g => Number(g.id) === Number(groupId));
+      if (cleanGroupId !== null) {
+        const groupExists = savedGroups.find(g => Number(g.id) === cleanGroupId);
         if (groupExists) {
-          activeResultGroupId = Number(groupId);
-          viewGroup(Number(groupId));
+          activeResultGroupId = cleanGroupId;
+          viewGroup(cleanGroupId);
         } else {
+          activeResultGroupId = null;
           history.replaceState({page:"mySets", groupId:null}, "");
           showMySets();
         }
       } else {
+        activeResultGroupId = null;
         showMySets();
       }
       break;
 
     case "panel":
       mySetsPage.style.display = "block";
-      activeResultGroupId = Number(groupId);
-      const group = savedGroups.find(g => Number(g.id) === Number(activeResultGroupId));
-      if(group) {
-        viewGroup(activeResultGroupId);
-        openResultPanel(group.max, group.id, false);
+      const panelGroup = savedGroups.find(g => Number(g.id) === cleanGroupId);
+      if(panelGroup) {
+        activeResultGroupId = cleanGroupId;
+        // Önce DOM'u hazırla (viewGroup), sonra paneli aç (senkronizasyon için)
+        viewGroup(cleanGroupId);
+        openResultPanel(panelGroup.max, panelGroup.id, false);
       } else {
+        activeResultGroupId = null;
         history.replaceState({page:"mySets", groupId:null}, "");
         showMySets();
       }
@@ -218,6 +225,7 @@ function renderCurrentState(page, groupId) {
 
     default:
       generatePage.style.display = "block";
+      activeResultGroupId = null;
   }
 }
 
@@ -342,13 +350,15 @@ function showMySets(){
 
 function viewGroup(id){
   const currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(id));
+  const cleanId = Number(id);
+  let group=currentGroups.find(g=>Number(g.id)===cleanId);
+  
   if(!group){
     showMySets();
     return;
   }
   
-  activeResultGroupId=Number(id);
+  activeResultGroupId = cleanId;
   let resText = "Henüz girilmedi";
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
     resText = "Ana: " + group.results.main.join(",") + " | Joker: " + group.results.joker.join(",");
@@ -367,20 +377,19 @@ function viewGroup(id){
   });
   html+=`<button onclick='navTo("mySets")' style="background:#666;">Listeye Dön</button>`;
   
-  // DOM Sync Safety: Only update if we are still on the mySets page
-  if(mySetsPage.style.display !== "none") {
-      savedSets.innerHTML=html;
-      updateMatches(group.id);
-  }
+  // Render regardless of display check but target the correct container
+  savedSets.innerHTML=html;
+  updateMatches(cleanId);
 }
 
 function deleteGroup(id){
   if(!confirm("Silmek istediğinize emin misiniz?")) return;
+  const cleanId = Number(id);
   let currentGroups = getLatestSavedGroups();
-  currentGroups=currentGroups.filter(g=>Number(g.id)!==Number(id));
+  currentGroups=currentGroups.filter(g=>Number(g.id)!==cleanId);
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   
-  if(history.state && history.state.groupId == id) {
+  if(history.state && Number(history.state.groupId) === cleanId) {
       navTo('mySets');
   } else {
       showMySets();
@@ -388,45 +397,50 @@ function deleteGroup(id){
 }
 
 function openResultPanel(max,groupId, shouldPushState = true){
-  activeResultGroupId=Number(groupId);
+  const cleanGroupId = Number(groupId);
+  activeResultGroupId = cleanGroupId;
   const currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
+  let group=currentGroups.find(g=>Number(g.id)===cleanGroupId);
   if(!group) return;
 
   const resultDiv=document.getElementById("resultNumbers");
   let html="<h4>Ana Sayı Havuzu (1-"+max+")</h4><div class='ball-row'>";
   for(let i=1;i<=max;i++){
     let isSelected=group.results.main.includes(i)?"result-selected":"";
-    html+=`<div class="ball ${isSelected}" onclick="toggleMainResult(this,${groupId},${i})">${i}</div>`;
+    html+=`<div class="ball ${isSelected}" onclick="toggleMainResult(this,${cleanGroupId},${i})">${i}</div>`;
   }
   html+="</div>";
   if(group.jokerPerSet>0){
     html+="<h4>Joker Havuzu (1-"+group.jokerMax+")</h4><div class='ball-row'>";
     for(let i=1;i<=group.jokerMax;i++){
       let isSelectedJoker=group.results.joker.includes(i)?"joker result-selected":"joker";
-      html+=`<div class="ball ${isSelectedJoker}" onclick="toggleJokerResult(this,${groupId},${i})">${i}</div>`;
+      html+=`<div class="ball ${isSelectedJoker}" onclick="toggleJokerResult(this,${cleanGroupId},${i})">${i}</div>`;
     }
     html+="</div>";
   }
   resultDiv.innerHTML=html;
   
   if(shouldPushState) {
-    history.pushState({page: "panel", groupId: Number(groupId)}, "");
+    history.pushState({page: "panel", groupId: cleanGroupId}, "");
   }
   resultPanel.style.display="block";
 }
 
 function closeResultPanel(shouldGoBack = false){
   if(shouldGoBack && history.state && history.state.page === "panel") {
+    // Sadece panel sayfasındaysak geri git, yoksa manuel kapa (Safety check)
     history.back();
   } else {
     resultPanel.style.display="none";
+    if(activeResultGroupId) navTo("mySets", activeResultGroupId);
+    else navTo("mySets");
   }
 }
 
 function toggleMainResult(el,groupId,val){
+  const cleanGroupId = Number(groupId);
   let currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
+  let group=currentGroups.find(g=>Number(g.id)===cleanGroupId);
   if(!group) return;
   
   let limit = group.perSet || 5;
@@ -444,16 +458,17 @@ function toggleMainResult(el,groupId,val){
   }
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   
-  const resEl = document.getElementById(`resultText-${groupId}`);
+  const resEl = document.getElementById(`resultText-${cleanGroupId}`);
   if(resEl) {
       resEl.innerText = "Ana: " + group.results.main.join(",") + " | Joker: " + group.results.joker.join(",");
   }
-  updateMatches(groupId);
+  updateMatches(cleanGroupId);
 }
 
 function toggleJokerResult(el,groupId,val){
+  const cleanGroupId = Number(groupId);
   let currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
+  let group=currentGroups.find(g=>Number(g.id)===cleanGroupId);
   if(!group) return;
 
   let index=group.results.joker.indexOf(val);
@@ -470,20 +485,22 @@ function toggleJokerResult(el,groupId,val){
   }
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   
-  const resEl = document.getElementById(`resultText-${groupId}`);
+  const resEl = document.getElementById(`resultText-${cleanGroupId}`);
   if(resEl) {
       resEl.innerText = "Ana: " + group.results.main.join(",") + " | Joker: " + group.results.joker.join(",");
   }
-  updateMatches(groupId);
+  updateMatches(cleanGroupId);
 }
 
 function confirmResult(){
+  // Panel kapatıldığında popstate tetiklenecek ve renderCurrentState her şeyi düzeltecek
   closeResultPanel(true);
 }
 
 function updateMatches(groupId){
+  const cleanId = Number(groupId);
   const currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(groupId));
+  let group=currentGroups.find(g=>Number(g.id)===cleanId);
   if(!group) return;
   
   const cards=savedSets.querySelectorAll(".card");
@@ -504,6 +521,7 @@ function updateMatches(groupId){
 }
 
 function cleanResult(){
+  if(!activeResultGroupId) return;
   let currentGroups = getLatestSavedGroups();
   let group=currentGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
   if(!group) return;
