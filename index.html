@@ -216,7 +216,6 @@ function renderCurrentState(page, groupId) {
       if(panelGroup) {
         activeResultGroupId = cleanGroupId;
         viewGroup(cleanGroupId);
-        // DOM'un render edilmesini bekleyip paneli açıyoruz (Race condition önlemi)
         requestAnimationFrame(() => {
           openResultPanel(panelGroup.max, panelGroup.id, false);
         });
@@ -384,7 +383,6 @@ function viewGroup(id){
   html+=`<button onclick='navTo("mySets")' style="background:#666;">Listeye Dön</button>`;
   
   savedSets.innerHTML=html;
-  // DOM güncellemesinden hemen sonra eşleşmeleri vurgula
   requestAnimationFrame(() => updateMatches(cleanId));
 }
 
@@ -395,7 +393,6 @@ function deleteGroup(id){
   currentGroups=currentGroups.filter(g=>Number(g.id)!==cleanId);
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   
-  // Eğer silinen grubun detay sayfasındaysak listeye yönlendir
   if(activeResultGroupId === cleanId) {
       navTo('mySets');
   } else {
@@ -434,6 +431,8 @@ function openResultPanel(max, groupId, shouldPushState = true){
 }
 
 function closeResultPanel(shouldGoBack = false){
+  // Geliştirme: Eğer panel açıksa ve geri gidilmesi gerekiyorsa (X butonu veya Onayla)
+  // Sadece history'de gerçekten panel varsa geri gidilir, aksi halde sadece kapatılır.
   if(shouldGoBack && history.state && history.state.page === "panel") {
     history.back();
   } else {
