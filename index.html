@@ -195,6 +195,8 @@ function renderCurrentState(page, groupId) {
           activeResultGroupId = Number(groupId);
           viewGroup(Number(groupId));
         } else {
+          // Eğer ID bulunamazsa geçmişi temizle ve ana listeye dön
+          history.replaceState({page:"mySets", groupId:null}, "");
           showMySets();
         }
       } else {
@@ -210,6 +212,7 @@ function renderCurrentState(page, groupId) {
         viewGroup(activeResultGroupId);
         openResultPanel(group.max, group.id, false);
       } else {
+        history.replaceState({page:"mySets", groupId:null}, "");
         showMySets();
       }
       break;
@@ -376,7 +379,13 @@ function deleteGroup(id){
   let currentGroups = getLatestSavedGroups();
   currentGroups=currentGroups.filter(g=>Number(g.id)!==Number(id));
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
-  showMySets();
+  
+  // Eğer detay sayfasındayken silindiyse listeye dön
+  if(history.state && history.state.groupId == id) {
+      navTo('mySets');
+  } else {
+      showMySets();
+  }
 }
 
 function openResultPanel(max,groupId, shouldPushState = true){
