@@ -103,6 +103,10 @@ color:#1976d2;
 background:#1976d2;
 color:#fff;
 }
+.copy-btn {
+    background: #4caf50;
+    margin-bottom: 10px;
+}
 </style>
 </head>
 <body>
@@ -286,6 +290,22 @@ function generateSets(){
     displayGenerated();
 }
 
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert("Pano'ya kopyalandı!");
+    });
+}
+
+function formatGroupForCopy(group) {
+    let text = `${group.name} Sonuçları\n`;
+    group.sets.forEach((set, i) => {
+        text += `${i+1}. Kolon: ${set.numbers.join(", ")}`;
+        if(set.jokers.length > 0) text += ` + Joker: ${set.jokers.join(", ")}`;
+        text += `\n`;
+    });
+    return text;
+}
+
 function displayGenerated(){
     let html="";
     generatedSets.forEach((set,i)=>{
@@ -370,6 +390,7 @@ function viewGroup(id){
     }
     
     let html=`<h3>${group.name}</h3>`;
+    html+=`<button class="copy-btn" onclick='copyToClipboard(formatGroupForCopy(getLatestSavedGroups().find(g=>String(g.id)==="${cleanId}")))'>Panoya Kopyala</button>`;
     html+=`
         <div class="card">
             <b>Sonuçlar:</b>
