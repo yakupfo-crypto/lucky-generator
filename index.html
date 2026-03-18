@@ -163,8 +163,7 @@ window.onpopstate=function(event){
 }
 
 function navTo(page, groupId=null){
-  let cleanId = (groupId !== null && groupId !== undefined) ? Number(groupId) : null;
-  if (isNaN(cleanId)) cleanId = null;
+  const cleanId = (groupId !== null && groupId !== undefined) ? String(groupId) : null;
   history.pushState({page:page, groupId:cleanId}, "");
   renderCurrentState(page, cleanId);
 }
@@ -172,13 +171,13 @@ function navTo(page, groupId=null){
 function renderCurrentState(page, groupId) {
   generatePage.style.display = "none";
   mySetsPage.style.display = "none";
+  resultPanel.style.display = "none";
   
   const savedGroups = getLatestSavedGroups();
-  const cleanGroupId = (groupId !== null && groupId !== undefined) ? Number(groupId) : null;
+  const cleanGroupId = (groupId !== null && groupId !== undefined) ? String(groupId) : null;
 
   switch(page) {
     case "generate":
-      resultPanel.style.display = "none";
       generatePage.style.display = "block";
       activeResultGroupId = null;
       const stored = sessionStorage.getItem("tempGeneratedSets");
@@ -192,10 +191,9 @@ function renderCurrentState(page, groupId) {
       break;
 
     case "mySets":
-      resultPanel.style.display = "none";
       mySetsPage.style.display = "block";
-      if (cleanGroupId !== null && !isNaN(cleanGroupId)) {
-        const groupExists = savedGroups.find(g => Number(g.id) === cleanGroupId);
+      if (cleanGroupId) {
+        const groupExists = savedGroups.find(g => String(g.id) === cleanGroupId);
         if (groupExists) {
           activeResultGroupId = cleanGroupId;
           viewGroup(cleanGroupId);
@@ -212,7 +210,7 @@ function renderCurrentState(page, groupId) {
 
     case "panel":
       mySetsPage.style.display = "block";
-      const panelGroup = savedGroups.find(g => Number(g.id) === cleanGroupId);
+      const panelGroup = savedGroups.find(g => String(g.id) === cleanGroupId);
       if(panelGroup) {
         activeResultGroupId = cleanGroupId;
         viewGroup(cleanGroupId);
@@ -220,7 +218,6 @@ function renderCurrentState(page, groupId) {
           openResultPanel(panelGroup.max, panelGroup.id, false);
         });
       } else {
-        resultPanel.style.display = "none";
         activeResultGroupId = null;
         history.replaceState({page:"mySets", groupId:null}, "");
         showMySets();
@@ -228,7 +225,6 @@ function renderCurrentState(page, groupId) {
       break;
 
     default:
-      resultPanel.style.display = "none";
       generatePage.style.display = "block";
       activeResultGroupId = null;
   }
@@ -316,7 +312,7 @@ function saveGroup(){
   const jPerVal=parseInt(document.getElementById("jokerCount").value);
   
   const currentGroups = getLatestSavedGroups();
-  const newId = Date.now(); 
+  const newId = String(Date.now()); 
   
   currentGroups.push({
     id:newId,
@@ -346,8 +342,8 @@ function showMySets(){
       <div class='card' id="group-card-${group.id}">
         <b>${group.name}</b><br>
         Kolon Sayısı: ${group.sets.length}<br>
-        <button onclick='navTo("mySets",${group.id})'>Görüntüle</button>
-        <button onclick='deleteGroup(${group.id})' style="background:#d32f2f;margin-top:5px;">Sil</button>
+        <button onclick='navTo("mySets","${group.id}")'>Görüntüle</button>
+        <button onclick='deleteGroup("${group.id}")' style="background:#d32f2f;margin-top:5px;">Sil</button>
       </div>`;
   });
   savedSets.innerHTML=html;
@@ -355,8 +351,8 @@ function showMySets(){
 
 function viewGroup(id){
   const currentGroups = getLatestSavedGroups();
-  const cleanId = Number(id);
-  let group=currentGroups.find(g=>Number(g.id)===cleanId);
+  const cleanId = String(id);
+  let group=currentGroups.find(g=>String(g.id)===cleanId);
   
   if(!group){
     showMySets();
@@ -375,7 +371,7 @@ function viewGroup(id){
       <b>Sonuçlar:</b>
       <span id="resultText-${group.id}">${resText}</span>
       <br>
-      <button onclick="openResultPanel(${group.max},${group.id})">Sonuç Gir (Kıyasla)</button>
+      <button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button>
     </div>`;
   group.sets.forEach((set,i)=>{
     html+=`<div class='card'><b>${i+1}.</b>${createBalls(set)}</div>`;
@@ -388,9 +384,9 @@ function viewGroup(id){
 
 function deleteGroup(id){
   if(!confirm("Silmek istediğinize emin misiniz?")) return;
-  const cleanId = Number(id);
+  const cleanId = String(id);
   let currentGroups = getLatestSavedGroups();
-  currentGroups=currentGroups.filter(g=>Number(g.id)!==cleanId);
+  currentGroups=currentGroups.filter(g=>String(g.id)!==cleanId);
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   
   if(activeResultGroupId === cleanId) {
@@ -401,24 +397,26 @@ function deleteGroup(id){
 }
 
 function openResultPanel(max, groupId, shouldPushState = true){
-  const cleanGroupId = Number(groupId);
+  const cleanGroupId = String(groupId);
   activeResultGroupId = cleanGroupId;
   const currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===cleanGroupId);
+  let group=currentGroups.find(g=>String(g.id)===cleanGroupId);
   if(!group) return;
 
   const resultDiv=document.getElementById("resultNumbers");
+  if(!resultDiv) return;
+
   let html="<h4>Ana Sayı Havuzu (1-"+max+")</h4><div class='ball-row'>";
   for(let i=1;i<=max;i++){
     let isSelected=group.results.main.includes(i)?"result-selected":"";
-    html+=`<div class="ball ${isSelected}" onclick="toggleMainResult(this,${cleanGroupId},${i})">${i}</div>`;
+    html+=`<div class="ball ${isSelected}" onclick="toggleMainResult(this,'${cleanGroupId}',${i})">${i}</div>`;
   }
   html+="</div>";
   if(group.jokerPerSet>0){
     html+="<h4>Joker Havuzu (1-"+group.jokerMax+")</h4><div class='ball-row'>";
     for(let i=1;i<=group.jokerMax;i++){
       let isSelectedJoker=group.results.joker.includes(i)?"joker result-selected":"joker";
-      html+=`<div class="ball ${isSelectedJoker}" onclick="toggleJokerResult(this,${cleanGroupId},${i})">${i}</div>`;
+      html+=`<div class="ball ${isSelectedJoker}" onclick="toggleJokerResult(this,'${cleanGroupId}',${i})">${i}</div>`;
     }
     html+="</div>";
   }
@@ -431,19 +429,21 @@ function openResultPanel(max, groupId, shouldPushState = true){
 }
 
 function closeResultPanel(shouldGoBack = false){
-  // Geliştirme: Eğer panel açıksa ve geri gidilmesi gerekiyorsa (X butonu veya Onayla)
-  // Sadece history'de gerçekten panel varsa geri gidilir, aksi halde sadece kapatılır.
-  if(shouldGoBack && history.state && history.state.page === "panel") {
-    history.back();
+  if(shouldGoBack) {
+    if(history.state && history.state.page === "panel") {
+      history.back();
+    } else {
+      navTo("mySets", activeResultGroupId);
+    }
   } else {
     resultPanel.style.display="none";
   }
 }
 
 function toggleMainResult(el,groupId,val){
-  const cleanGroupId = Number(groupId);
+  const cleanGroupId = String(groupId);
   let currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===cleanGroupId);
+  let group=currentGroups.find(g=>String(g.id)===cleanGroupId);
   if(!group) return;
   
   let limit = group.perSet || 5;
@@ -469,9 +469,9 @@ function toggleMainResult(el,groupId,val){
 }
 
 function toggleJokerResult(el,groupId,val){
-  const cleanGroupId = Number(groupId);
+  const cleanGroupId = String(groupId);
   let currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===cleanGroupId);
+  let group=currentGroups.find(g=>String(g.id)===cleanGroupId);
   if(!group) return;
 
   let index=group.results.joker.indexOf(val);
@@ -500,9 +500,9 @@ function confirmResult(){
 }
 
 function updateMatches(groupId){
-  const cleanId = Number(groupId);
+  const cleanId = String(groupId);
   const currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===cleanId);
+  let group=currentGroups.find(g=>String(g.id)===cleanId);
   if(!group) return;
   
   const cards=savedSets.querySelectorAll(".card");
@@ -527,7 +527,7 @@ function updateMatches(groupId){
 function cleanResult(){
   if(!activeResultGroupId) return;
   let currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
+  let group=currentGroups.find(g=>String(g.id)===String(activeResultGroupId));
   if(!group) return;
   
   group.results={main:[],joker:[]};
