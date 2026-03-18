@@ -110,7 +110,9 @@ color:#fff;
 </style>
 </head>
 <body>
+
 <header>Lucky Generator</header>
+
 <div class="container" id="generatePage">
 <div class="card">
 <label><b>Ana Grup Toplam Sayı (Havuz)</b></label>
@@ -129,19 +131,23 @@ color:#fff;
 </div>
 <div id="results"></div>
 </div>
+
 <div class="container" id="mySetsPage" style="display:none;">
 <div id="savedSets"></div>
 </div>
+
 <div class="bottom-nav">
 <button onclick="navTo('generate')">Üret</button>
 <button onclick="navTo('mySets')">Kayıtlarım</button>
 </div>
+
 <div id="resultPanel" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,0.2); max-height:70%; overflow:auto; z-index:1000;">
 <h3>Sonuç Gir <span onclick="closeResultPanel(true)" style="float:right;cursor:pointer;">×</span></h3>
 <div id="resultNumbers" class="ball-row"></div>
 <button onclick="confirmResult()">Onayla</button>
 <button onclick="cleanResult()" style="background:#999;margin-top:8px;">Temizle</button>
 </div>
+
 <script>
 const generatePage=document.getElementById("generatePage");
 const mySetsPage=document.getElementById("mySetsPage");
@@ -177,8 +183,10 @@ function navTo(page, groupId=null){
 function renderCurrentState(page, groupId) {
     generatePage.style.display = "none";
     mySetsPage.style.display = "none";
-    resultPanel.style.display = "none";
     
+    // Panel flicker engelleme: Eğer sayfa panel değilse kapat, panel ise bekle
+    if(page !== "panel") resultPanel.style.display = "none";
+
     const savedGroups = getLatestSavedGroups();
     const cleanGroupId = (groupId !== null && groupId !== undefined) ? String(groupId) : null;
 
@@ -187,8 +195,19 @@ function renderCurrentState(page, groupId) {
             generatePage.style.display = "block";
             activeResultGroupId = null;
             const stored = sessionStorage.getItem("tempGeneratedSets");
+            const storedInputs = sessionStorage.getItem("tempInputs");
+            
             if (stored) {
                 generatedSets = JSON.parse(stored);
+                // Input değerlerini geri yükle
+                if(storedInputs) {
+                    const inputs = JSON.parse(storedInputs);
+                    document.getElementById("maxNumber").value = inputs.max;
+                    document.getElementById("perSet").value = inputs.per;
+                    document.getElementById("jokerMax").value = inputs.jMax;
+                    document.getElementById("jokerCount").value = inputs.jPer;
+                    document.getElementById("setCount").value = inputs.count;
+                }
                 displayGenerated();
             } else {
                 generatedSets = [];
@@ -220,9 +239,8 @@ function renderCurrentState(page, groupId) {
                 mySetsPage.style.display = "block";
                 activeResultGroupId = cleanGroupId;
                 viewGroup(cleanGroupId);
-                setTimeout(() => {
-                    openResultPanel(panelGroup.max, panelGroup.id, false);
-                }, 10);
+                // Direkt render et, setTimeout'u sadece DOM yerleşimi için minimal tut
+                openResultPanel(panelGroup.max, panelGroup.id, false);
             } else {
                 activeResultGroupId = null;
                 history.replaceState({page:"mySets", groupId:null}, "");
@@ -286,7 +304,11 @@ function generateSets(){
         }
         generatedSets.push({numbers,jokers,max,jokerMax:jMax});
     }
+
+    // Verilerle birlikte inputları da sakla
     sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
+    sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
+    
     displayGenerated();
 }
 
@@ -351,6 +373,7 @@ function saveGroup(){
     
     localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
     sessionStorage.removeItem("tempGeneratedSets");
+    sessionStorage.removeItem("tempInputs");
     generatedSets=[];
     alert("Kaydedildi");
     navTo('mySets', newId);
@@ -414,9 +437,11 @@ function deleteGroup(id){
     currentGroups=currentGroups.filter(g=>String(g.id)!==cleanId);
     localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
     
+    // Geçmişi temizle (Olmayan sayfaya Geri gitmeyi engeller)
     if(activeResultGroupId === cleanId) {
         activeResultGroupId = null;
-        navTo("mySets");
+        history.replaceState({page:"mySets", groupId:null}, "");
+        renderCurrentState("mySets", null);
     } else {
         showMySets();
     }
