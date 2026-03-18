@@ -209,9 +209,9 @@ function renderCurrentState(page, groupId) {
       break;
 
     case "panel":
-      mySetsPage.style.display = "block";
       const panelGroup = savedGroups.find(g => String(g.id) === cleanGroupId);
       if(panelGroup) {
+        mySetsPage.style.display = "block";
         activeResultGroupId = cleanGroupId;
         viewGroup(cleanGroupId);
         requestAnimationFrame(() => {
@@ -220,6 +220,7 @@ function renderCurrentState(page, groupId) {
       } else {
         activeResultGroupId = null;
         history.replaceState({page:"mySets", groupId:null}, "");
+        mySetsPage.style.display = "block";
         showMySets();
       }
       break;
@@ -355,6 +356,7 @@ function viewGroup(id){
   let group=currentGroups.find(g=>String(g.id)===cleanId);
   
   if(!group){
+    activeResultGroupId = null;
     showMySets();
     return;
   }
@@ -390,7 +392,9 @@ function deleteGroup(id){
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   
   if(activeResultGroupId === cleanId) {
-      navTo('mySets');
+      activeResultGroupId = null;
+      history.replaceState({page:"mySets", groupId:null}, "");
+      renderCurrentState("mySets", null);
   } else {
       showMySets();
   }
