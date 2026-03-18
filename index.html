@@ -156,12 +156,15 @@ const savedSets=document.getElementById("savedSets");
 const resultPanel=document.getElementById("resultPanel");
 
 let generatedSets=[];
-let activeResultGroupId=null;
 
 function getLatestSavedGroups() {
     try {
         return JSON.parse(localStorage.getItem("savedGroups")) || [];
     } catch(e) { return []; }
+}
+
+function getActiveGroupIdFromState() {
+    return (history.state && history.state.groupId) ? String(history.state.groupId) : null;
 }
 
 window.onload=function(){
@@ -184,7 +187,6 @@ function renderCurrentState(page, groupId) {
     generatePage.style.display = "none";
     mySetsPage.style.display = "none";
     
-    // Panel flicker engelleme: Eğer sayfa panel değilse kapat, panel ise bekle
     if(page !== "panel") resultPanel.style.display = "none";
 
     const savedGroups = getLatestSavedGroups();
@@ -193,13 +195,11 @@ function renderCurrentState(page, groupId) {
     switch(page) {
         case "generate":
             generatePage.style.display = "block";
-            activeResultGroupId = null;
             const stored = sessionStorage.getItem("tempGeneratedSets");
             const storedInputs = sessionStorage.getItem("tempInputs");
             
             if (stored) {
                 generatedSets = JSON.parse(stored);
-                // Input değerlerini geri yükle
                 if(storedInputs) {
                     const inputs = JSON.parse(storedInputs);
                     document.getElementById("maxNumber").value = inputs.max;
@@ -220,15 +220,12 @@ function renderCurrentState(page, groupId) {
             if (cleanGroupId) {
                 const groupExists = savedGroups.find(g => String(g.id) === cleanGroupId);
                 if (groupExists) {
-                    activeResultGroupId = cleanGroupId;
                     viewGroup(cleanGroupId);
                 } else {
-                    activeResultGroupId = null;
                     history.replaceState({page:"mySets", groupId:null}, "");
                     showMySets();
                 }
             } else {
-                activeResultGroupId = null;
                 showMySets();
             }
             break;
@@ -237,12 +234,9 @@ function renderCurrentState(page, groupId) {
             const panelGroup = savedGroups.find(g => String(g.id) === cleanGroupId);
             if(panelGroup) {
                 mySetsPage.style.display = "block";
-                activeResultGroupId = cleanGroupId;
                 viewGroup(cleanGroupId);
-                // Direkt render et, setTimeout'u sadece DOM yerleşimi için minimal tut
                 openResultPanel(panelGroup.max, panelGroup.id, false);
             } else {
-                activeResultGroupId = null;
                 history.replaceState({page:"mySets", groupId:null}, "");
                 mySetsPage.style.display = "block";
                 showMySets();
@@ -251,7 +245,6 @@ function renderCurrentState(page, groupId) {
 
         default:
             generatePage.style.display = "block";
-            activeResultGroupId = null;
     }
 }
 
@@ -305,7 +298,6 @@ function generateSets(){
         generatedSets.push({numbers,jokers,max,jokerMax:jMax});
     }
 
-    // Verilerle birlikte inputları da sakla
     sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
     sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
     
@@ -319,6 +311,7 @@ function copyToClipboard(text) {
 }
 
 function formatGroupForCopy(group) {
+    if(!group) return "";
     let text = `${group.name} Sonuçları\n`;
     group.sets.forEach((set, i) => {
         text += `${i+1}. Kolon: ${set.numbers.join(", ")}`;
@@ -401,12 +394,10 @@ function viewGroup(id){
     let group=currentGroups.find(g=>String(g.id)===cleanId);
     
     if(!group){
-        activeResultGroupId = null;
         showMySets();
         return;
     }
     
-    activeResultGroupId = cleanId;
     let resText = "Henüz girilmedi";
     if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
         resText = "Ana: " + group.results.main.join(",") + " | Joker: " + group.results.joker.join(",");
@@ -437,9 +428,8 @@ function deleteGroup(id){
     currentGroups=currentGroups.filter(g=>String(g.id)!==cleanId);
     localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
     
-    // Geçmişi temizle (Olmayan sayfaya Geri gitmeyi engeller)
-    if(activeResultGroupId === cleanId) {
-        activeResultGroupId = null;
+    const activeId = getActiveGroupIdFromState();
+    if(activeId === cleanId) {
         history.replaceState({page:"mySets", groupId:null}, "");
         renderCurrentState("mySets", null);
     } else {
@@ -449,7 +439,6 @@ function deleteGroup(id){
 
 function openResultPanel(max, groupId, shouldPushState = true){
     const cleanGroupId = String(groupId);
-    activeResultGroupId = cleanGroupId;
     const currentGroups = getLatestSavedGroups();
     let group=currentGroups.find(g=>String(g.id)===cleanGroupId);
     if(!group) return;
@@ -484,7 +473,7 @@ function closeResultPanel(shouldGoBack = false){
         if(history.state && history.state.page === "panel") {
             history.back();
         } else {
-            navTo("mySets", activeResultGroupId);
+            navTo("mySets", getActiveGroupIdFromState());
         }
     } else {
         resultPanel.style.display="none";
@@ -576,17 +565,18 @@ function updateMatches(groupId){
 }
 
 function cleanResult(){
-    if(!activeResultGroupId) return;
+    const activeId = getActiveGroupIdFromState();
+    if(!activeId) return;
     let currentGroups = getLatestSavedGroups();
-    let group=currentGroups.find(g=>String(g.id)===String(activeResultGroupId));
+    let group=currentGroups.find(g=>String(g.id)===activeId);
     if(!group) return;
     
     group.results={main:[],joker:[]};
     localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
     document.querySelectorAll("#resultNumbers .ball").forEach(b=>b.classList.remove("result-selected"));
-    let el=document.getElementById(`resultText-${activeResultGroupId}`);
+    let el=document.getElementById(`resultText-${activeId}`);
     if(el) el.innerText="Henüz girilmedi";
-    updateMatches(activeResultGroupId);
+    updateMatches(activeId);
 }
 </script>
 </body>
