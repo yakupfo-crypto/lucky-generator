@@ -195,7 +195,6 @@ function renderCurrentState(page, groupId) {
           activeResultGroupId = Number(groupId);
           viewGroup(Number(groupId));
         } else {
-          // Eğer ID bulunamazsa geçmişi temizle ve ana listeye dön
           history.replaceState({page:"mySets", groupId:null}, "");
           showMySets();
         }
@@ -331,7 +330,7 @@ function showMySets(){
   if(currentGroups.length===0) html+="<p>Henüz kayıtlı set yok.</p>";
   currentGroups.forEach(group=>{
     html+=`
-      <div class='card'>
+      <div class='card' id="group-card-${group.id}">
         <b>${group.name}</b><br>
         Kolon Sayısı: ${group.sets.length}<br>
         <button onclick='navTo("mySets",${group.id})'>Görüntüle</button>
@@ -342,16 +341,13 @@ function showMySets(){
 }
 
 function viewGroup(id){
-  if (id === null || isNaN(Number(id))) {
-    showMySets();
-    return;
-  }
   const currentGroups = getLatestSavedGroups();
   let group=currentGroups.find(g=>Number(g.id)===Number(id));
   if(!group){
     showMySets();
     return;
   }
+  
   activeResultGroupId=Number(id);
   let resText = "Henüz girilmedi";
   if(group.results && (group.results.main.length>0 || group.results.joker.length>0)){
@@ -370,8 +366,12 @@ function viewGroup(id){
     html+=`<div class='card'><b>${i+1}.</b>${createBalls(set)}</div>`;
   });
   html+=`<button onclick='navTo("mySets")' style="background:#666;">Listeye Dön</button>`;
-  savedSets.innerHTML=html;
-  updateMatches(group.id);
+  
+  // DOM Sync Safety: Only update if we are still on the mySets page
+  if(mySetsPage.style.display !== "none") {
+      savedSets.innerHTML=html;
+      updateMatches(group.id);
+  }
 }
 
 function deleteGroup(id){
@@ -380,7 +380,6 @@ function deleteGroup(id){
   currentGroups=currentGroups.filter(g=>Number(g.id)!==Number(id));
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   
-  // Eğer detay sayfasındayken silindiyse listeye dön
   if(history.state && history.state.groupId == id) {
       navTo('mySets');
   } else {
@@ -444,6 +443,12 @@ function toggleMainResult(el,groupId,val){
     el.classList.add("result-selected");
   }
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
+  
+  const resEl = document.getElementById(`resultText-${groupId}`);
+  if(resEl) {
+      resEl.innerText = "Ana: " + group.results.main.join(",") + " | Joker: " + group.results.joker.join(",");
+  }
+  updateMatches(groupId);
 }
 
 function toggleJokerResult(el,groupId,val){
@@ -464,19 +469,16 @@ function toggleJokerResult(el,groupId,val){
     el.classList.add("result-selected");
   }
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
+  
+  const resEl = document.getElementById(`resultText-${groupId}`);
+  if(resEl) {
+      resEl.innerText = "Ana: " + group.results.main.join(",") + " | Joker: " + group.results.joker.join(",");
+  }
+  updateMatches(groupId);
 }
 
 function confirmResult(){
-  const currentGroups = getLatestSavedGroups();
-  let group=currentGroups.find(g=>Number(g.id)===Number(activeResultGroupId));
-  if(!group) return;
-  
   closeResultPanel(true);
-  let el=document.getElementById(`resultText-${activeResultGroupId}`);
-  if(el){
-    el.innerText="Ana: "+group.results.main.join(", ")+" | Joker: "+group.results.joker.join(", ");
-  }
-  updateMatches(activeResultGroupId);
 }
 
 function updateMatches(groupId){
@@ -487,6 +489,7 @@ function updateMatches(groupId){
   const cards=savedSets.querySelectorAll(".card");
   cards.forEach(card=>{
     const balls=card.querySelectorAll(".ball");
+    if(balls.length === 0) return;
     balls.forEach(b=>{
       const val=parseInt(b.innerText);
       if(b.classList.contains("joker")){
