@@ -312,10 +312,10 @@ function copyToClipboard(text) {
 
 function formatGroupForCopy(group) {
     if(!group) return "";
-    let text = `${group.name} Sonuçları\n`;
+    let text = `${group.name || "Üretilen"} Sonuçları\n`;
     group.sets.forEach((set, i) => {
         text += `${i+1}. Kolon: ${set.numbers.join(", ")}`;
-        if(set.jokers.length > 0) text += ` + Joker: ${set.jokers.join(", ")}`;
+        if(set.jokers && set.jokers.length > 0) text += ` + Joker: ${set.jokers.join(", ")}`;
         text += `\n`;
     });
     return text;
@@ -329,6 +329,7 @@ function displayGenerated(){
     if(generatedSets.length>0){
         html+=`
         <div class="card">
+            <button class="copy-btn" onclick='copyToClipboard(formatGroupForCopy({name:"Geçici Liste", sets:generatedSets}))'>Bu Listeyi Panoya Kopyala</button>
             <label><b>Grup Adı</b></label>
             <input type="text" id="groupNameInput" placeholder="Örn: Pazartesi Çekilişi">
             <button onclick='saveGroup()'>Grubu Kaydet</button>
