@@ -139,14 +139,14 @@ color:#fff;
 <button onclick="cleanResult()" style="background:#999;margin-top:8px;">Temizle</button>
 </div>
 <script>
-const generatePage=document.getElementById("generatePage")
-const mySetsPage=document.getElementById("mySetsPage")
-const results=document.getElementById("results")
-const savedSets=document.getElementById("savedSets")
-const resultPanel=document.getElementById("resultPanel")
+const generatePage=document.getElementById("generatePage");
+const mySetsPage=document.getElementById("mySetsPage");
+const results=document.getElementById("results");
+const savedSets=document.getElementById("savedSets");
+const resultPanel=document.getElementById("resultPanel");
 
-let generatedSets=JSON.parse(sessionStorage.getItem("tempGeneratedSets"))||[]
-let activeResultGroupId=null
+let generatedSets=[];
+let activeResultGroupId=null;
 
 function getLatestSavedGroups() {
     return JSON.parse(localStorage.getItem("savedGroups")) || [];
@@ -162,7 +162,7 @@ window.onpopstate=function(event){
   renderCurrentState(state.page, state.groupId);
 }
 
-function navTo(page,groupId=null){
+function navTo(page, groupId=null){
   let cleanId = (groupId !== null && groupId !== undefined) ? Number(groupId) : null;
   if (isNaN(cleanId)) cleanId = null;
   history.pushState({page:page, groupId:cleanId}, "");
@@ -170,29 +170,31 @@ function navTo(page,groupId=null){
 }
 
 function renderCurrentState(page, groupId) {
-  // Reset initial visibility
   generatePage.style.display = "none";
   mySetsPage.style.display = "none";
-  resultPanel.style.display = "none";
   
   const savedGroups = getLatestSavedGroups();
-  const cleanGroupId = groupId !== null ? Number(groupId) : null;
+  const cleanGroupId = (groupId !== null && groupId !== undefined) ? Number(groupId) : null;
 
   switch(page) {
     case "generate":
+      resultPanel.style.display = "none";
       generatePage.style.display = "block";
       activeResultGroupId = null;
-      if (generatedSets.length > 0 || sessionStorage.getItem("tempGeneratedSets")) {
-        generatedSets = JSON.parse(sessionStorage.getItem("tempGeneratedSets")) || [];
+      const stored = sessionStorage.getItem("tempGeneratedSets");
+      if (stored) {
+        generatedSets = JSON.parse(stored);
         displayGenerated();
       } else {
+        generatedSets = [];
         results.innerHTML = "";
       }
       break;
 
     case "mySets":
+      resultPanel.style.display = "none";
       mySetsPage.style.display = "block";
-      if (cleanGroupId !== null) {
+      if (cleanGroupId !== null && !isNaN(cleanGroupId)) {
         const groupExists = savedGroups.find(g => Number(g.id) === cleanGroupId);
         if (groupExists) {
           activeResultGroupId = cleanGroupId;
@@ -213,10 +215,13 @@ function renderCurrentState(page, groupId) {
       const panelGroup = savedGroups.find(g => Number(g.id) === cleanGroupId);
       if(panelGroup) {
         activeResultGroupId = cleanGroupId;
-        // Önce DOM'u hazırla (viewGroup), sonra paneli aç (senkronizasyon için)
         viewGroup(cleanGroupId);
-        openResultPanel(panelGroup.max, panelGroup.id, false);
+        // DOM'un render edilmesini bekleyip paneli açıyoruz (Race condition önlemi)
+        requestAnimationFrame(() => {
+          openResultPanel(panelGroup.max, panelGroup.id, false);
+        });
       } else {
+        resultPanel.style.display = "none";
         activeResultGroupId = null;
         history.replaceState({page:"mySets", groupId:null}, "");
         showMySets();
@@ -224,6 +229,7 @@ function renderCurrentState(page, groupId) {
       break;
 
     default:
+      resultPanel.style.display = "none";
       generatePage.style.display = "block";
       activeResultGroupId = null;
   }
@@ -377,9 +383,9 @@ function viewGroup(id){
   });
   html+=`<button onclick='navTo("mySets")' style="background:#666;">Listeye Dön</button>`;
   
-  // Render regardless of display check but target the correct container
   savedSets.innerHTML=html;
-  updateMatches(cleanId);
+  // DOM güncellemesinden hemen sonra eşleşmeleri vurgula
+  requestAnimationFrame(() => updateMatches(cleanId));
 }
 
 function deleteGroup(id){
@@ -389,14 +395,15 @@ function deleteGroup(id){
   currentGroups=currentGroups.filter(g=>Number(g.id)!==cleanId);
   localStorage.setItem("savedGroups",JSON.stringify(currentGroups));
   
-  if(history.state && Number(history.state.groupId) === cleanId) {
+  // Eğer silinen grubun detay sayfasındaysak listeye yönlendir
+  if(activeResultGroupId === cleanId) {
       navTo('mySets');
   } else {
       showMySets();
   }
 }
 
-function openResultPanel(max,groupId, shouldPushState = true){
+function openResultPanel(max, groupId, shouldPushState = true){
   const cleanGroupId = Number(groupId);
   activeResultGroupId = cleanGroupId;
   const currentGroups = getLatestSavedGroups();
@@ -428,12 +435,9 @@ function openResultPanel(max,groupId, shouldPushState = true){
 
 function closeResultPanel(shouldGoBack = false){
   if(shouldGoBack && history.state && history.state.page === "panel") {
-    // Sadece panel sayfasındaysak geri git, yoksa manuel kapa (Safety check)
     history.back();
   } else {
     resultPanel.style.display="none";
-    if(activeResultGroupId) navTo("mySets", activeResultGroupId);
-    else navTo("mySets");
   }
 }
 
@@ -493,7 +497,6 @@ function toggleJokerResult(el,groupId,val){
 }
 
 function confirmResult(){
-  // Panel kapatıldığında popstate tetiklenecek ve renderCurrentState her şeyi düzeltecek
   closeResultPanel(true);
 }
 
@@ -504,6 +507,8 @@ function updateMatches(groupId){
   if(!group) return;
   
   const cards=savedSets.querySelectorAll(".card");
+  if(!cards.length) return;
+
   cards.forEach(card=>{
     const balls=card.querySelectorAll(".ball");
     if(balls.length === 0) return;
