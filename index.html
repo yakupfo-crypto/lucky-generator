@@ -1,194 +1,250 @@
-import React, { useState, useEffect } from 'react';
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucky Generator - Vue Edition</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
+        header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }
+        .container{ padding:20px; }
+        .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+        input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; transition: opacity 0.2s; }
+        button:active { opacity: 0.8; }
+        .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 10; }
+        .bottom-nav button{ background:none; color:white; border:none; width:auto; font-weight: bold; }
+        .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+        .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select: none; }
+        .ball.selected { background: #e3f2fd; border-color: #90caf9; }
+        .ball.result-selected { background:#1976d2 !important; color:white !important; border:none; }
+        .ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
+        .ball.joker.result-selected{ background:#f44336 !important; color:white !important; border:none; }
+        .card b{ display:block; margin-bottom:10px; color:#1976d2; }
+        .copy-btn { background: #4caf50; margin-bottom: 10px; }
+        .panel-overlay { position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,0.2); max-height:70%; overflow-auto; z-index:1000; box-sizing: border-box; }
+    </style>
+</head>
+<body>
 
-// --- YARDIMCI FONKSİYONLAR (UTILS) ---
-const secureRandomInt = (max) => {
-  const array = new Uint32Array(1);
-  window.crypto.getRandomValues(array);
-  return array[0] % max;
-};
+<div id="app">
+    <header>Lucky Generator</header>
 
-const secureShuffle = (array) => {
-  let shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = secureRandomInt(i + 1);
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-};
-
-// --- ANA BİLEŞEN ---
-export default function LuckyGenerator() {
-  const [view, setView] = useState('generate'); // generate, mySets, viewGroup
-  const [savedGroups, setSavedGroups] = useState(() => JSON.parse(localStorage.getItem('savedGroups')) || []);
-  const [activeGroupId, setActiveGroupId] = useState(null);
-  const [tempSets, setTempSets] = useState([]);
-  const [showResultPanel, setShowResultPanel] = useState(false);
-  
-  // Input Değerleri (State)
-  const [inputs, setInputs] = useState({ max: 35, per: 5, jMax: 31, jPer: 1, count: 5 });
-
-  // Kayıtlı veriyi izle ve kaydet
-  useEffect(() => {
-    localStorage.setItem('savedGroups', JSON.stringify(savedGroups));
-  }, [savedGroups]);
-
-  // --- MANTIK (LOGIC) ---
-  const generateSets = () => {
-    const newSets = [];
-    for (let i = 0; i < inputs.count; i++) {
-      const numbers = secureShuffle(Array.from({ length: inputs.max }, (_, i) => i + 1))
-        .slice(0, inputs.per).sort((a, b) => a - b);
-      const jokers = secureShuffle(Array.from({ length: inputs.jMax }, (_, i) => i + 1))
-        .slice(0, inputs.jPer).sort((a, b) => a - b);
-      newSets.push({ numbers, jokers });
-    }
-    setTempSets(newSets);
-  };
-
-  const saveGroup = (name) => {
-    if (!name.trim()) return alert("İsim girin!");
-    const newGroup = {
-      id: Date.now().toString(),
-      name,
-      sets: tempSets,
-      max: inputs.max,
-      jokerMax: inputs.jMax,
-      jokerPerSet: inputs.jPer,
-      results: { main: [], joker: [] }
-    };
-    setSavedGroups([...savedGroups, newGroup]);
-    setTempSets([]);
-    setView('mySets');
-  };
-
-  const toggleResultNumber = (type, val) => {
-    setSavedGroups(prev => prev.map(group => {
-      if (group.id === activeGroupId) {
-        const list = [...group.results[type]];
-        const idx = list.indexOf(val);
-        if (idx > -1) list.splice(idx, 1);
-        else if (type === 'main' && list.length < 10) list.push(val);
-        else if (type === 'joker' && list.length < group.jokerPerSet) list.push(val);
-        return { ...group, results: { ...group.results, [type]: list } };
-      }
-      return group;
-    }));
-  };
-
-  // --- GÖRÜNÜMLER (COMPONENTS) ---
-  const BallRow = ({ numbers, jokers, results = { main: [], joker: [] } }) => (
-    <div className="ball-row">
-      {numbers.map(n => (
-        <div key={n} className={`ball selected ${results.main.includes(n) ? 'result-selected' : ''}`}>{n}</div>
-      ))}
-      {jokers.map(j => (
-        <div key={j} className={`ball joker ${results.joker.includes(j) ? 'result-selected' : ''}`}>{j}</div>
-      ))}
-    </div>
-  );
-
-  return (
-    <div className="app-wrapper">
-      <header>Lucky Generator</header>
-
-      <div className="container">
-        {/* ÜRETME SAYFASI */}
-        {view === 'generate' && (
-          <div>
-            <div className="card">
-              <label><b>Ana Grup Havuz & Adet</b></label>
-              <input type="number" value={inputs.max} onChange={e => setInputs({...inputs, max: +e.target.value})} />
-              <input type="number" value={inputs.per} onChange={e => setInputs({...inputs, per: +e.target.value})} />
-              <hr />
-              <label><b>Joker Havuz & Adet</b></label>
-              <input type="number" value={inputs.jMax} onChange={e => setInputs({...inputs, jMax: +e.target.value})} />
-              <input type="number" value={inputs.jPer} onChange={e => setInputs({...inputs, jPer: +e.target.value})} />
-              <button onClick={generateSets}>Kolonları Üret</button>
-            </div>
-            
-            {tempSets.map((set, i) => (
-              <div key={i} className="card"><b>{i+1}. Kolon</b><BallRow {...set} /></div>
-            ))}
-            
-            {tempSets.length > 0 && (
-              <div className="card">
-                <input id="gnInput" type="text" placeholder="Grup Adı Örn: Süper Loto" />
-                <button onClick={() => saveGroup(document.getElementById('gnInput').value)}>Kaydet</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* KAYITLARIM LİSTESİ */}
-        {view === 'mySets' && (
-          <div className="my-sets-list">
-            <h3>Kayıtlı Kolonlarım</h3>
-            {savedGroups.length === 0 && <p>Henüz kayıt yok.</p>}
-            {savedGroups.map(group => (
-              <div key={group.id} className="card">
-                <b>{group.name}</b>
-                <button onClick={() => { setActiveGroupId(group.id); setView('viewGroup'); }}>Görüntüle</button>
-                <button style={{background: '#d32f2f'}} onClick={() => setSavedGroups(savedGroups.filter(g => g.id !== group.id))}>Sil</button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* GRUP DETAY GÖRÜNÜMÜ */}
-        {view === 'viewGroup' && activeGroupId && (
-          <div>
-            {savedGroups.filter(g => g.id === activeGroupId).map(group => (
-              <div key={group.id}>
-                <h3>{group.name}</h3>
-                <div className="card">
-                  <b>Sonuçlar:</b> Main: {group.results.main.join(',')} | J: {group.results.joker.join(',')}
-                  <button onClick={() => setShowResultPanel(true)}>Sonuç Gir / Kıyasla</button>
-                </div>
-                {group.sets.map((set, i) => (
-                  <div key={i} className="card"><b>{i+1}. Kolon</b><BallRow {...set} results={group.results} /></div>
-                ))}
-                <button style={{background:'#666'}} onClick={() => setView('mySets')}>Geri Dön</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* SONUÇ GİRİŞ PANELİ (MODAL) */}
-      {showResultPanel && activeGroupId && (
-        <div id="resultPanel" style={{display: 'block'}}>
-          <div className="panel-header">
-            <h3>Sonuç Seç <span onClick={() => setShowResultPanel(false)} style={{float:'right'}}>×</span></h3>
-          </div>
-          {savedGroups.filter(g => g.id === activeGroupId).map(group => (
-            <div key={group.id}>
-              <h4>Ana Havuz (1-{group.max})</h4>
-              <div className="ball-row">
-                {Array.from({length: group.max}, (_, i) => i + 1).map(n => (
-                  <div key={n} 
-                    className={`ball ${group.results.main.includes(n) ? 'result-selected' : ''}`}
-                    onClick={() => toggleResultNumber('main', n)}>{n}</div>
-                ))}
-              </div>
-              <h4>Joker Havuz (1-{group.jokerMax})</h4>
-              <div className="ball-row">
-                {Array.from({length: group.jokerMax}, (_, i) => i + 1).map(n => (
-                  <div key={n} 
-                    className={`ball joker ${group.results.joker.includes(n) ? 'result-selected' : ''}`}
-                    onClick={() => toggleResultNumber('joker', n)}>{n}</div>
-                ))}
-              </div>
-            </div>
-          ))}
-          <button onClick={() => setShowResultPanel(false)}>Tamam</button>
+    <div v-if="currentPage === 'generate'" class="container">
+        <div class="card">
+            <label><b>Ana Grup Havuzu (Max Sayı)</b></label>
+            <input type="number" v-model.number="config.max">
+            <label>Ana Grup Seçilecek Adet</label>
+            <input type="number" v-model.number="config.per">
+            <hr>
+            <label><b>Joker Havuzu (Max Sayı)</b></label>
+            <input type="number" v-model.number="config.jMax">
+            <label>Joker Seçilecek Adet</label>
+            <input type="number" v-model.number="config.jPer">
+            <hr>
+            <label>Kolon Sayısı</label>
+            <input type="number" v-model.number="config.count">
+            <button @click="generateSets">Kolonları Üret</button>
         </div>
-      )}
 
-      {/* ALT NAVİGASYON */}
-      <div className="bottom-nav">
-        <button onClick={() => setView('generate')}>Üret</button>
-        <button onClick={() => setView('mySets')}>Kayıtlarım</button>
-      </div>
+        <div v-for="(set, index) in generatedSets" :key="index" class="card">
+            <b>{{ index + 1 }}. Kolon</b>
+            <div class="ball-row">
+                <div v-for="n in set.numbers" class="ball selected">{{ n }}</div>
+                <div v-for="j in set.jokers" class="ball joker">{{ j }}</div>
+            </div>
+        </div>
+
+        <div v-if="generatedSets.length > 0" class="card">
+            <button class="copy-btn" @click="copyGroup(null, generatedSets)">Panoya Kopyala</button>
+            <label><b>Grup Adı</b></label>
+            <input type="text" v-model="tempGroupName" placeholder="Örn: Hafta Sonu Çekilişi">
+            <button @click="saveGroup">Grubu Kaydet</button>
+        </div>
     </div>
-  );
-}
+
+    <div v-if="currentPage === 'mySets'" class="container">
+        <h3>Kayıtlı Kolonlarım</h3>
+        <p v-if="savedGroups.length === 0">Henüz kayıtlı set yok.</p>
+        
+        <div v-for="group in savedGroups" :key="group.id" class="card">
+            <b>{{ group.name }}</b>
+            <div>Kolon Sayısı: {{ group.sets.length }}</div>
+            <button @click="viewGroup(group)">Görüntüle</button>
+            <button @click="deleteGroup(group.id)" style="background:#d32f2f; margin-top:5px;">Sil</button>
+        </div>
+    </div>
+
+    <div v-if="currentPage === 'detail' && activeGroup" class="container">
+        <h3>{{ activeGroup.name }}</h3>
+        <button class="copy-btn" @click="copyGroup(activeGroup)">Panoya Kopyala</button>
+        
+        <div class="card">
+            <b>Sonuçlar:</b>
+            <span v-if="activeGroup.results.main.length || activeGroup.results.joker.length">
+                Ana: {{ activeGroup.results.main.join(', ') }} | Joker: {{ activeGroup.results.joker.join(', ') }}
+            </span>
+            <span v-else>Henüz girilmedi</span>
+            <button @click="showResultPanel = true" style="margin-top:10px;">Sonuç Gir (Kıyasla)</button>
+        </div>
+
+        <div v-for="(set, i) in activeGroup.sets" :key="i" class="card">
+            <b>{{ i + 1 }}. Kolon</b>
+            <div class="ball-row">
+                <div v-for="n in set.numbers" 
+                     :class="['ball', 'selected', { 'result-selected': activeGroup.results.main.includes(n) }]">
+                    {{ n }}
+                </div>
+                <div v-for="j in set.jokers" 
+                     :class="['ball', 'joker', { 'result-selected': activeGroup.results.joker.includes(j) }]">
+                    {{ j }}
+                </div>
+            </div>
+        </div>
+        <button @click="currentPage = 'mySets'" style="background:#666;">Listeye Dön</button>
+    </div>
+
+    <div class="bottom-nav">
+        <button @click="currentPage = 'generate'">Üret</button>
+        <button @click="currentPage = 'mySets'">Kayıtlarım</button>
+    </div>
+
+    <div v-if="showResultPanel && activeGroup" class="panel-overlay">
+        <h3>Sonuç Gir <span @click="showResultPanel = false" style="float:right; cursor:pointer;">×</span></h3>
+        
+        <h4>Ana Sayı (1-{{ activeGroup.max }})</h4>
+        <div class="ball-row">
+            <div v-for="n in activeGroup.max" :key="'m'+n"
+                 :class="['ball', { 'result-selected': activeGroup.results.main.includes(n) }]"
+                 @click="toggleResult(n, 'main')">
+                {{ n }}
+            </div>
+        </div>
+
+        <h4 v-if="activeGroup.jokerMax > 0">Joker (1-{{ activeGroup.jokerMax }})</h4>
+        <div class="ball-row">
+            <div v-for="j in activeGroup.jokerMax" :key="'j'+j"
+                 :class="['ball', 'joker', { 'result-selected': activeGroup.results.joker.includes(j) }]"
+                 @click="toggleResult(j, 'joker')">
+                {{ j }}
+            </div>
+        </div>
+
+        <button @click="showResultPanel = false" style="margin-top:15px;">Onayla</button>
+        <button @click="clearResults" style="background:#999; margin-top:8px;">Temizle</button>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, onMounted, watch } = Vue;
+
+createApp({
+    setup() {
+        // State (Durum Yönetimi)
+        const currentPage = ref('generate'); // generate, mySets, detail
+        const showResultPanel = ref(false);
+        const generatedSets = ref([]);
+        const savedGroups = ref(JSON.parse(localStorage.getItem("savedGroups") || "[]"));
+        const activeGroup = ref(null);
+        const tempGroupName = ref("");
+        
+        const config = reactive({
+            max: 35, per: 5, jMax: 31, jPer: 1, count: 5
+        });
+
+        // Yardımcı Fonksiyonlar (Logic)
+        const secureRandomInt = (max) => {
+            const array = new Uint32Array(1);
+            window.crypto.getRandomValues(array);
+            return array[0] % max;
+        };
+
+        const secureShuffle = (array) => {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = secureRandomInt(i + 1);
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        };
+
+        const generateSets = () => {
+            const result = [];
+            for (let i = 0; i < config.count; i++) {
+                const numbers = secureShuffle(Array.from({length: config.max}, (_, i) => i + 1))
+                                .slice(0, config.per).sort((a,b)=>a-b);
+                const jokers = secureShuffle(Array.from({length: config.jMax}, (_, i) => i + 1))
+                                .slice(0, config.jPer).sort((a,b)=>a-b);
+                result.push({ numbers, jokers });
+            }
+            generatedSets.ref = result; // Vue 3'te direkt atama yerine .value veya spread kullanılır
+            generatedSets.value = [...result];
+        };
+
+        const saveGroup = () => {
+            if (!tempGroupName.value.trim()) return alert("İsim girin!");
+            const newGroup = {
+                id: Date.now().toString(),
+                name: tempGroupName.value,
+                sets: JSON.parse(JSON.stringify(generatedSets.value)),
+                max: config.max,
+                jokerMax: config.jMax,
+                jokerPerSet: config.jPer,
+                results: { main: [], joker: [] }
+            };
+            savedGroups.value.push(newGroup);
+            localStorage.setItem("savedGroups", JSON.stringify(savedGroups.value));
+            tempGroupName.value = "";
+            generatedSets.value = [];
+            currentPage.value = 'mySets';
+        };
+
+        const deleteGroup = (id) => {
+            if(confirm("Silmek istediğinize emin misiniz?")) {
+                savedGroups.value = savedGroups.value.filter(g => g.id !== id);
+                localStorage.setItem("savedGroups", JSON.stringify(savedGroups.value));
+            }
+        };
+
+        const viewGroup = (group) => {
+            activeGroup.value = group;
+            currentPage.value = 'detail';
+        };
+
+        const toggleResult = (val, type) => {
+            const target = activeGroup.value.results[type];
+            const idx = target.indexOf(val);
+            if (idx > -1) target.splice(idx, 1);
+            else {
+                if(type === 'main' && target.length < 10) target.push(val);
+                if(type === 'joker' && target.length < activeGroup.value.jokerPerSet) target.push(val);
+            }
+            localStorage.setItem("savedGroups", JSON.stringify(savedGroups.value));
+        };
+
+        const clearResults = () => {
+            activeGroup.value.results = { main: [], joker: [] };
+            localStorage.setItem("savedGroups", JSON.stringify(savedGroups.value));
+        };
+
+        const copyGroup = (group, rawSets = null) => {
+            const sets = group ? group.sets : rawSets;
+            const name = group ? group.name : "Geçici Liste";
+            let text = `${name}\n`;
+            sets.forEach((s, i) => {
+                text += `${i+1}. Kolon: ${s.numbers.join(", ")} ${s.jokers.length ? '+ J:'+s.jokers.join(',') : ''}\n`;
+            });
+            navigator.clipboard.writeText(text).then(() => alert("Kopyalandı!"));
+        };
+
+        return {
+            currentPage, config, generatedSets, savedGroups, activeGroup, 
+            tempGroupName, showResultPanel,
+            generateSets, saveGroup, deleteGroup, viewGroup, toggleResult, clearResults, copyGroup
+        };
+    }
+}).mount('#app');
+</script>
+
+</body>
+</html>
