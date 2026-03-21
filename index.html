@@ -5,16 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lucky Generator Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://bundle.run/zustand@4.3.8"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://unpkg.com/zustand@4/dist/umd/index.js"></script>
     <style>
-        .ball { @apply w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm border transition-all cursor-pointer; }
-        .ball-selected { @apply bg-blue-600 text-white border-blue-700 shadow-inner; }
-        .ball-joker { @apply bg-red-50 text-red-700 border-red-200; }
-        .ball-joker-selected { @apply bg-red-600 text-white border-red-700; }
-        .nav-btn { @apply flex-1 py-3 text-white font-medium text-center transition-colors; }
+        .ball-shadow { box-shadow: inset -3px -3px 6px rgba(0,0,0,0.1), 2px 2px 5px rgba(0,0,0,0.1); }
+        .active-nav { border-top: 3px solid white; }
     </style>
 </head>
 <body class="bg-slate-50 pb-24">
@@ -22,8 +19,40 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
+        const { create } = zustand;
 
-        // --- UTILS (Mantıksal Değişiklik Yok, Sadece Temizlendi) ---
+        // --- State Management (Zustand) ---
+        const useStore = create((set, get) => ({
+            page: 'generate',
+            activeGroupId: null,
+            savedGroups: JSON.parse(localStorage.getItem("savedGroups") || "[]"),
+            tempSets: JSON.parse(sessionStorage.getItem("tempGeneratedSets") || "[]"),
+            
+            setPage: (page, groupId = null) => set({ page, activeGroupId: groupId }),
+            
+            saveGroup: (group) => {
+                const newGroups = [...get().savedGroups, group];
+                localStorage.setItem("savedGroups", JSON.stringify(newGroups));
+                set({ savedGroups: newGroups, tempSets: [] });
+                sessionStorage.removeItem("tempGeneratedSets");
+            },
+
+            deleteGroup: (id) => {
+                const newGroups = get().savedGroups.filter(g => g.id !== id);
+                localStorage.setItem("savedGroups", JSON.stringify(newGroups));
+                set({ savedGroups: newGroups });
+            },
+
+            updateResults: (groupId, main, joker) => {
+                const newGroups = get().savedGroups.map(g => 
+                    g.id === groupId ? { ...g, results: { main, joker } } : g
+                );
+                localStorage.setItem("savedGroups", JSON.stringify(newGroups));
+                set({ savedGroups: newGroups });
+            }
+        }));
+
+        // --- Helpers ---
         const secureRandomInt = (max) => {
             const array = new Uint32Array(1);
             window.crypto.getRandomValues(array);
@@ -31,219 +60,243 @@
         };
 
         const secureShuffle = (array) => {
-            const newArr = [...array];
-            for (let i = newArr.length - 1; i > 0; i--) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
                 const j = secureRandomInt(i + 1);
-                [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+                [arr[i], arr[j]] = [arr[j], arr[i]];
             }
-            return newArr;
+            return arr;
         };
 
-        // --- STATE MANAGEMENT (Zustand Mimarisi) ---
-        const useStore = (() => {
-            const saved = JSON.parse(localStorage.getItem("savedGroups") || "[]");
-            return () => {
-                const [groups, setGroups] = useState(saved);
-                const [view, setView] = useState("generate"); // generate, mySets, detail
-                const [activeGroupId, setActiveGroupId] = useState(null);
-
-                useEffect(() => {
-                    localStorage.setItem("savedGroups", JSON.stringify(groups));
-                }, [groups]);
-
-                return { groups, setGroups, view, setView, activeGroupId, setActiveGroupId };
+        // --- Components ---
+        const Ball = ({ number, type = 'normal', selected = false, onClick }) => {
+            const base = "w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ball-shadow cursor-pointer ";
+            const styles = {
+                normal: selected ? "bg-blue-600 text-white" : "bg-white text-slate-700 border border-slate-200",
+                joker: selected ? "bg-red-500 text-white" : "bg-red-50 text-red-600 border border-red-200"
             };
-        })();
+            return (
+                <div onClick={onClick} className={base + styles[type] + (selected ? " scale-110" : "")}>
+                    {number}
+                </div>
+            );
+        };
 
-        // --- COMPONENTS ---
-
-        const Ball = ({ val, isJoker, isMatched }) => (
-            <div className={`ball ${isJoker ? (isMatched ? 'ball-joker-selected' : 'ball-joker') : (isMatched ? 'ball-selected' : 'bg-white text-slate-700 border-slate-200')}`}>
-                {val}
-            </div>
-        );
-
-        const App = () => {
+        const GeneratePage = () => {
             const store = useStore();
             const [inputs, setInputs] = useState({ max: 35, per: 5, jMax: 31, jPer: 1, count: 5 });
-            const [tempSets, setTempSets] = useState([]);
+            const [localSets, setLocalSets] = useState(store.tempSets);
             const [groupName, setGroupName] = useState("");
-            const [showPanel, setShowPanel] = useState(false);
 
-            // Kolon Üretme
-            const generate = () => {
-                const sets = [];
+            const handleGenerate = () => {
+                const newSets = [];
                 for (let i = 0; i < inputs.count; i++) {
                     const numbers = secureShuffle(Array.from({length: inputs.max}, (_, i) => i + 1))
-                        .slice(0, inputs.per).sort((a,b) => a-b);
+                                    .slice(0, inputs.per).sort((a,b)=>a-b);
                     const jokers = secureShuffle(Array.from({length: inputs.jMax}, (_, i) => i + 1))
-                        .slice(0, inputs.jPer).sort((a,b) => a-b);
-                    sets.push({ numbers, jokers });
+                                    .slice(0, inputs.jPer).sort((a,b)=>a-b);
+                    newSets.push({ numbers, jokers });
                 }
-                setTempSets(sets);
+                setLocalSets(newSets);
+                sessionStorage.setItem("tempGeneratedSets", JSON.stringify(newSets));
             };
 
-            const saveGroup = () => {
-                if (!groupName.trim()) return alert("İsim gerekli!");
-                const newGroup = {
+            const handleSave = () => {
+                if (!groupName.trim()) return alert("Grup adı gerekli!");
+                store.saveGroup({
                     id: Date.now().toString(),
                     name: groupName,
-                    sets: tempSets,
-                    config: {...inputs},
+                    sets: localSets,
+                    config: inputs,
                     results: { main: [], joker: [] }
-                };
-                store.setGroups([...store.groups, newGroup]);
-                setTempSets([]);
-                setGroupName("");
-                store.setView("mySets");
-            };
-
-            const toggleResult = (type, val) => {
-                const updated = store.groups.map(g => {
-                    if (g.id === store.activeGroupId) {
-                        const list = g.results[type];
-                        const newList = list.includes(val) ? list.filter(v => v !== val) : [...list, val];
-                        return { ...g, results: { ...g.results, [type]: newList } };
-                    }
-                    return g;
                 });
-                store.setGroups(updated);
+                store.setPage('mySets');
             };
-
-            const activeGroup = store.groups.find(g => g.id === store.activeGroupId);
 
             return (
-                <div className="max-w-md mx-auto min-h-screen flex flex-col">
-                    <header className="bg-blue-600 text-white py-6 text-center shadow-lg sticky top-0 z-40">
-                        <h1 className="text-xl font-bold tracking-tight">LUCKY GENERATOR PRO</h1>
-                    </header>
-
-                    <main className="p-4 flex-grow">
-                        {store.view === 'generate' && (
-                            <div className="space-y-4">
-                                <section className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-                                    <h2 className="text-blue-600 font-bold border-b pb-2 mb-4">Ayarlar</h2>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Havuz</label>
-                                            <input type="number" className="w-full p-2 bg-slate-50 border rounded-lg" value={inputs.max} onChange={e => setInputs({...inputs, max: +e.target.value})} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Seçilecek</label>
-                                            <input type="number" className="w-full p-2 bg-slate-50 border rounded-lg" value={inputs.per} onChange={e => setInputs({...inputs, per: +e.target.value})} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Joker Havuz</label>
-                                            <input type="number" className="w-full p-2 bg-slate-50 border rounded-lg" value={inputs.jMax} onChange={e => setInputs({...inputs, jMax: +e.target.value})} />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-slate-500 uppercase font-bold">Joker Adet</label>
-                                            <input type="number" className="w-full p-2 bg-slate-50 border rounded-lg" value={inputs.jPer} onChange={e => setInputs({...inputs, jPer: +e.target.value})} />
-                                        </div>
-                                    </div>
-                                    <button onClick={generate} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors">KOLONLARI ÜRET</button>
-                                </section>
-
-                                {tempSets.map((set, i) => (
-                                    <div key={i} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-                                        <b className="text-slate-400 text-xs block mb-2">{i+1}. KOLON</b>
-                                        <div className="flex flex-wrap gap-2">
-                                            {set.numbers.map(n => <Ball key={n} val={n} />)}
-                                            {set.jokers.map(j => <Ball key={j} val={j} isJoker />)}
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {tempSets.length > 0 && (
-                                    <div className="bg-white p-5 rounded-2xl shadow-md border-t-4 border-green-500">
-                                        <input type="text" placeholder="Grup Adı (Örn: Süper Loto)" className="w-full p-3 border rounded-lg mb-3" value={groupName} onChange={e => setGroupName(e.target.value)} />
-                                        <button onClick={saveGroup} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">GRUBU KAYDET</button>
-                                    </div>
-                                )}
+                <div className="p-4 max-w-md mx-auto space-y-4">
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Havuz (Ana)</label>
+                                <input type="number" className="w-full p-2 border rounded-lg" value={inputs.max} onChange={e => setInputs({...inputs, max: +e.target.value})} />
                             </div>
-                        )}
-
-                        {store.view === 'mySets' && (
-                            <div className="space-y-4">
-                                <h2 className="font-bold text-slate-700 text-lg">Kayıtlı Listelerim</h2>
-                                {store.groups.length === 0 && <p className="text-slate-400">Henüz kayıt yok.</p>}
-                                {store.groups.map(g => (
-                                    <div key={g.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center">
-                                        <div>
-                                            <h3 className="font-bold text-slate-800">{g.name}</h3>
-                                            <p className="text-xs text-slate-500">{g.sets.length} Kolon | {new Date(+g.id).toLocaleDateString()}</p>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => {store.setActiveGroupId(g.id); store.setView('detail');}} className="bg-blue-100 text-blue-600 px-4 py-2 rounded-lg text-sm font-bold">Aç</button>
-                                            <button onClick={() => store.setGroups(store.groups.filter(x => x.id !== g.id))} className="bg-red-50 text-red-500 p-2 rounded-lg">Sil</button>
-                                        </div>
-                                    </div>
-                                ))}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Adet</label>
+                                <input type="number" className="w-full p-2 border rounded-lg" value={inputs.per} onChange={e => setInputs({...inputs, per: +e.target.value})} />
                             </div>
-                        )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Joker Havuz</label>
+                                <input type="number" className="w-full p-2 border rounded-lg" value={inputs.jMax} onChange={e => setInputs({...inputs, jMax: +e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Joker Adet</label>
+                                <input type="number" className="w-full p-2 border rounded-lg" value={inputs.jPer} onChange={e => setInputs({...inputs, jPer: +e.target.value})} />
+                            </div>
+                        </div>
+                        <button onClick={handleGenerate} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition">KOLON ÜRET</button>
+                    </div>
 
-                        {store.view === 'detail' && activeGroup && (
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <button onClick={() => store.setView('mySets')} className="text-blue-600 font-bold">← Geri</button>
-                                    <h2 className="font-bold text-lg">{activeGroup.name}</h2>
-                                    <button onClick={() => setShowPanel(true)} className="bg-orange-500 text-white px-3 py-1 rounded-lg text-xs font-bold">Sonuç Gir</button>
+                    {localSets.map((set, idx) => (
+                        <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                            <div className="text-xs font-bold text-blue-600 mb-2">{idx + 1}. KOLON</div>
+                            <div className="flex flex-wrap gap-2">
+                                {set.numbers.map(n => <Ball key={n} number={n} />)}
+                                {set.jokers.map(j => <Ball key={j} number={j} type="joker" />)}
+                            </div>
+                        </div>
+                    ))}
+
+                    {localSets.length > 0 && (
+                        <div className="bg-white p-5 rounded-2xl shadow-lg border-2 border-blue-100 space-y-3">
+                            <input type="text" placeholder="Grup Adı (Örn: Çılgın Sayısal)" className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none" 
+                                   value={groupName} onChange={e => setGroupName(e.target.value)} />
+                            <button onClick={handleSave} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-md">KAYDET</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const MySetsPage = () => {
+            const { savedGroups, deleteGroup, setPage } = useStore();
+            return (
+                <div className="p-4 max-w-md mx-auto space-y-4">
+                    <h2 className="text-xl font-bold text-slate-800">Kayıtlı Listelerim</h2>
+                    {savedGroups.length === 0 && <p className="text-slate-400 italic">Henüz bir kayıt yok.</p>}
+                    {savedGroups.map(group => (
+                        <div key={group.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
+                            <div>
+                                <h3 className="font-bold text-slate-700">{group.name}</h3>
+                                <p className="text-xs text-slate-400">{group.sets.length} Kolon • {new Date(parseInt(group.id)).toLocaleDateString()}</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setPage('view', group.id)} className="p-2 bg-blue-50 text-blue-600 rounded-lg font-bold text-sm">Aç</button>
+                                <button onClick={() => deleteGroup(group.id)} className="p-2 bg-red-50 text-red-500 rounded-lg">Sil</button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const ViewPanel = () => {
+            const { activeGroupId, savedGroups, updateResults, setPage } = useStore();
+            const group = savedGroups.find(g => g.id === activeGroupId);
+            const [showPanel, setShowPanel] = useState(false);
+
+            if (!group) return null;
+
+            const toggleMain = (val) => {
+                const current = [...group.results.main];
+                const idx = current.indexOf(val);
+                if (idx > -1) current.splice(idx, 1);
+                else if (current.length < 10) current.push(val);
+                updateResults(group.id, current, group.results.joker);
+            };
+
+            const toggleJoker = (val) => {
+                const current = [...group.results.joker];
+                const idx = current.indexOf(val);
+                if (idx > -1) current.splice(idx, 1);
+                else if (current.length < group.config.jPer) current.push(val);
+                updateResults(group.id, group.results.main, current);
+            };
+
+            return (
+                <div className="p-4 max-w-md mx-auto pb-64">
+                    <div className="flex justify-between items-center mb-4">
+                        <button onClick={() => setPage('mySets')} className="text-blue-600 font-bold">← Geri</button>
+                        <h2 className="text-xl font-bold">{group.name}</h2>
+                    </div>
+
+                    <div className="bg-blue-600 text-white p-5 rounded-2xl shadow-lg mb-6">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="text-sm opacity-80 uppercase tracking-widest font-bold">Resmi Sonuçlar</span>
+                            <button onClick={() => setShowPanel(true)} className="bg-white/20 px-3 py-1 rounded-full text-xs">Düzenle</button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {group.results.main.length === 0 && <span className="text-sm italic opacity-60">Sonuç girilmedi...</span>}
+                            {group.results.main.map(n => <Ball key={n} number={n} selected />)}
+                            {group.results.joker.map(j => <Ball key={j} number={j} type="joker" selected />)}
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        {group.sets.map((set, idx) => (
+                            <div key={idx} className="bg-white p-4 rounded-xl border border-slate-100">
+                                <div className="flex flex-wrap gap-2">
+                                    {set.numbers.map(n => (
+                                        <Ball key={n} number={n} selected={group.results.main.includes(n)} />
+                                    ))}
+                                    {set.jokers.map(j => (
+                                        <Ball key={j} number={j} type="joker" selected={group.results.joker.includes(j)} />
+                                    ))}
                                 </div>
-
-                                {activeGroup.sets.map((set, i) => (
-                                    <div key={i} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-                                        <div className="flex flex-wrap gap-2">
-                                            {set.numbers.map(n => <Ball key={n} val={n} isMatched={activeGroup.results.main.includes(n)} />)}
-                                            {set.jokers.map(j => <Ball key={j} val={j} isJoker isMatched={activeGroup.results.joker.includes(j)} />)}
-                                        </div>
-                                    </div>
-                                ))}
                             </div>
-                        )}
-                    </main>
+                        ))}
+                    </div>
 
-                    {/* Result Entry Panel (Modal-like) */}
-                    {showPanel && activeGroup && (
+                    {showPanel && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
                             <div className="bg-white w-full max-h-[80vh] rounded-t-3xl p-6 overflow-y-auto shadow-2xl">
                                 <div className="flex justify-between items-center mb-6">
-                                    <h3 className="font-bold text-xl text-slate-800">Kazanan Numaralar</h3>
-                                    <button onClick={() => setShowPanel(false)} className="text-slate-400 text-2xl">&times;</button>
+                                    <h3 className="text-lg font-black uppercase text-slate-800">Numara Seçimi</h3>
+                                    <button onClick={() => setShowPanel(false)} className="bg-slate-100 p-2 rounded-full font-bold w-10 h-10">✕</button>
                                 </div>
+                                
                                 <div className="space-y-6">
                                     <div>
-                                        <p className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-widest">Ana Sayılar</p>
+                                        <p className="text-xs font-bold text-slate-400 mb-3 tracking-widest uppercase">Ana Havuz (1-{group.config.max})</p>
                                         <div className="flex flex-wrap gap-2">
-                                            {Array.from({length: activeGroup.config.max}, (_, i) => i + 1).map(n => (
-                                                <div key={n} onClick={() => toggleResult('main', n)} 
-                                                     className={`ball ${activeGroup.results.main.includes(n) ? 'ball-selected' : 'bg-slate-50'}`}>
-                                                    {n}
-                                                </div>
+                                            {Array.from({length: group.config.max}, (_, i) => i + 1).map(n => (
+                                                <Ball key={n} number={n} selected={group.results.main.includes(n)} onClick={() => toggleMain(n)} />
                                             ))}
                                         </div>
                                     </div>
-                                    {activeGroup.config.jPer > 0 && (
+                                    {group.config.jPer > 0 && (
                                         <div>
-                                            <p className="text-xs font-bold text-red-400 mb-3 uppercase tracking-widest">Joker Sayılar</p>
+                                            <p className="text-xs font-bold text-red-400 mb-3 tracking-widest uppercase">Joker Havuzu (1-{group.config.jMax})</p>
                                             <div className="flex flex-wrap gap-2">
-                                                {Array.from({length: activeGroup.config.jMax}, (_, i) => i + 1).map(n => (
-                                                    <div key={n} onClick={() => toggleResult('joker', n)} 
-                                                         className={`ball ${activeGroup.results.joker.includes(n) ? 'ball-joker-selected' : 'ball-joker'}`}>
-                                                        {n}
-                                                    </div>
+                                                {Array.from({length: group.config.jMax}, (_, i) => i + 1).map(n => (
+                                                    <Ball key={n} number={n} type="joker" selected={group.results.joker.includes(n)} onClick={() => toggleJoker(n)} />
                                                 ))}
                                             </div>
                                         </div>
                                     )}
-                                    <button onClick={() => setShowPanel(false)} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-200">TAMAMLA</button>
+                                    <button onClick={() => setShowPanel(false)} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg">TAMAMLA</button>
                                 </div>
                             </div>
                         </div>
                     )}
+                </div>
+            );
+        };
 
-                    <nav className="fixed bottom-0 w-full max-w-md bg-blue-700 flex border-t border-blue-800 shadow-2xl z-40">
-                        <button onClick={() => store.setView('generate')} className={`nav-btn ${store.view === 'generate' ? 'bg-blue-800' : ''}`}>ÜRET</button>
-                        <button onClick={() => store.setView('mySets')} className={`nav-btn ${store.view !== 'generate' ? 'bg-blue-800' : ''}`}>KAYITLARIM</button>
+        const App = () => {
+            const { page, setPage } = useStore();
+            
+            return (
+                <div className="min-h-screen">
+                    <header className="bg-blue-600 text-white p-6 text-center shadow-md">
+                        <h1 className="text-2xl font-black tracking-tighter">LUCKY GEN <span className="font-thin">PRO</span></h1>
+                    </header>
+
+                    <main className="pb-10">
+                        {page === 'generate' && <GeneratePage />}
+                        {page === 'mySets' && <MySetsPage />}
+                        {page === 'view' && <ViewPanel />}
+                    </main>
+
+                    <nav className="fixed bottom-0 w-full bg-blue-700 text-white flex justify-around p-3 shadow-2xl border-t border-blue-500/30 backdrop-blur-md">
+                        <button onClick={() => setPage('generate')} className={`flex flex-col items-center p-2 transition-all ${page === 'generate' ? 'active-nav opacity-100 scale-110' : 'opacity-60'}`}>
+                            <span className="text-xs font-bold uppercase tracking-tighter">Üret</span>
+                        </button>
+                        <button onClick={() => setPage('mySets')} className={`flex flex-col items-center p-2 transition-all ${page === 'mySets' ? 'active-nav opacity-100 scale-110' : 'opacity-60'}`}>
+                            <span className="text-xs font-bold uppercase tracking-tighter">Kayıtlarım</span>
+                        </button>
                     </nav>
                 </div>
             );
