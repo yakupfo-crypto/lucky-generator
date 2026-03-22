@@ -1,27 +1,27 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lucky Generator</title>
-<style>
-body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
-header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }
-.container{ padding:20px; }
-.card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
-input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
-button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
-.bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; }
-.bottom-nav button{ background:none; color:white; border:none; width:auto; }
-.ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-.ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; }
-.ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
-.ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
-.ball.joker.result-selected{ background:#f44336!important; color:white!important; border:none; }
-.card b{ display:block; margin-bottom:10px; color:#1976d2; }
-.ball.result-selected{ background:#1976d2; color:#fff; }
-.copy-btn { background: #4caf50; margin-bottom: 10px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucky Generator - TS Edition</title>
+    <style>
+        body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
+        header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }
+        .container{ padding:20px; }
+        .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+        input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
+        button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
+        .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 500; }
+        .bottom-nav button{ background:none; color:white; border:none; width:auto; }
+        .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+        .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; }
+        .ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
+        .ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
+        .ball.joker.result-selected{ background:#f44336!important; color:white!important; border:none; }
+        .card b{ display:block; margin-bottom:10px; color:#1976d2; }
+        .ball.result-selected{ background:#1976d2; color:#fff; }
+        .copy-btn { background: #4caf50; margin-bottom: 10px; }
+    </style>
 </head>
 <body>
 
@@ -44,124 +44,140 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
+/**
+ * TYPE DEFINITIONS (TypeScript Benzetimi)
+ * @typedef {Object} SetModel
+ * @property {number[]} numbers
+ * @property {number[]} jokers
+ * @property {number} max
+ * @property {number} jokerMax
+ */
+
+/**
+ * @typedef {Object} GroupModel
+ * @property {string} id
+ * @property {string} name
+ * @property {SetModel[]} sets
+ * @property {number} max
+ * @property {number} jokerMax
+ * @property {number} jokerPerSet
+ * @property {{main: number[], joker: number[]}} results
+ */
+
+// Global State
 const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
+/** @type {SetModel[]} */
 let generatedSets = [];
 
-function secureRandomInt(max) {
+// --- UTILS ---
+
+const secureRandomInt = (max) => {
     const array = new Uint32Array(1);
     window.crypto.getRandomValues(array);
     return array[0] % max;
-}
+};
 
-function secureShuffle(array) {
+const secureShuffle = (array) => {
     for (let i = array.length - 1; i > 0; i--) {
         const j = secureRandomInt(i + 1);
         [array[i], array[j]] = [array[j], array[i]];
     }
     return array;
-}
+};
 
-// HATA YÖNETİMİ: Veri okuma sırasında JSON bozulmalarına karşı koruma
+/** @returns {GroupModel[]} */
 function getLatestSavedGroups() {
     try {
         const data = localStorage.getItem("savedGroups");
         return data ? JSON.parse(data) : [];
-    } catch(e) { 
+    } catch (e) {
         console.error("Veri okuma hatası:", e);
-        return []; 
+        return [];
     }
 }
 
-// HATA YÖNETİMİ: history.state bozulmalarına karşı koruma
-function getActiveGroupIdFromState() {
-    try {
-        return (history.state && history.state.groupId) ? String(history.state.groupId) : null;
-    } catch(e) {
-        return null;
-    }
+// --- NAVIGATION & ROUTING ---
+
+window.onload = () => {
+    const s = history.state || { page: "generate", groupId: null };
+    renderCurrentState(s.page, s.groupId);
+};
+
+window.onpopstate = (event) => {
+    const state = event.state || { page: "generate", groupId: null };
+    renderCurrentState(state.page, state.groupId);
+};
+
+/**
+ * @param {string} page 
+ * @param {string|null} groupId 
+ */
+function navTo(page, groupId = null) {
+    const cleanId = groupId ? String(groupId) : null;
+    history.pushState({ page, groupId: cleanId }, "");
+    renderCurrentState(page, cleanId);
 }
 
-window.onload = function() {
-    try {
-        const s = history.state || {page:"generate", groupId:null};
-        renderCurrentState(s.page, s.groupId);
-    } catch(e) {
-        renderCurrentState("generate", null);
-    }
-}
-
-window.onpopstate = function(event) {
-    try {
-        const state = event.state || {page:"generate", groupId:null};
-        renderCurrentState(state.page, state.groupId);
-    } catch(e) {
-        navTo("generate");
-    }
-}
-
-function navTo(page, groupId=null) {
-    try {
-        const cleanId = (groupId !== null && groupId !== undefined) ? String(groupId) : null;
-        history.pushState({page:page, groupId:cleanId}, "");
-        renderCurrentState(page, cleanId);
-    } catch(e) {
-        console.error("Navigasyon hatası:", e);
-    }
-}
-
+/**
+ * @param {string} page 
+ * @param {string|null} groupId 
+ */
 function renderCurrentState(page, groupId) {
-    try {
-        viewContainer.innerHTML = "";
-        resultPanel.style.display = "none";
-        const savedGroups = getLatestSavedGroups();
-        const cleanGroupId = (groupId !== null && groupId !== undefined) ? String(groupId) : null;
+    if (!viewContainer || !resultPanel) return;
 
-        if (page === "generate") {
+    viewContainer.innerHTML = "";
+    resultPanel.style.display = "none";
+    const savedGroups = getLatestSavedGroups();
+
+    switch (page) {
+        case "generate":
             renderGeneratePage();
-        } else if (page === "mySets") {
-            if (cleanGroupId) {
-                const group = savedGroups.find(g => String(g.id) === cleanGroupId);
-                group ? renderViewGroup(cleanGroupId) : renderMySetsList();
+            break;
+        case "mySets":
+            if (groupId) {
+                const group = savedGroups.find(g => String(g.id) === groupId);
+                group ? renderViewGroup(groupId) : renderMySetsList();
             } else {
                 renderMySetsList();
             }
-        } else if (page === "panel") {
-            const group = savedGroups.find(g => String(g.id) === cleanGroupId);
-            if(group) {
-                renderViewGroup(cleanGroupId);
-                openResultPanel(group.max, group.id, false);
+            break;
+        case "panel":
+            const panelGroup = savedGroups.find(g => String(g.id) === groupId);
+            if (panelGroup) {
+                renderViewGroup(groupId);
+                openResultPanel(panelGroup.max, panelGroup.id, false);
             } else {
                 navTo("mySets");
             }
-        }
-    } catch(e) {
-        viewContainer.innerHTML = "<div class='container'>Bir şeyler yanlış gitti. Lütfen sayfayı yenileyin.</div>";
+            break;
     }
 }
 
+// --- PAGES & RENDERING ---
+
 function renderGeneratePage() {
-    let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
+    let storedInputs = { max: 35, per: 5, jMax: 31, jPer: 1, count: 5 };
     try {
         const stored = sessionStorage.getItem("tempGeneratedSets");
         const inputs = sessionStorage.getItem("tempInputs");
         generatedSets = stored ? JSON.parse(stored) : [];
-        if(inputs) storedInputs = JSON.parse(inputs);
-    } catch(e) {
+        if (inputs) storedInputs = JSON.parse(inputs);
+    } catch (e) {
         generatedSets = [];
     }
 
-    let html = `
+    viewContainer.innerHTML = `
     <div class="container">
         <div class="card">
-            <label><b>Ana Grup Toplam Sayı (Havuz)</b></label>
+            <label><b>Ana Grup Havuzu (1-N)</b></label>
             <input type="number" id="maxNumber" value="${storedInputs.max}">
-            <label>Ana Grup Seçilecek Adet</label>
+            <label>Seçilecek Adet</label>
             <input type="number" id="perSet" value="${storedInputs.per}">
             <hr>
-            <label><b>Joker Grubu Toplam Sayı (Havuz)</b></label>
+            <label><b>Joker Havuzu (1-N)</b></label>
             <input type="number" id="jokerMax" value="${storedInputs.jMax}">
-            <label>Joker Seçilecek Adet</label>
+            <label>Joker Adet</label>
             <input type="number" id="jokerCount" value="${storedInputs.jPer}">
             <hr>
             <label>Kolon Sayısı</label>
@@ -170,265 +186,277 @@ function renderGeneratePage() {
         </div>
         <div id="results">${getGeneratedSetsHtml()}</div>
     </div>`;
-    viewContainer.innerHTML = html;
 }
 
 function getGeneratedSetsHtml() {
-    let html = "";
-    generatedSets.forEach((set, i) => {
-        html += `<div class='card'><b>${i+1}. Kolon</b>${createBalls(set)}</div>`;
-    });
-    if (generatedSets.length > 0) {
-        html += `
-        <div class="card">
-            <button class="copy-btn" onclick='copyToClipboard(formatGroupForCopy({name:"Geçici Liste", sets:generatedSets}))'>Bu Listeyi Panoya Kopyala</button>
-            <label><b>Grup Adı</b></label>
-            <input type="text" id="groupNameInput" placeholder="Örn: Pazartesi Çekilişi">
-            <button onclick='saveGroup()'>Grubu Kaydet</button>
-        </div>`;
-    }
+    if (generatedSets.length === 0) return "";
+
+    let html = generatedSets.map((set, i) => `
+        <div class='card'>
+            <b>${i + 1}. Kolon</b>
+            ${createBalls(set)}
+        </div>
+    `).join("");
+
+    html += `
+    <div class="card">
+        <button class="copy-btn" onclick="copySetsToClipboard()">Listeyi Panoya Kopyala</button>
+        <label><b>Grup Adı</b></label>
+        <input type="text" id="groupNameInput" placeholder="Örn: Hafta Sonu Çekilişi">
+        <button onclick="saveGroup()">Grubu Kaydet</button>
+    </div>`;
     return html;
 }
 
 function renderMySetsList() {
-    const currentGroups = getLatestSavedGroups();
+    const groups = getLatestSavedGroups();
     let html = `<div class="container"><h3>Kayıtlı Kolonlarım</h3>`;
-    if (currentGroups.length === 0) html += "<p>Henüz kayıtlı set yok.</p>";
-    currentGroups.forEach(group => {
-        html += `
+    
+    if (groups.length === 0) {
+        html += "<p>Henüz kayıtlı set yok.</p>";
+    } else {
+        html += groups.map(group => `
             <div class='card'>
                 <b>${group.name}</b><br>
-                Kolon Sayısı: ${group.sets.length}<br>
-                <button onclick='navTo("mySets","${group.id}")'>Görüntüle</button>
-                <button onclick='deleteGroup("${group.id}")' style="background:#d32f2f;margin-top:5px;">Sil</button>
-            </div>`;
-    });
+                Kolon: ${group.sets.length} | Havuz: ${group.max}<br>
+                <button onclick="navTo('mySets','${group.id}')">Görüntüle</button>
+                <button onclick="deleteGroup('${group.id}')" style="background:#d32f2f;margin-top:5px;">Sil</button>
+            </div>
+        `).join("");
+    }
+    
     html += `</div>`;
     viewContainer.innerHTML = html;
 }
 
+/** @param {string} id */
 function renderViewGroup(id) {
-    const group = getLatestSavedGroups().find(g => String(g.id) === String(id));
-    if (!group) return renderMySetsList();
+    const group = getLatestSavedGroups().find(g => String(g.id) === id);
+    if (!group) return navTo("mySets");
 
-    let resText = (group.results.main.length > 0 || group.results.joker.length > 0) 
-        ? `Ana: ${group.results.main.join(",")} | Joker: ${group.results.joker.join(",")}` 
-        : "Henüz girilmedi";
+    const resMain = group.results.main.length > 0 ? group.results.main.sort((a,b)=>a-b).join(", ") : "-";
+    const resJoker = group.results.joker.length > 0 ? group.results.joker.sort((a,b)=>a-b).join(", ") : "-";
 
-    let html = `<div class="container"><h3>${group.name}</h3>`;
-    html += `<button class="copy-btn" onclick='copyToClipboard(formatGroupForCopy(getLatestSavedGroups().find(g=>String(g.id)==="${id}")))'>Panoya Kopyala</button>`;
-    html += `
+    let html = `
+    <div class="container">
+        <h3>${group.name}</h3>
+        <button class="copy-btn" onclick="copyGroupById('${group.id}')">Panoya Kopyala</button>
         <div class="card">
-            <b>Sonuçlar:</b> <span id="resultText-${group.id}">${resText}</span><br>
-            <button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button>
+            <b>Sonuçlar:</b> 
+            <div style="font-size: 0.9em; margin-top:5px;">
+                Ana: <span style="color:#1976d2">${resMain}</span> | Joker: <span style="color:#c62828">${resJoker}</span>
+            </div>
+            <button onclick="openResultPanel(${group.max},'${group.id}')" style="margin-top:10px;">Sonuç Gir / Düzenle</button>
         </div>`;
-    
-    group.sets.forEach((set, i) => {
-        html += `<div class='card'><b>${i+1}.</b>${createBallsWithMatch(set, group.results)}</div>`;
-    });
-    html += `<button onclick='navTo("mySets")' style="background:#666;">Listeye Dön</button></div>`;
+
+    html += group.sets.map((set, i) => `
+        <div class='card'>
+            <b>${i + 1}. Kolon</b>
+            ${createBallsWithMatch(set, group.results)}
+        </div>
+    `).join("");
+
+    html += `<button onclick="navTo('mySets')" style="background:#666;">Listeye Dön</button></div>`;
     viewContainer.innerHTML = html;
 }
 
-function createBalls(set) {
-    let balls = "<div class='ball-row'>";
-    set.numbers.forEach(n => { balls += `<div class="ball selected">${n}</div>`; });
-    set.jokers.forEach(j => { balls += `<div class="ball joker">${j}</div>`; });
-    return balls + "</div>";
-}
-
-function createBallsWithMatch(set, results) {
-    let balls = "<div class='ball-row'>";
-    set.numbers.forEach(n => {
-        const isMatch = results.main.includes(n) ? "result-selected" : "";
-        balls += `<div class="ball selected ${isMatch}">${n}</div>`;
-    });
-    set.jokers.forEach(j => {
-        const isMatch = results.joker.includes(j) ? "result-selected" : "";
-        balls += `<div class="ball joker ${isMatch}">${j}</div>`;
-    });
-    return balls + "</div>";
-}
+// --- LOGIC ---
 
 function generateSets() {
-    try {
-        const max = parseInt(document.getElementById("maxNumber").value);
-        const per = parseInt(document.getElementById("perSet").value);
-        const jMax = parseInt(document.getElementById("jokerMax").value);
-        const jPer = parseInt(document.getElementById("jokerCount").value);
-        const count = parseInt(document.getElementById("setCount").value);
+    const getVal = (id) => parseInt(document.getElementById(id).value);
+    
+    const config = {
+        max: getVal("maxNumber"),
+        per: getVal("perSet"),
+        jMax: getVal("jokerMax"),
+        jPer: getVal("jokerCount"),
+        count: getVal("setCount")
+    };
 
-        if ([max, per, jMax, jPer, count].some(isNaN)) { 
-            alert("Lütfen tüm alanları geçerli sayılarla doldurun!"); 
-            return; 
-        }
-        if (per > max || jPer > jMax || max <= 0 || count <= 0) {
-            alert("Lütfen girdiğiniz sayıların mantıklı olduğundan emin olun!");
-            return;
-        }
-        
-        generatedSets = [];
-        for (let i = 0; i < count; i++) {
-            let numbersArray = Array.from({length: max}, (_, i) => i + 1);
-            let numbers = secureShuffle(numbersArray).slice(0, per).sort((a,b)=>a-b);
-            let jokerArray = Array.from({length: jMax}, (_, i) => i + 1);
-            let jokers = secureShuffle(jokerArray).slice(0, jPer).sort((a,b)=>a-b);
-            generatedSets.push({numbers, jokers, max, jokerMax: jMax});
-        }
-
-        sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
-        sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
-        document.getElementById("results").innerHTML = getGeneratedSetsHtml();
-    } catch(e) {
-        alert("Üretim sırasında bir hata oluştu.");
+    if (Object.values(config).some(isNaN) || config.per > config.max || config.jPer > config.jMax) {
+        alert("Lütfen tüm alanları mantıklı sayılarla doldurun!");
+        return;
     }
+
+    generatedSets = Array.from({ length: config.count }, () => {
+        const nums = Array.from({ length: config.max }, (_, i) => i + 1);
+        const jNums = Array.from({ length: config.jMax }, (_, i) => i + 1);
+        
+        return {
+            numbers: secureShuffle([...nums]).slice(0, config.per).sort((a, b) => a - b),
+            jokers: secureShuffle([...jNums]).slice(0, config.jPer).sort((a, b) => a - b),
+            max: config.max,
+            jokerMax: config.jMax
+        };
+    });
+
+    sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
+    sessionStorage.setItem("tempInputs", JSON.stringify(config));
+    
+    const resultsDiv = document.getElementById("results");
+    if(resultsDiv) resultsDiv.innerHTML = getGeneratedSetsHtml();
 }
 
-// HATA YÖNETİMİ: localStorage dolduğunda kullanıcıyı uyarma
 function saveGroup() {
+    const nameInput = document.getElementById("groupNameInput");
+    const name = nameInput ? nameInput.value.trim() : "";
+    if (!name) { alert("Lütfen bir grup adı girin!"); return; }
+
     try {
-        const name = document.getElementById("groupNameInput")?.value;
-        if (!name?.trim()) { alert("İsim girin!"); return; }
-        
         const groups = getLatestSavedGroups();
-        const newId = String(Date.now());
-        groups.push({
-            id: newId, name, sets: [...generatedSets],
-            max: parseInt(document.getElementById("maxNumber").value),
-            jokerMax: parseInt(document.getElementById("jokerMax").value),
-            jokerPerSet: parseInt(document.getElementById("jokerCount").value),
-            results: {main: [], joker: []}
-        });
+        const config = JSON.parse(sessionStorage.getItem("tempInputs") || "{}");
         
+        /** @type {GroupModel} */
+        const newGroup = {
+            id: String(Date.now()),
+            name,
+            sets: [...generatedSets],
+            max: config.max || 0,
+            jokerMax: config.jMax || 0,
+            jokerPerSet: config.jPer || 0,
+            results: { main: [], joker: [] }
+        };
+
+        groups.push(newGroup);
         localStorage.setItem("savedGroups", JSON.stringify(groups));
         sessionStorage.removeItem("tempGeneratedSets");
-        navTo('mySets', newId);
-    } catch(e) {
-        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-            alert("Hata: Tarayıcı depolama alanı doldu! Lütfen bazı eski kayıtları silin.");
-        } else {
-            alert("Kaydedilirken beklenmedik bir hata oluştu.");
-        }
+        navTo("mySets", newGroup.id);
+    } catch (e) {
+        alert("Kayıt sırasında bir hata oluştu. Depolama alanı dolu olabilir.");
     }
 }
 
-function deleteGroup(id) {
-    try {
-        if (!confirm("Emin misiniz?")) return;
-        const groups = getLatestSavedGroups().filter(g => String(g.id) !== String(id));
-        localStorage.setItem("savedGroups", JSON.stringify(groups));
-        renderMySetsList();
-    } catch(e) {
-        alert("Silme işlemi başarısız.");
-    }
+/** @param {SetModel} set */
+function createBalls(set) {
+    const mainBalls = set.numbers.map(n => `<div class="ball selected">${n}</div>`).join("");
+    const jokerBalls = set.jokers.map(j => `<div class="ball joker">${j}</div>`).join("");
+    return `<div class='ball-row'>${mainBalls}${jokerBalls}</div>`;
 }
+
+/** * @param {SetModel} set 
+ * @param {{main: number[], joker: number[]}} results
+ */
+function createBallsWithMatch(set, results) {
+    const mainBalls = set.numbers.map(n => {
+        const matchClass = results.main.includes(n) ? "result-selected" : "";
+        return `<div class="ball selected ${matchClass}">${n}</div>`;
+    }).join("");
+
+    const jokerBalls = set.jokers.map(j => {
+        const matchClass = results.joker.includes(j) ? "result-selected" : "";
+        return `<div class="ball joker ${matchClass}">${j}</div>`;
+    }).join("");
+
+    return `<div class='ball-row'>${mainBalls}${jokerBalls}</div>`;
+}
+
+// --- RESULT PANEL ---
 
 function openResultPanel(max, groupId, shouldPushState = true) {
-    try {
-        const group = getLatestSavedGroups().find(g => String(g.id) === String(groupId));
-        const resultDiv = document.getElementById("resultNumbers");
-        
-        let html = `<h4>Ana Sayı (1-${max})</h4><div class='ball-row'>`;
-        for(let i=1; i<=max; i++) {
-            let sel = group.results.main.includes(i) ? "result-selected" : "";
-            html += `<div class="ball ${sel}" onclick="toggleMainResult(this,'${groupId}',${i})">${i}</div>`;
+    const group = getLatestSavedGroups().find(g => String(g.id) === groupId);
+    const resultNumbersDiv = document.getElementById("resultNumbers");
+    if (!group || !resultNumbersDiv) return;
+
+    let html = `<h4>Ana Sayılar (1-${max})</h4><div class='ball-row'>`;
+    for (let i = 1; i <= max; i++) {
+        const sel = group.results.main.includes(i) ? "result-selected" : "";
+        html += `<div class="ball ${sel}" onclick="toggleResult(this, '${groupId}', ${i}, 'main')">${i}</div>`;
+    }
+    html += "</div>";
+
+    if (group.jokerPerSet > 0) {
+        html += `<h4>Joker Sayılar (1-${group.jokerMax})</h4><div class='ball-row'>`;
+        for (let i = 1; i <= group.jokerMax; i++) {
+            const sel = group.results.joker.includes(i) ? "joker result-selected" : "joker";
+            html += `<div class="ball ${sel}" onclick="toggleResult(this, '${groupId}', ${i}, 'joker')">${i}</div>`;
         }
         html += "</div>";
-        
-        if (group.jokerPerSet > 0) {
-            html += `<h4>Joker (1-${group.jokerMax})</h4><div class='ball-row'>`;
-            for(let i=1; i<=group.jokerMax; i++) {
-                let sel = group.results.joker.includes(i) ? "joker result-selected" : "joker";
-                html += `<div class="ball ${sel}" onclick="toggleJokerResult(this,'${groupId}',${i})">${i}</div>`;
-            }
-            html += "</div>";
-        }
-        
-        resultDiv.innerHTML = html;
-        if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
-        resultPanel.style.display = "block";
-    } catch(e) {
-        navTo("mySets");
     }
+
+    resultNumbersDiv.innerHTML = html;
+    if (shouldPushState) history.pushState({ page: "panel", groupId: String(groupId) }, "");
+    resultPanel.style.display = "block";
 }
 
-function toggleMainResult(el, id, val) {
-    try {
-        let groups = getLatestSavedGroups();
-        let g = groups.find(x => String(x.id) === String(id));
-        let idx = g.results.main.indexOf(val);
-        
-        if (idx > -1) g.results.main.splice(idx, 1);
-        else if (g.results.main.length < 10) g.results.main.push(val); 
-        
-        localStorage.setItem("savedGroups", JSON.stringify(groups));
-        el.classList.toggle("result-selected");
-        renderViewGroup(id);
-    } catch(e) {
-        console.error("Sonuç güncellenemedi");
-    }
-}
+/**
+ * @param {HTMLElement} el 
+ * @param {string} id 
+ * @param {number} val 
+ * @param {'main'|'joker'} type 
+ */
+function toggleResult(el, id, val, type) {
+    const groups = getLatestSavedGroups();
+    const g = groups.find(x => String(x.id) === id);
+    if (!g) return;
 
-function toggleJokerResult(el, id, val) {
-    try {
-        let groups = getLatestSavedGroups();
-        let g = groups.find(x => String(x.id) === String(id));
-        let idx = g.results.joker.indexOf(val);
-        
-        if (idx > -1) g.results.joker.splice(idx, 1);
-        else if (g.results.joker.length < g.jokerPerSet) g.results.joker.push(val);
-        
-        localStorage.setItem("savedGroups", JSON.stringify(groups));
-        el.classList.toggle("result-selected");
-        renderViewGroup(id);
-    } catch(e) {
-        console.error("Joker güncellenemedi");
+    const targetArr = type === 'main' ? g.results.main : g.results.joker;
+    const idx = targetArr.indexOf(val);
+
+    if (idx > -1) {
+        targetArr.splice(idx, 1);
+    } else {
+        // Ana sayılarda limit 10, jokerlerde set başı adet kadar
+        const limit = type === 'main' ? 10 : g.jokerPerSet;
+        if (targetArr.length < limit) targetArr.push(val);
     }
+
+    localStorage.setItem("savedGroups", JSON.stringify(groups));
+    el.classList.toggle("result-selected");
+    renderViewGroup(id);
 }
 
 function closeResultPanel(back = false) {
-    if (back && history.state?.page === "panel") history.back();
-    else resultPanel.style.display = "none";
+    if (back && history.state?.page === "panel") {
+        history.back();
+    } else {
+        resultPanel.style.display = "none";
+    }
 }
 
 function confirmResult() { closeResultPanel(true); }
 
 function cleanResult() {
-    try {
-        const id = getActiveGroupIdFromState();
-        if (!id) return;
-        let groups = getLatestSavedGroups();
-        const group = groups.find(x => String(x.id) === id);
-        if(group) {
-            group.results = {main: [], joker: []};
-            localStorage.setItem("savedGroups", JSON.stringify(groups));
-            renderCurrentState("mySets", id);
-        }
-    } catch(e) {
-        alert("Temizleme başarısız.");
+    const id = history.state?.groupId;
+    if (!id) return;
+    const groups = getLatestSavedGroups();
+    const g = groups.find(x => String(x.id) === id);
+    if (g) {
+        g.results = { main: [], joker: [] };
+        localStorage.setItem("savedGroups", JSON.stringify(groups));
+        renderViewGroup(id);
+        openResultPanel(g.max, id, false);
     }
 }
 
-// HATA YÖNETİMİ: Bazı tarayıcılarda clipboard izni kapalı olabilir
-function copyToClipboard(text) {
-    if (!navigator.clipboard) {
-        alert("Tarayıcınız kopyalama özelliğini desteklemiyor.");
-        return;
-    }
+// --- CLIPBOARD & HELPERS ---
+
+function copySetsToClipboard() {
+    const text = generatedSets.map((s, i) => 
+        `${i+1}. Kolon: ${s.numbers.join(", ")}${s.jokers.length ? ' + Joker: ' + s.jokers.join(", ") : ''}`
+    ).join("\n");
+    doCopy(text);
+}
+
+function copyGroupById(id) {
+    const group = getLatestSavedGroups().find(g => String(g.id) === id);
+    if (!group) return;
+    const text = `${group.name}\n` + group.sets.map((s, i) => 
+        `${i+1}. Kolon: ${s.numbers.join(", ")}${s.jokers.length ? ' + Joker: ' + s.jokers.join(", ") : ''}`
+    ).join("\n");
+    doCopy(text);
+}
+
+function doCopy(text) {
     navigator.clipboard.writeText(text)
-        .then(() => alert("Kopyalandı!"))
-        .catch(err => alert("Kopyalama başarısız oldu."));
+        .then(() => alert("Başarıyla kopyalandı!"))
+        .catch(() => alert("Kopyalama hatası."));
 }
 
-function formatGroupForCopy(group) {
-    if (!group) return "";
-    try {
-        let t = `${group.name}\n`;
-        group.sets.forEach((s, i) => {
-            t += `${i+1}. Kolon: ${s.numbers.join(", ")} ${s.jokers.length ? '+ J:'+s.jokers.join(',') : ''}\n`;
-        });
-        return t;
-    } catch(e) { return "Veri formatlanamadı."; }
+function deleteGroup(id) {
+    if (!confirm("Bu grubu silmek istediğinize emin misiniz?")) return;
+    const groups = getLatestSavedGroups().filter(g => String(g.id) !== id);
+    localStorage.setItem("savedGroups", JSON.stringify(groups));
+    renderMySetsList();
 }
 </script>
 </body>
