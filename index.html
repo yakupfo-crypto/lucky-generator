@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lucky Generator Pro - Atomic Backup</title>
+<title>Lucky Generator Pro - Atomic & Validated</title>
 <style>
 body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
 header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }
@@ -11,7 +11,7 @@ header{ background:#1976d2; color:white; padding:20px; text-align:center; font-s
 .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
 input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
 button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
-.bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 900; }
+.bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; }
 .bottom-nav button{ background:none; color:white; border:none; width:auto; }
 .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
 .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; }
@@ -21,9 +21,6 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 .card b{ display:block; margin-bottom:10px; color:#1976d2; }
 .ball.result-selected{ background:#1976d2; color:#fff; }
 .copy-btn { background: #4caf50; margin-bottom: 10px; }
-.backup-section { display: flex; gap: 10px; margin-bottom: 20px; }
-.export-btn { background: #ff9800; }
-.import-btn { background: #673ab7; }
 </style>
 </head>
 <body>
@@ -51,6 +48,46 @@ const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 
+// --- SCHEMA VALIDATOR (Zod-like Logic) ---
+const Validator = {
+    isNumber: (v) => typeof v === 'number' && !isNaN(v),
+    isArray: (v) => Array.isArray(v),
+    isString: (v) => typeof v === 'string',
+
+    // Tek bir kolonu doğrular
+    validateSet: (set) => {
+        if (!set || typeof set !== 'object') return null;
+        return {
+            numbers: Validator.isArray(set.numbers) ? set.numbers.filter(Validator.isNumber) : [],
+            jokers: Validator.isArray(set.jokers) ? set.jokers.filter(Validator.isNumber) : [],
+            max: Validator.isNumber(set.max) ? set.max : 49,
+            jokerMax: Validator.isNumber(set.jokerMax) ? set.jokerMax : 0
+        };
+    },
+
+    // Tüm veri grubunu (Group) doğrular
+    validateGroup: (data) => {
+        try {
+            if (!data || typeof data !== 'object') return null;
+            return {
+                id: Validator.isString(data.id) ? data.id : String(Date.now()),
+                name: Validator.isString(data.name) ? data.name : "İsimsiz Liste",
+                sets: Validator.isArray(data.sets) ? data.sets.map(Validator.validateSet).filter(Boolean) : [],
+                max: Validator.isNumber(data.max) ? data.max : 49,
+                jokerMax: Validator.isNumber(data.jokerMax) ? data.jokerMax : 0,
+                jokerPerSet: Validator.isNumber(data.jokerPerSet) ? data.jokerPerSet : 0,
+                results: (data.results && Validator.isArray(data.results.main)) ? 
+                    { main: data.results.main.filter(Validator.isNumber), joker: (data.results.joker || []).filter(Validator.isNumber) } : 
+                    { main: [], joker: [] },
+                version: Validator.isNumber(data.version) ? data.version : Date.now()
+            };
+        } catch (e) {
+            console.error("Doğrulama hatası:", e);
+            return null;
+        }
+    }
+};
+
 // --- ATOMIC INDEXEDDB CORE ---
 const dbName = "LuckyDB";
 const storeName = "savedGroups";
@@ -74,25 +111,34 @@ async function getAllGroups() {
     return new Promise(resolve => {
         const tx = db.transaction(storeName, "readonly");
         const store = tx.objectStore(storeName);
-        store.getAll().onsuccess = (e) => resolve(e.target.result || []);
+        store.getAll().onsuccess = (e) => {
+            const rawData = e.target.result || [];
+            // Okurken doğrula: Bozuk verileri ayıkla veya düzelt
+            resolve(rawData.map(Validator.validateGroup).filter(Boolean));
+        };
     });
 }
 
 async function atomicSave(item) {
+    const validatedItem = Validator.validateGroup(item);
+    if (!validatedItem) throw new Error("Geçersiz veri formatı!");
+
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, "readwrite");
         const store = tx.objectStore(storeName);
-        const getRequest = store.get(item.id);
+        const getRequest = store.get(validatedItem.id);
+        
         getRequest.onsuccess = () => {
             const existing = getRequest.result;
-            if (existing && item.version !== existing.version) {
-                reject("Çakışma: Veri başka bir sekmede güncellenmiş.");
+            if (existing && validatedItem.version !== existing.version) {
+                reject("Çakışma: Veri başka bir sekmede güncellenmiş. Lütfen sayfayı yenileyin.");
                 return;
             }
-            item.version = Date.now();
-            store.put(item);
+            validatedItem.version = Date.now();
+            store.put(validatedItem);
         };
+
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject("İşlem hatası");
     });
@@ -109,54 +155,10 @@ async function getGroupById(id) {
     const db = await openDB();
     return new Promise(resolve => {
         const tx = db.transaction(storeName, "readonly");
-        tx.objectStore(storeName).get(id).onsuccess = (e) => resolve(e.target.result);
-    });
-}
-
-// --- BACKUP & RESTORE ---
-async function exportBackup() {
-    const data = await getAllGroups();
-    if (data.length === 0) { alert("Dışa aktarılacak kayıt bulunamadı."); return; }
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `lucky_backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-function triggerImport() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            try {
-                const importedData = JSON.parse(event.target.result);
-                if (!Array.isArray(importedData)) throw new Error("Geçersiz format");
-                
-                const db = await openDB();
-                const tx = db.transaction(storeName, "readwrite");
-                const store = tx.objectStore(storeName);
-                
-                importedData.forEach(item => store.put(item));
-                
-                tx.oncomplete = () => {
-                    alert("Veriler başarıyla içeri aktarıldı!");
-                    renderMySetsList();
-                };
-            } catch (err) {
-                alert("Hata: Dosya formatı uyumsuz.");
-            }
+        tx.objectStore(storeName).get(id).onsuccess = (e) => {
+            resolve(Validator.validateGroup(e.target.result));
         };
-        reader.readAsText(file);
-    };
-    input.click();
+    });
 }
 
 // --- LOGIC ---
@@ -216,10 +218,22 @@ async function renderCurrentState(page, groupId) {
 
 function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
-    const stored = sessionStorage.getItem("tempGeneratedSets");
-    const inputs = sessionStorage.getItem("tempInputs");
-    generatedSets = stored ? JSON.parse(stored) : [];
-    if(inputs) storedInputs = JSON.parse(inputs);
+    try {
+        const stored = sessionStorage.getItem("tempGeneratedSets");
+        const inputs = sessionStorage.getItem("tempInputs");
+        
+        // SessionStorage verilerini de okurken doğruluyoruz
+        const parsedSets = stored ? JSON.parse(stored) : [];
+        generatedSets = Array.isArray(parsedSets) ? parsedSets.map(Validator.validateSet).filter(Boolean) : [];
+        
+        if(inputs) {
+            const pInputs = JSON.parse(inputs);
+            if(Validator.isNumber(pInputs.max)) storedInputs = pInputs;
+        }
+    } catch(e) {
+        console.warn("Geçici veriler bozuk, sıfırlanıyor.");
+        generatedSets = [];
+    }
 
     viewContainer.innerHTML = `
     <div class="container">
@@ -261,14 +275,7 @@ function getGeneratedSetsHtml() {
 
 async function renderMySetsList() {
     const currentGroups = await getAllGroups();
-    let html = `
-    <div class="container">
-        <h3>Kayıtlı Kolonlarım</h3>
-        <div class="backup-section">
-            <button class="export-btn" onclick="exportBackup()">Yedekle (JSON)</button>
-            <button class="import-btn" onclick="triggerImport()">Geri Yükle</button>
-        </div>`;
-        
+    let html = `<div class="container"><h3>Kayıtlı Kolonlarım</h3>`;
     if (currentGroups.length === 0) html += "<p>Henüz kayıtlı set yok.</p>";
     currentGroups.forEach(group => {
         html += `
@@ -384,8 +391,9 @@ async function deleteGroup(id) {
 
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId);
+    if(!group) return;
+
     const resultDiv = document.getElementById("resultNumbers");
-    
     let html = `<h4>Ana Sayı (1-${max})</h4><div class='ball-row'>`;
     for(let i=1; i<=max; i++) {
         let sel = group.results.main.includes(i) ? "result-selected" : "";
@@ -408,6 +416,7 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
 async function toggleMainResult(el, id, val) {
     try {
         const group = await getGroupById(id);
+        if(!group) return;
         const idx = group.results.main.indexOf(val);
         if (idx > -1) group.results.main.splice(idx, 1);
         else if (group.results.main.length < 10) group.results.main.push(val); 
@@ -424,6 +433,7 @@ async function toggleMainResult(el, id, val) {
 async function toggleJokerResult(el, id, val) {
     try {
         const group = await getGroupById(id);
+        if(!group) return;
         const idx = group.results.joker.indexOf(val);
         if (idx > -1) group.results.joker.splice(idx, 1);
         else if (group.results.joker.length < group.jokerPerSet) group.results.joker.push(val);
