@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lucky Generator Pro - Atomic & Validated</title>
+<title>Lucky Generator Pro - Atomic & Sanitized</title>
 <style>
 body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
 header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }
@@ -48,6 +48,14 @@ const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 
+// --- SECURITY: SANITIZATION HELPER ---
+function escapeHTML(str) {
+    if (!str) return "";
+    const p = document.createElement("p");
+    p.textContent = str;
+    return p.innerHTML;
+}
+
 // --- SCHEMA VALIDATOR ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
@@ -67,7 +75,7 @@ const Validator = {
             if (!data || typeof data !== 'object') return null;
             return {
                 id: Validator.isString(data.id) ? data.id : String(Date.now()),
-                name: Validator.isString(data.name) ? data.name : "İsimsiz Liste",
+                name: Validator.isString(data.name) ? escapeHTML(data.name) : "İsimsiz Liste",
                 sets: Validator.isArray(data.sets) ? data.sets.map(Validator.validateSet).filter(Boolean) : [],
                 max: Validator.isNumber(data.max) ? data.max : 49,
                 jokerMax: Validator.isNumber(data.jokerMax) ? data.jokerMax : 0,
@@ -81,7 +89,7 @@ const Validator = {
     }
 };
 
-// --- ATOMIC INDEXEDDB CORE WITH WEB LOCKS ---
+// --- ATOMIC INDEXEDDB CORE ---
 const dbName = "LuckyDB";
 const storeName = "savedGroups";
 const lockName = "db_write_lock";
@@ -122,7 +130,7 @@ async function atomicSave(item) {
             getRequest.onsuccess = () => {
                 const existing = getRequest.result;
                 if (existing && validatedItem.version !== existing.version) {
-                    return reject("Çakışma: Veri başka bir sekmede güncellenmiş. Lütfen sayfayı yenileyin.");
+                    return reject("Çakışma: Veri başka bir sekmede güncellenmiş.");
                 }
                 validatedItem.version = Date.now();
                 store.put(validatedItem);
@@ -260,37 +268,71 @@ function getGeneratedSetsHtml() {
 
 async function renderMySetsList() {
     const currentGroups = await getAllGroups();
-    let html = `<div class="container"><h3>Kayıtlı Kolonlarım</h3>`;
-    if (currentGroups.length === 0) html += "<p>Henüz kayıtlı set yok.</p>";
+    const container = document.createElement("div");
+    container.className = "container";
+    container.innerHTML = `<h3>Kayıtlı Kolonlarım</h3>`;
+
+    if (currentGroups.length === 0) container.innerHTML += "<p>Henüz kayıtlı set yok.</p>";
+    
     currentGroups.forEach(group => {
-        html += `
-            <div class='card'>
-                <b>${group.name}</b><br>
-                Kolon Sayısı: ${group.sets.length}<br>
-                <button onclick='navTo("mySets","${group.id}")'>Görüntüle</button>
-                <button onclick='deleteGroup("${group.id}")' style="background:#d32f2f;margin-top:5px;">Sil</button>
-            </div>`;
+        const card = document.createElement("div");
+        card.className = "card";
+        
+        const b = document.createElement("b");
+        b.textContent = group.name; // GÜVENLİ: innerText/textContent kullanımı
+        
+        const info = document.createElement("div");
+        info.style.marginTop = "5px";
+        info.innerHTML = `Kolon Sayısı: ${group.sets.length}<br>`;
+        
+        const btnView = document.createElement("button");
+        btnView.textContent = "Görüntüle";
+        btnView.onclick = () => navTo("mySets", group.id);
+        
+        const btnDel = document.createElement("button");
+        btnDel.textContent = "Sil";
+        btnDel.style.background = "#d32f2f";
+        btnDel.style.marginTop = "5px";
+        btnDel.onclick = () => deleteGroup(group.id);
+        
+        card.append(b, info, btnView, btnDel);
+        container.appendChild(card);
     });
-    viewContainer.innerHTML = html + "</div>";
+    viewContainer.appendChild(container);
 }
 
 async function renderViewGroup(id) {
     const group = await getGroupById(id);
     if (!group) return renderMySetsList();
+    
     let resText = (group.results.main.length > 0 || group.results.joker.length > 0) 
         ? `Ana: ${group.results.main.join(",")} | Joker: ${group.results.joker.join(",")}` 
         : "Henüz girilmedi";
-    let html = `<div class="container"><h3>${group.name}</h3>`;
-    html += `<button class="copy-btn" onclick='copySpecificGroup("${id}")'>Panoya Kopyala</button>`;
-    html += `
+        
+    const container = document.createElement("div");
+    container.className = "container";
+    
+    const h3 = document.createElement("h3");
+    h3.textContent = group.name; // GÜVENLİ
+    
+    container.appendChild(h3);
+    container.innerHTML += `<button class="copy-btn" onclick='copySpecificGroup("${id}")'>Panoya Kopyala</button>
         <div class="card">
             <b>Sonuçlar:</b> <span id="resultText-${group.id}">${resText}</span><br>
             <button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button>
         </div>`;
+        
     group.sets.forEach((set, i) => {
-        html += `<div class='card'><b>${i+1}.</b>${createBallsWithMatch(set, group.results)}</div>`;
+        container.innerHTML += `<div class='card'><b>${i+1}.</b>${createBallsWithMatch(set, group.results)}</div>`;
     });
-    viewContainer.innerHTML = html + `<button onclick='navTo("mySets")' style="background:#666;">Listeye Dön</button></div>`;
+    
+    const backBtn = document.createElement("button");
+    backBtn.textContent = "Listeye Dön";
+    backBtn.style.background = "#666";
+    backBtn.onclick = () => navTo("mySets");
+    
+    container.appendChild(backBtn);
+    viewContainer.appendChild(container);
 }
 
 function createBalls(set) {
@@ -337,11 +379,14 @@ function generateSets() {
 }
 
 async function saveGroup() {
-    const name = document.getElementById("groupNameInput")?.value;
-    if (!name?.trim()) { alert("İsim girin!"); return; }
+    const rawName = document.getElementById("groupNameInput")?.value;
+    if (!rawName?.trim()) { alert("İsim girin!"); return; }
+    
+    const sanitizedName = escapeHTML(rawName); // GÜVENLİ: Input arındırma
+    
     const group = {
         id: String(Date.now()), 
-        name, 
+        name: sanitizedName, 
         sets: [...generatedSets],
         max: parseInt(document.getElementById("maxNumber").value),
         jokerMax: parseInt(document.getElementById("jokerMax").value),
