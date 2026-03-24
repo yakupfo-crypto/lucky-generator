@@ -44,11 +44,16 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
+// --- GLOBAL ERROR BOUNDARY ---
+window.onerror = function(message, source, lineno, colno, error) {
+    alert("Kritik Hata: Uygulama veriyi korumak için durduruldu.");
+    return true; 
+};
+
 const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 
-// --- SECURITY: SANITIZATION HELPER ---
 function escapeHTML(str) {
     if (!str) return "";
     const p = document.createElement("p");
@@ -56,7 +61,6 @@ function escapeHTML(str) {
     return p.innerHTML;
 }
 
-// --- SCHEMA VALIDATOR ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -89,7 +93,6 @@ const Validator = {
     }
 };
 
-// --- ATOMIC INDEXEDDB CORE ---
 const dbName = "LuckyDB";
 const storeName = "savedGroups";
 const lockName = "db_write_lock";
@@ -160,7 +163,6 @@ async function getGroupById(id) {
     });
 }
 
-// --- LOGIC ---
 function secureRandomInt(max) {
     const array = new Uint32Array(1);
     window.crypto.getRandomValues(array);
@@ -277,24 +279,19 @@ async function renderMySetsList() {
     currentGroups.forEach(group => {
         const card = document.createElement("div");
         card.className = "card";
-        
         const b = document.createElement("b");
-        b.textContent = group.name; // GÜVENLİ: innerText/textContent kullanımı
-        
+        b.textContent = group.name;
         const info = document.createElement("div");
         info.style.marginTop = "5px";
         info.innerHTML = `Kolon Sayısı: ${group.sets.length}<br>`;
-        
         const btnView = document.createElement("button");
         btnView.textContent = "Görüntüle";
         btnView.onclick = () => navTo("mySets", group.id);
-        
         const btnDel = document.createElement("button");
         btnDel.textContent = "Sil";
         btnDel.style.background = "#d32f2f";
         btnDel.style.marginTop = "5px";
         btnDel.onclick = () => deleteGroup(group.id);
-        
         card.append(b, info, btnView, btnDel);
         container.appendChild(card);
     });
@@ -304,33 +301,26 @@ async function renderMySetsList() {
 async function renderViewGroup(id) {
     const group = await getGroupById(id);
     if (!group) return renderMySetsList();
-    
     let resText = (group.results.main.length > 0 || group.results.joker.length > 0) 
         ? `Ana: ${group.results.main.join(",")} | Joker: ${group.results.joker.join(",")}` 
         : "Henüz girilmedi";
-        
     const container = document.createElement("div");
     container.className = "container";
-    
     const h3 = document.createElement("h3");
-    h3.textContent = group.name; // GÜVENLİ
-    
+    h3.textContent = group.name;
     container.appendChild(h3);
     container.innerHTML += `<button class="copy-btn" onclick='copySpecificGroup("${id}")'>Panoya Kopyala</button>
         <div class="card">
             <b>Sonuçlar:</b> <span id="resultText-${group.id}">${resText}</span><br>
             <button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button>
         </div>`;
-        
     group.sets.forEach((set, i) => {
         container.innerHTML += `<div class='card'><b>${i+1}.</b>${createBallsWithMatch(set, group.results)}</div>`;
     });
-    
     const backBtn = document.createElement("button");
     backBtn.textContent = "Listeye Dön";
     backBtn.style.background = "#666";
     backBtn.onclick = () => navTo("mySets");
-    
     container.appendChild(backBtn);
     viewContainer.appendChild(container);
 }
@@ -381,9 +371,7 @@ function generateSets() {
 async function saveGroup() {
     const rawName = document.getElementById("groupNameInput")?.value;
     if (!rawName?.trim()) { alert("İsim girin!"); return; }
-    
-    const sanitizedName = escapeHTML(rawName); // GÜVENLİ: Input arındırma
-    
+    const sanitizedName = escapeHTML(rawName);
     const group = {
         id: String(Date.now()), 
         name: sanitizedName, 
