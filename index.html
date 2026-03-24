@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
+<meta name="theme-color" content="#1976d2">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkx1Y2t5IEdlbmVyYXRvciBQcm8iLAogICJzaG9ydF9uYW1lIjogIkx1Y2t5R2VuIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNmMmY2ZmIiLAogICJ0aGVtZV9jb2xvciI6ICIjMTk3NmQyIiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiaWNvbi0xOTIucG5nIiwKICAgICAgInNpemVzIjogIjE5MngxOTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciCiAgICB9CiAgXQp9">
+
 <title>Lucky Generator Pro - Atomic & Sanitized</title>
 <style>
 body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
@@ -44,7 +49,45 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
     <button onclick="cleanResult()" style="background:#999;margin-top:8px;">Temizle</button>
 </div>
 
+<script id="sw-code" type="application/javascript">
+// SERVICE WORKER MANTIĞI (BLOB İÇİNDE ÇALIŞACAK)
+const CACHE_NAME = 'lucky-gen-v1';
+const ASSETS = [
+  '/',
+  'index.html'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
+  );
+});
+</script>
+
 <script>
+// --- SERVICE WORKER KAYIT (MODERN & ATOMIC) ---
+if ('serviceWorker' in navigator) {
+    const swCode = document.getElementById('sw-code').textContent;
+    const blob = new Blob([swCode], { type: 'application/javascript' });
+    const swUrl = URL.createObjectURL(blob);
+    
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register(swUrl)
+            .then(reg => console.log('Uygulama Hapsedildi: Çevrimdışı Kullanılabilir.'))
+            .catch(err => console.log('SW Hatası:', err));
+    });
+}
+
+// Geri kalan fonksiyonların (Validator, DB, Navigasyon vb.) tamamı bozulmadan devam eder...
 window.onerror = function(message, source, lineno, colno, error) {
     alert("Kritik Hata: Uygulama veriyi korumak için durduruldu.");
     return true; 
