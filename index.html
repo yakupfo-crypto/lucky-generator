@@ -48,13 +48,11 @@ const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 
-// --- SCHEMA VALIDATOR (Zod-like Logic) ---
+// --- SCHEMA VALIDATOR ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
     isString: (v) => typeof v === 'string',
-
-    // Tek bir kolonu doğrular
     validateSet: (set) => {
         if (!set || typeof set !== 'object') return null;
         return {
@@ -64,8 +62,6 @@ const Validator = {
             jokerMax: Validator.isNumber(set.jokerMax) ? set.jokerMax : 0
         };
     },
-
-    // Tüm veri grubunu (Group) doğrular
     validateGroup: (data) => {
         try {
             if (!data || typeof data !== 'object') return null;
@@ -81,25 +77,21 @@ const Validator = {
                     { main: [], joker: [] },
                 version: Validator.isNumber(data.version) ? data.version : Date.now()
             };
-        } catch (e) {
-            console.error("Doğrulama hatası:", e);
-            return null;
-        }
+        } catch (e) { return null; }
     }
 };
 
-// --- ATOMIC INDEXEDDB CORE ---
+// --- ATOMIC INDEXEDDB CORE WITH WEB LOCKS ---
 const dbName = "LuckyDB";
 const storeName = "savedGroups";
+const lockName = "db_write_lock";
 
 function openDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(dbName, 1);
         request.onupgradeneeded = (e) => {
             const db = e.target.result;
-            if (!db.objectStoreNames.contains(storeName)) {
-                db.createObjectStore(storeName, { keyPath: "id" });
-            }
+            if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: "id" });
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject("DB hatası");
@@ -110,11 +102,8 @@ async function getAllGroups() {
     const db = await openDB();
     return new Promise(resolve => {
         const tx = db.transaction(storeName, "readonly");
-        const store = tx.objectStore(storeName);
-        store.getAll().onsuccess = (e) => {
-            const rawData = e.target.result || [];
-            // Okurken doğrula: Bozuk verileri ayıkla veya düzelt
-            resolve(rawData.map(Validator.validateGroup).filter(Boolean));
+        tx.objectStore(storeName).getAll().onsuccess = (e) => {
+            resolve((e.target.result || []).map(Validator.validateGroup).filter(Boolean));
         };
     });
 }
@@ -123,32 +112,34 @@ async function atomicSave(item) {
     const validatedItem = Validator.validateGroup(item);
     if (!validatedItem) throw new Error("Geçersiz veri formatı!");
 
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, "readwrite");
-        const store = tx.objectStore(storeName);
-        const getRequest = store.get(validatedItem.id);
-        
-        getRequest.onsuccess = () => {
-            const existing = getRequest.result;
-            if (existing && validatedItem.version !== existing.version) {
-                reject("Çakışma: Veri başka bir sekmede güncellenmiş. Lütfen sayfayı yenileyin.");
-                return;
-            }
-            validatedItem.version = Date.now();
-            store.put(validatedItem);
-        };
+    return navigator.locks.request(lockName, async () => {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, "readwrite");
+            const store = tx.objectStore(storeName);
+            const getRequest = store.get(validatedItem.id);
 
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject("İşlem hatası");
+            getRequest.onsuccess = () => {
+                const existing = getRequest.result;
+                if (existing && validatedItem.version !== existing.version) {
+                    return reject("Çakışma: Veri başka bir sekmede güncellenmiş. Lütfen sayfayı yenileyin.");
+                }
+                validatedItem.version = Date.now();
+                store.put(validatedItem);
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject("İşlem hatası");
+        });
     });
 }
 
 async function deleteFromDB(id) {
-    const db = await openDB();
-    const tx = db.transaction(storeName, "readwrite");
-    tx.objectStore(storeName).delete(id);
-    return new Promise(resolve => tx.oncomplete = resolve);
+    return navigator.locks.request(lockName, async () => {
+        const db = await openDB();
+        const tx = db.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).delete(id);
+        return new Promise(resolve => tx.oncomplete = resolve);
+    });
 }
 
 async function getGroupById(id) {
@@ -221,19 +212,13 @@ function renderGeneratePage() {
     try {
         const stored = sessionStorage.getItem("tempGeneratedSets");
         const inputs = sessionStorage.getItem("tempInputs");
-        
-        // SessionStorage verilerini de okurken doğruluyoruz
         const parsedSets = stored ? JSON.parse(stored) : [];
         generatedSets = Array.isArray(parsedSets) ? parsedSets.map(Validator.validateSet).filter(Boolean) : [];
-        
         if(inputs) {
             const pInputs = JSON.parse(inputs);
             if(Validator.isNumber(pInputs.max)) storedInputs = pInputs;
         }
-    } catch(e) {
-        console.warn("Geçici veriler bozuk, sıfırlanıyor.");
-        generatedSets = [];
-    }
+    } catch(e) { generatedSets = []; }
 
     viewContainer.innerHTML = `
     <div class="container">
@@ -292,11 +277,9 @@ async function renderMySetsList() {
 async function renderViewGroup(id) {
     const group = await getGroupById(id);
     if (!group) return renderMySetsList();
-
     let resText = (group.results.main.length > 0 || group.results.joker.length > 0) 
         ? `Ana: ${group.results.main.join(",")} | Joker: ${group.results.joker.join(",")}` 
         : "Henüz girilmedi";
-
     let html = `<div class="container"><h3>${group.name}</h3>`;
     html += `<button class="copy-btn" onclick='copySpecificGroup("${id}")'>Panoya Kopyala</button>`;
     html += `
@@ -304,7 +287,6 @@ async function renderViewGroup(id) {
             <b>Sonuçlar:</b> <span id="resultText-${group.id}">${resText}</span><br>
             <button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button>
         </div>`;
-    
     group.sets.forEach((set, i) => {
         html += `<div class='card'><b>${i+1}.</b>${createBallsWithMatch(set, group.results)}</div>`;
     });
@@ -337,12 +319,10 @@ function generateSets() {
     const jMax = parseInt(document.getElementById("jokerMax").value);
     const jPer = parseInt(document.getElementById("jokerCount").value);
     const count = parseInt(document.getElementById("setCount").value);
-
     if ([max, per, jMax, jPer, count].some(isNaN) || per > max || jPer > jMax) {
         alert("Lütfen geçerli değerler girin!");
         return;
     }
-    
     generatedSets = [];
     for (let i = 0; i < count; i++) {
         let nArr = Array.from({length: max}, (_, i) => i + 1);
@@ -351,7 +331,6 @@ function generateSets() {
         let jokers = secureShuffle(jArr).slice(0, jPer).sort((a,b)=>a-b);
         generatedSets.push({numbers, jokers, max, jokerMax: jMax});
     }
-
     sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
     sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
     document.getElementById("results").innerHTML = getGeneratedSetsHtml();
@@ -360,10 +339,8 @@ function generateSets() {
 async function saveGroup() {
     const name = document.getElementById("groupNameInput")?.value;
     if (!name?.trim()) { alert("İsim girin!"); return; }
-    
-    const newId = String(Date.now());
     const group = {
-        id: newId, 
+        id: String(Date.now()), 
         name, 
         sets: [...generatedSets],
         max: parseInt(document.getElementById("maxNumber").value),
@@ -372,14 +349,11 @@ async function saveGroup() {
         results: {main: [], joker: []},
         version: Date.now()
     };
-    
     try {
         await atomicSave(group);
         sessionStorage.removeItem("tempGeneratedSets");
-        navTo('mySets', newId);
-    } catch(err) {
-        alert(err);
-    }
+        navTo('mySets', group.id);
+    } catch(err) { alert(err); }
 }
 
 async function deleteGroup(id) {
@@ -392,14 +366,12 @@ async function deleteGroup(id) {
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId);
     if(!group) return;
-
     const resultDiv = document.getElementById("resultNumbers");
     let html = `<h4>Ana Sayı (1-${max})</h4><div class='ball-row'>`;
     for(let i=1; i<=max; i++) {
         let sel = group.results.main.includes(i) ? "result-selected" : "";
         html += `<div class="ball ${sel}" onclick="toggleMainResult(this,'${groupId}',${i})">${i}</div>`;
     }
-    
     if (group.jokerPerSet > 0) {
         html += `</div><h4>Joker (1-${group.jokerMax})</h4><div class='ball-row'>`;
         for(let i=1; i<=group.jokerMax; i++) {
@@ -407,7 +379,6 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
             html += `<div class="ball ${sel}" onclick="toggleJokerResult(this,'${groupId}',${i})">${i}</div>`;
         }
     }
-    
     resultDiv.innerHTML = html + "</div>";
     if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
     resultPanel.style.display = "block";
@@ -420,7 +391,6 @@ async function toggleMainResult(el, id, val) {
         const idx = group.results.main.indexOf(val);
         if (idx > -1) group.results.main.splice(idx, 1);
         else if (group.results.main.length < 10) group.results.main.push(val); 
-        
         await atomicSave(group);
         el.classList.toggle("result-selected");
         renderViewGroup(id);
@@ -437,7 +407,6 @@ async function toggleJokerResult(el, id, val) {
         const idx = group.results.joker.indexOf(val);
         if (idx > -1) group.results.joker.splice(idx, 1);
         else if (group.results.joker.length < group.jokerPerSet) group.results.joker.push(val);
-        
         await atomicSave(group);
         el.classList.toggle("result-selected");
         renderViewGroup(id);
@@ -464,9 +433,7 @@ async function cleanResult() {
             await atomicSave(group);
             renderCurrentState("mySets", id);
         }
-    } catch(err) {
-        alert(err);
-    }
+    } catch(err) { alert(err); }
 }
 
 async function copySpecificGroup(id) {
