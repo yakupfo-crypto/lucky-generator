@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lucky Generator Pro - Atomic</title>
+<title>Lucky Generator Pro</title>
 <style>
 body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
 header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }
@@ -48,7 +48,7 @@ const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 
-// --- ATOMIC INDEXEDDB CORE ---
+// --- INDEXEDDB CORE ---
 const dbName = "LuckyDB";
 const storeName = "savedGroups";
 
@@ -75,37 +75,18 @@ async function getAllGroups() {
     });
 }
 
-// Atomik Kayıt Fonksiyonu (Optimistic Locking)
-async function atomicSave(item) {
+async function saveToDB(item) {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, "readwrite");
-        const store = tx.objectStore(storeName);
-        
-        // Veriyi çekip versiyon kontrolü yapıyoruz
-        const getRequest = store.get(item.id);
-        
-        getRequest.onsuccess = () => {
-            const existing = getRequest.result;
-            if (existing && item.version !== existing.version) {
-                reject("Çakışma: Veri başka bir sekmede güncellenmiş. Lütfen sayfayı yenileyin.");
-                return;
-            }
-            // Versiyonu güncelle ve kaydet
-            item.version = Date.now();
-            store.put(item);
-        };
-
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject("İşlem hatası");
-    });
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).put(item);
+    return tx.complete;
 }
 
 async function deleteFromDB(id) {
     const db = await openDB();
     const tx = db.transaction(storeName, "readwrite");
     tx.objectStore(storeName).delete(id);
-    return new Promise(resolve => tx.oncomplete = resolve);
+    return tx.complete;
 }
 
 async function getGroupById(id) {
@@ -306,23 +287,16 @@ async function saveGroup() {
     
     const newId = String(Date.now());
     const group = {
-        id: newId, 
-        name, 
-        sets: [...generatedSets],
+        id: newId, name, sets: [...generatedSets],
         max: parseInt(document.getElementById("maxNumber").value),
         jokerMax: parseInt(document.getElementById("jokerMax").value),
         jokerPerSet: parseInt(document.getElementById("jokerCount").value),
-        results: {main: [], joker: []},
-        version: Date.now() // İlk versiyon
+        results: {main: [], joker: []}
     };
     
-    try {
-        await atomicSave(group);
-        sessionStorage.removeItem("tempGeneratedSets");
-        navTo('mySets', newId);
-    } catch(err) {
-        alert(err);
-    }
+    await saveToDB(group);
+    sessionStorage.removeItem("tempGeneratedSets");
+    navTo('mySets', newId);
 }
 
 async function deleteGroup(id) {
@@ -356,35 +330,25 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
 }
 
 async function toggleMainResult(el, id, val) {
-    try {
-        const group = await getGroupById(id);
-        const idx = group.results.main.indexOf(val);
-        if (idx > -1) group.results.main.splice(idx, 1);
-        else if (group.results.main.length < 10) group.results.main.push(val); 
-        
-        await atomicSave(group);
-        el.classList.toggle("result-selected");
-        renderViewGroup(id);
-    } catch(err) {
-        alert(err);
-        renderCurrentState("mySets", id); // Veriyi tazelemek için
-    }
+    const group = await getGroupById(id);
+    const idx = group.results.main.indexOf(val);
+    if (idx > -1) group.results.main.splice(idx, 1);
+    else if (group.results.main.length < 10) group.results.main.push(val); 
+    
+    await saveToDB(group);
+    el.classList.toggle("result-selected");
+    renderViewGroup(id);
 }
 
 async function toggleJokerResult(el, id, val) {
-    try {
-        const group = await getGroupById(id);
-        const idx = group.results.joker.indexOf(val);
-        if (idx > -1) group.results.joker.splice(idx, 1);
-        else if (group.results.joker.length < group.jokerPerSet) group.results.joker.push(val);
-        
-        await atomicSave(group);
-        el.classList.toggle("result-selected");
-        renderViewGroup(id);
-    } catch(err) {
-        alert(err);
-        renderCurrentState("mySets", id);
-    }
+    const group = await getGroupById(id);
+    const idx = group.results.joker.indexOf(val);
+    if (idx > -1) group.results.joker.splice(idx, 1);
+    else if (group.results.joker.length < group.jokerPerSet) group.results.joker.push(val);
+    
+    await saveToDB(group);
+    el.classList.toggle("result-selected");
+    renderViewGroup(id);
 }
 
 function closeResultPanel(back = false) {
@@ -397,15 +361,11 @@ function confirmResult() { closeResultPanel(true); }
 async function cleanResult() {
     const id = history.state?.groupId;
     if (!id) return;
-    try {
-        const group = await getGroupById(id);
-        if(group) {
-            group.results = {main: [], joker: []};
-            await atomicSave(group);
-            renderCurrentState("mySets", id);
-        }
-    } catch(err) {
-        alert(err);
+    const group = await getGroupById(id);
+    if(group) {
+        group.results = {main: [], joker: []};
+        await saveToDB(group);
+        renderCurrentState("mySets", id);
     }
 }
 
