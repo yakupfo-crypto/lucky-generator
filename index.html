@@ -45,15 +45,19 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
+// --- HATA YÖNETİMİ ---
 window.onerror = function(message, source, lineno, colno, error) {
-    alert("Kritik Hata: Uygulama veriyi korumak için durduruldu.");
+    console.error(error);
+    alert("Bir hata oluştu. Sayfa yenilenebilir.");
     return true; 
 };
 
+// --- GLOBAL DEĞİŞKENLER ---
 const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 
+// --- YARDIMCI FONKSİYONLAR ---
 function escapeHTML(str) {
     if (!str) return "";
     const p = document.createElement("p");
@@ -61,6 +65,7 @@ function escapeHTML(str) {
     return p.innerHTML;
 }
 
+// --- VERİ DOĞRULAMA (VALIDATOR) ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -93,9 +98,20 @@ const Validator = {
     }
 };
 
+// --- VERİTABANI (INDEXEDDB) VE KİLİT MEKANİZMASI ---
 const dbName = "LuckyDB";
 const storeName = "savedGroups";
 const lockName = "db_write_lock";
+
+// ÇÖZÜM: navigator.locks desteği yoksa güvenli şekilde bypass eden sarmalayıcı
+async function withLock(name, callback) {
+    if (window.navigator && navigator.locks && typeof navigator.locks.request === 'function') {
+        return navigator.locks.request(name, callback);
+    } else {
+        // Kilit mekanizması yoksa doğrudan çalıştır (Geriye dönük uyumluluk)
+        return callback();
+    }
+}
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -123,7 +139,7 @@ async function atomicSave(item) {
     const validatedItem = Validator.validateGroup(item);
     if (!validatedItem) throw new Error("Geçersiz veri formatı!");
 
-    return navigator.locks.request(lockName, async () => {
+    return withLock(lockName, async () => {
         const db = await openDB();
         return new Promise((resolve, reject) => {
             const tx = db.transaction(storeName, "readwrite");
@@ -145,7 +161,7 @@ async function atomicSave(item) {
 }
 
 async function deleteFromDB(id) {
-    return navigator.locks.request(lockName, async () => {
+    return withLock(lockName, async () => {
         const db = await openDB();
         const tx = db.transaction(storeName, "readwrite");
         tx.objectStore(storeName).delete(id);
@@ -163,27 +179,25 @@ async function getGroupById(id) {
     });
 }
 
+// --- GÜVENLİ RASTGELELİK ---
 function secureRandomInt(max) {
     const array = new Uint32Array(1);
     window.crypto.getRandomValues(array);
     const val = array[0] % max;
-    array.fill(0); // Bellek temizliği
     return val;
 }
 
 function secureShuffle(array) {
     const randomBuffer = new Uint32Array(array.length);
     window.crypto.getRandomValues(randomBuffer);
-    
     for (let i = array.length - 1; i > 0; i--) {
         const j = randomBuffer[i] % (i + 1);
         [array[i], array[j]] = [array[j], array[i]];
     }
-    
-    randomBuffer.fill(0); // Rastgelelik havuzunu temizle
     return array;
 }
 
+// --- NAVİGASYON VE RENDER ---
 window.onload = () => {
     const s = history.state || {page:"generate", groupId:null};
     renderCurrentState(s.page, s.groupId);
@@ -365,24 +379,16 @@ function generateSets() {
     }
     
     generatedSets = [];
-    
-    // Geçici veriler için TypedArrays kullanımı
     for (let i = 0; i < count; i++) {
-        let nPool = new Uint8Array(max);
-        for(let k=0; k<max; k++) nPool[k] = k + 1;
-        let shuffledN = secureShuffle(Array.from(nPool));
+        let nPool = Array.from({length: max}, (_, k) => k + 1);
+        let shuffledN = secureShuffle(nPool);
         let numbers = shuffledN.slice(0, per).sort((a,b)=>a-b);
         
-        let jPool = new Uint8Array(jMax);
-        for(let k=0; k<jMax; k++) jPool[k] = k + 1;
-        let shuffledJ = secureShuffle(Array.from(jPool));
+        let jPool = Array.from({length: jMax}, (_, k) => k + 1);
+        let shuffledJ = secureShuffle(jPool);
         let jokers = shuffledJ.slice(0, jPer).sort((a,b)=>a-b);
         
         generatedSets.push({numbers, jokers, max, jokerMax: jMax});
-        
-        // Hassas verileri bellekten temizle
-        nPool.fill(0);
-        jPool.fill(0);
     }
     
     sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
@@ -393,10 +399,9 @@ function generateSets() {
 async function saveGroup() {
     const rawName = document.getElementById("groupNameInput")?.value;
     if (!rawName?.trim()) { alert("İsim girin!"); return; }
-    const sanitizedName = escapeHTML(rawName);
     const group = {
         id: String(Date.now()), 
-        name: sanitizedName, 
+        name: escapeHTML(rawName), 
         sets: [...generatedSets],
         max: parseInt(document.getElementById("maxNumber").value),
         jokerMax: parseInt(document.getElementById("jokerMax").value),
@@ -413,8 +418,10 @@ async function saveGroup() {
 
 async function deleteGroup(id) {
     if (confirm("Emin misiniz?")) {
-        await deleteFromDB(id);
-        renderMySetsList();
+        try {
+            await deleteFromDB(id);
+            renderMySetsList();
+        } catch(err) { alert(err); }
     }
 }
 
@@ -501,7 +508,11 @@ function copyCurrentGenerated() {
 }
 
 function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => alert("Kopyalandı!"));
+    if(navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => alert("Kopyalandı!"));
+    } else {
+        alert("Tarayıcınız panoyu desteklemiyor.");
+    }
 }
 
 function formatGroupForCopy(group) {
