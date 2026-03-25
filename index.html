@@ -72,7 +72,7 @@ window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", 
 const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
-let lastRequestId = 0; // Hızlı navigasyon (race condition) kontrolü için
+let lastRequestId = 0; // Edge-case çözümü: Race condition kontrolü
 
 // --- 3. YARDIMCI VE DB FONKSİYONLARI (KORUNDU) ---
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
@@ -129,7 +129,6 @@ window.onpopstate = (event) => {
 
 function navTo(page, groupId = null) {
     const cleanId = groupId ? String(groupId) : null;
-    // Aynı sayfaya tekrar tıklanırsa pushState yapma
     if (history.state?.page === page && history.state?.groupId === cleanId) return;
     
     history.pushState({page, groupId: cleanId}, "");
@@ -137,38 +136,40 @@ function navTo(page, groupId = null) {
 }
 
 async function renderCurrentState(page, groupId) {
-    const currentRequestId = ++lastRequestId; // Yeni bir render isteği başlar
+    const currentRequestId = ++lastRequestId; 
     
-    // UI Sıfırlama
+    // UI Temizliği
     viewContainer.innerHTML = "";
     resultPanel.style.display = "none";
     
     if (page === "generate") {
         if (currentRequestId !== lastRequestId) return;
         renderGeneratePage();
-    } else if (page === "mySets") {
+    } 
+    else if (page === "mySets") {
         if (groupId) {
             const group = await getGroupById(groupId);
-            // Veri gelene kadar kullanıcı başka yere geçtiyse dur
             if (currentRequestId !== lastRequestId) return;
-            group ? renderViewGroup(groupId) : renderMySetsList();
+            group ? renderViewGroup(group, currentRequestId) : renderMySetsList(currentRequestId);
         } else {
-            if (currentRequestId !== lastRequestId) return;
-            renderMySetsList();
+            renderMySetsList(currentRequestId);
         }
-    } else if (page === "panel") {
+    } 
+    else if (page === "panel") {
         const group = await getGroupById(groupId);
         if (currentRequestId !== lastRequestId) return;
         if(group) {
-            await renderViewGroup(groupId);
-            openResultPanel(group.max, group.id, false); // URL'e push yapmadan paneli aç
+            await renderViewGroup(group, currentRequestId);
+            if (currentRequestId === lastRequestId) {
+                openResultPanel(group.max, group.id, false); 
+            }
         } else {
             navTo("mySets");
         }
     }
 }
 
-// --- 5. SAYFA RENDER VE LOGIC (KORUNDU) ---
+// --- 5. SAYFA RENDER VE LOGIC (DÜZENLENDİ) ---
 
 function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
@@ -191,8 +192,10 @@ function getGeneratedSetsHtml() {
     return html;
 }
 
-async function renderMySetsList() {
+async function renderMySetsList(reqId) {
     const groups = await getAllGroups();
+    if (reqId !== lastRequestId) return;
+
     const container = document.createElement("div");
     container.className = "container";
     container.innerHTML = `<h3>Kayıtlı Kolonlarım</h3>`;
@@ -209,13 +212,13 @@ async function renderMySetsList() {
     viewContainer.appendChild(container);
 }
 
-async function renderViewGroup(id) {
-    const group = await getGroupById(id);
-    if (!group) return renderMySetsList();
+async function renderViewGroup(group, reqId) {
+    if (reqId !== lastRequestId) return;
+    
     let resText = (group.results.main.length > 0 || group.results.joker.length > 0) ? `Ana: ${group.results.main.join(",")} | Joker: ${group.results.joker.join(",")}` : "Henüz girilmedi";
     const container = document.createElement("div");
     container.className = "container";
-    container.innerHTML = `<h3>${group.name}</h3><button class="copy-btn" onclick='copySpecificGroup("${id}")'>Panoya Kopyala</button><div class="card"><b>Sonuçlar:</b> <span id="resultText-${group.id}">${resText}</span><br><button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button></div>`;
+    container.innerHTML = `<h3>${group.name}</h3><button class="copy-btn" onclick='copySpecificGroup("${group.id}")'>Panoya Kopyala</button><div class="card"><b>Sonuçlar:</b> <span id="resultText-${group.id}">${resText}</span><br><button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button></div>`;
     group.sets.forEach((set, i) => { container.innerHTML += `<div class='card'><b>${i+1}.</b>${createBallsWithMatch(set, group.results)}</div>`; });
     const backBtn = document.createElement("button"); backBtn.textContent = "Listeye Dön"; backBtn.style.background = "#666"; backBtn.onclick = () => navTo("mySets");
     container.appendChild(backBtn);
@@ -246,7 +249,7 @@ async function saveGroup() {
     try { await atomicSave(group); sessionStorage.removeItem("tempGeneratedSets"); navTo('mySets', group.id); } catch(err) { console.error(err); }
 }
 
-async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(); } catch(err) { console.error(err); } } }
+async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { console.error(err); } } }
 
 // --- 6. SONUÇ PANELİ VE KIYASLAMA (DÜZENLENDİ) ---
 
@@ -262,7 +265,6 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
     }
     resDiv.innerHTML = h + "</div>";
     
-    // Sadece manuel açılışta ve eğer zaten o state'de değilsek push yap
     if (shouldPushState && history.state?.page !== "panel") {
         history.pushState({page: "panel", groupId: String(groupId)}, "");
     }
@@ -274,8 +276,9 @@ async function toggleMainResult(el, id, val) {
         const g = await getGroupById(id); if(!g) return;
         const i = g.results.main.indexOf(val);
         if (i > -1) g.results.main.splice(i, 1); else if (g.results.main.length < 10) g.results.main.push(val);
-        await atomicSave(g); el.classList.toggle("result-selected"); renderViewGroup(id);
-    } catch(err) { renderCurrentState("mySets", id); }
+        await atomicSave(g); el.classList.toggle("result-selected"); 
+        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
+    } catch(err) { renderCurrentState(history.state.page, history.state.groupId); }
 }
 
 async function toggleJokerResult(el, id, val) {
@@ -283,15 +286,29 @@ async function toggleJokerResult(el, id, val) {
         const g = await getGroupById(id); if(!g) return;
         const i = g.results.joker.indexOf(val);
         if (i > -1) g.results.joker.splice(i, 1); else if (g.results.joker.length < g.jokerPerSet) g.results.joker.push(val);
-        await atomicSave(g); el.classList.toggle("result-selected"); renderViewGroup(id);
-    } catch(err) { renderCurrentState("mySets", id); }
+        await atomicSave(g); el.classList.toggle("result-selected"); 
+        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
+    } catch(err) { renderCurrentState(history.state.page, history.state.groupId); }
 }
 
-function closeResultPanel(back = false) { if (back && history.state?.page === "panel") history.back(); else resultPanel.style.display = "none"; }
+function closeResultPanel(back = false) { 
+    if (back && history.state?.page === "panel") {
+        history.back();
+    } else {
+        resultPanel.style.display = "none";
+    }
+}
 function confirmResult() { closeResultPanel(true); }
 async function cleanResult() {
     const id = history.state?.groupId; if (!id) return;
-    try { const g = await getGroupById(id); if(g) { g.results = {main: [], joker: []}; await atomicSave(g); renderCurrentState("mySets", id); } } catch(e) {}
+    try { 
+        const g = await getGroupById(id); 
+        if(g) { 
+            g.results = {main: [], joker: []}; 
+            await atomicSave(g); 
+            renderCurrentState("mySets", id); 
+        } 
+    } catch(e) {}
 }
 
 // --- 7. KOPYALAMA VE YARDIMCILAR (KORUNDU) ---
