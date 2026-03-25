@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
-    <title>Lucky Generator Pro - Hardened</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
+    <title>Lucky Generator Pro - Atomic & Sanitized</title>
     <style>
         body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
         header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }
@@ -33,15 +33,15 @@
 </div>
 
 <div class="bottom-nav">
-    <button data-action="nav" data-page="generate">Üret</button>
-    <button data-action="nav" data-page="mySets">Kayıtlarım</button>
+    <button onclick="navTo('generate')">Üret</button>
+    <button onclick="navTo('mySets')">Kayıtlarım</button>
 </div>
 
 <div id="resultPanel" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,0.2); max-height:70%; overflow:auto; z-index:1000;">
-    <h3>Sonuç Gir <span data-action="closePanel" style="float:right;cursor:pointer;">×</span></h3>
+    <h3>Sonuç Gir <span onclick="closeResultPanel(true)" style="float:right;cursor:pointer;">×</span></h3>
     <div id="resultNumbers" class="ball-row"></div>
-    <button data-action="confirmResult">Onayla</button>
-    <button data-action="cleanResult" style="background:#999;margin-top:8px;">Temizle</button>
+    <button onclick="confirmResult()">Onayla</button>
+    <button onclick="cleanResult()" style="background:#999;margin-top:8px;">Temizle</button>
 </div>
 
 <script src="script.js"></script>
