@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
-<title>Lucky Generator Pro - Atomic & Sanitized</title>
+<title>Lucky Generator Pro - Debug Friendly</title>
 <style>
+/* CSS aynı kalıyor, sadece hata mesajı için stil eklendi */
 body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
 header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }
 .container{ padding:20px; }
@@ -22,11 +23,21 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 .card b{ display:block; margin-bottom:10px; color:#1976d2; }
 .ball.result-selected{ background:#1976d2; color:#fff; }
 .copy-btn { background: #4caf50; margin-bottom: 10px; }
+
+/* Hata Toast Mesajı Stili */
+#error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index:10002; pointer-events:none; }
+.error-toast { 
+    background:#212121; color:#ff5252; padding:12px; border-radius:8px; 
+    margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); 
+    font-family: monospace; font-size:12px; border-left:4px solid #ff5252;
+    pointer-events: auto; animation: slideIn 0.3s ease-out;
+}
+@keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
 </style>
 </head>
 <body>
 
-<header>Lucky Generator</header>
+<div id="error-monitor"></div> <header>Lucky Generator</header>
 
 <div id="app">
     <div id="view-container"></div>
@@ -45,30 +56,58 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
-// --- 1. MODERN HATA YÖNETİMİ ---
-window.onerror = function(message, source, lineno, colno, error) {
-    console.error("Sistem Hatası:", { message, source, lineno, colno, error });
-    
-    const errorToast = document.createElement("div");
-    errorToast.style = "position:fixed; top:10px; right:10px; background:#f44336; color:white; padding:15px; border-radius:5px; z-index:9999; box-shadow:0 2px 10px rgba(0,0,0,0.3); font-size:13px;";
-    errorToast.innerHTML = `<strong>Hata:</strong> İşlem tamamlanamadı.<br><small>${message.substring(0, 50)}...</small>`;
-    document.body.appendChild(errorToast);
-    setTimeout(() => errorToast.remove(), 4000);
+/**
+ * --- 1. GELİŞTİRİCİ DOSTU HATA YÖNETİMİ ---
+ * Hatayı yutmaz, konsola gönderir ve arayüzde teknik bilgi sunar.
+ */
+const ErrorHandler = {
+    report: function(type, data) {
+        // Konsola tüm detayı bas (Debug kolaylaşır)
+        console.group(`%c ${type} `, "background:#ff5252; color:white; font-weight:bold;");
+        console.error("Mesaj:", data.message);
+        console.error("Kaynak:", data.source || "Bilinmiyor");
+        console.error("Satır/Sütun:", `${data.lineno}:${data.colno}`);
+        if(data.error) console.error("Stack Trace:", data.error.stack);
+        console.groupEnd();
 
-    return false; // Hatayı bastırmaz, konsola düşmesine izin verir.
+        // Kullanıcıya görsel geri bildirim
+        const monitor = document.getElementById("error-monitor");
+        if(monitor) {
+            const toast = document.createElement("div");
+            toast.className = "error-toast";
+            toast.innerHTML = `
+                <strong>[${type}]</strong> Bir hata oluştu.<br>
+                <small>${data.message.substring(0, 60)}...</small>
+            `;
+            toast.onclick = () => toast.remove();
+            monitor.appendChild(toast);
+            setTimeout(() => toast.remove(), 6000);
+        }
+    }
+};
+
+window.onerror = function(message, source, lineno, colno, error) {
+    ErrorHandler.report("Runtime Error", {message, source, lineno, colno, error});
+    return false; // ÖNEMLİ: false döndürerek tarayıcının default hata loglamasını engellemiyoruz.
 };
 
 window.onunhandledrejection = function(event) {
-    console.error("Asenkron Hata (Promise):", event.reason);
+    ErrorHandler.report("Promise Error", {
+        message: event.reason?.message || "Asenkron işlem başarısız",
+        source: "async_task",
+        lineno: 0, colno: 0,
+        error: event.reason
+    });
     return false;
 };
 
-// --- 2. GLOBAL DEĞİŞKENLER ---
+// --- 2. GLOBAL DEĞİŞKENLER VE DİĞER FONKSİYONLAR ---
+// (Mevcut kodların geri kalanı bozulmadan devam ediyor)
+
 const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 
-// --- 3. YARDIMCI FONKSİYONLAR ---
 function escapeHTML(str) {
     if (!str) return "";
     const p = document.createElement("p");
@@ -76,7 +115,6 @@ function escapeHTML(str) {
     return p.innerHTML;
 }
 
-// --- 4. VERİ DOĞRULAMA (VALIDATOR) ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -109,7 +147,6 @@ const Validator = {
     }
 };
 
-// --- 5. VERİTABANI İŞLEMLERİ ---
 const dbName = "LuckyDB";
 const storeName = "savedGroups";
 const lockName = "db_write_lock";
@@ -148,28 +185,23 @@ async function atomicSave(item) {
     if (!validatedItem) throw new Error("Geçersiz veri formatı!");
 
     return withLock(lockName, async () => {
-        try {
-            const db = await openDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(storeName, "readwrite");
-                const store = tx.objectStore(storeName);
-                const getRequest = store.get(validatedItem.id);
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, "readwrite");
+            const store = tx.objectStore(storeName);
+            const getRequest = store.get(validatedItem.id);
 
-                getRequest.onsuccess = () => {
-                    const existing = getRequest.result;
-                    if (existing && validatedItem.version !== existing.version) {
-                        return reject("Çakışma: Veri başka bir sekmede güncellenmiş.");
-                    }
-                    validatedItem.version = Date.now();
-                    store.put(validatedItem);
-                };
-                tx.oncomplete = () => resolve();
-                tx.onerror = (e) => reject("İşlem hatası: " + e.target.error);
-            });
-        } catch (e) {
-            console.error("atomicSave Kritik Hata:", e);
-            throw e;
-        }
+            getRequest.onsuccess = () => {
+                const existing = getRequest.result;
+                if (existing && validatedItem.version !== existing.version) {
+                    return reject(new Error("Çakışma: Veri başka bir sekmede güncellenmiş."));
+                }
+                validatedItem.version = Date.now();
+                store.put(validatedItem);
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(e.target.error);
+        });
     });
 }
 
@@ -192,7 +224,6 @@ async function getGroupById(id) {
     });
 }
 
-// --- 6. GÜVENLİ RASTGELELİK ---
 function secureShuffle(array) {
     const randomBuffer = new Uint32Array(array.length);
     window.crypto.getRandomValues(randomBuffer);
@@ -203,7 +234,6 @@ function secureShuffle(array) {
     return array;
 }
 
-// --- 7. NAVİGASYON VE RENDER ---
 window.onload = () => {
     const s = history.state || {page:"generate", groupId:null};
     renderCurrentState(s.page, s.groupId);
@@ -221,31 +251,26 @@ function navTo(page, groupId=null) {
 }
 
 async function renderCurrentState(page, groupId) {
-    try {
-        viewContainer.innerHTML = "";
-        resultPanel.style.display = "none";
-        
-        if (page === "generate") {
-            renderGeneratePage();
-        } else if (page === "mySets") {
-            if (groupId) {
-                const group = await getGroupById(groupId);
-                group ? renderViewGroup(groupId) : renderMySetsList();
-            } else {
-                renderMySetsList();
-            }
-        } else if (page === "panel") {
+    viewContainer.innerHTML = "";
+    resultPanel.style.display = "none";
+    
+    if (page === "generate") {
+        renderGeneratePage();
+    } else if (page === "mySets") {
+        if (groupId) {
             const group = await getGroupById(groupId);
-            if(group) {
-                await renderViewGroup(groupId);
-                openResultPanel(group.max, group.id, false);
-            } else {
-                navTo("mySets");
-            }
+            group ? renderViewGroup(groupId) : renderMySetsList();
+        } else {
+            renderMySetsList();
         }
-    } catch (e) {
-        console.error("Görünüm Render Hatası:", e);
-        viewContainer.innerHTML = "<div class='container'><div class='card'>Görünüm yüklenemedi. Lütfen sayfayı yenileyin.</div></div>";
+    } else if (page === "panel") {
+        const group = await getGroupById(groupId);
+        if(group) {
+            await renderViewGroup(groupId);
+            openResultPanel(group.max, group.id, false);
+        } else {
+            navTo("mySets");
+        }
     }
 }
 
