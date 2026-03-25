@@ -45,19 +45,30 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
-// --- HATA YÖNETİMİ ---
+// --- 1. MODERN HATA YÖNETİMİ ---
 window.onerror = function(message, source, lineno, colno, error) {
-    console.error(error);
-    alert("Bir hata oluştu. Sayfa yenilenebilir.");
-    return true; 
+    console.error("Sistem Hatası:", { message, source, lineno, colno, error });
+    
+    const errorToast = document.createElement("div");
+    errorToast.style = "position:fixed; top:10px; right:10px; background:#f44336; color:white; padding:15px; border-radius:5px; z-index:9999; box-shadow:0 2px 10px rgba(0,0,0,0.3); font-size:13px;";
+    errorToast.innerHTML = `<strong>Hata:</strong> İşlem tamamlanamadı.<br><small>${message.substring(0, 50)}...</small>`;
+    document.body.appendChild(errorToast);
+    setTimeout(() => errorToast.remove(), 4000);
+
+    return false; // Hatayı bastırmaz, konsola düşmesine izin verir.
 };
 
-// --- GLOBAL DEĞİŞKENLER ---
+window.onunhandledrejection = function(event) {
+    console.error("Asenkron Hata (Promise):", event.reason);
+    return false;
+};
+
+// --- 2. GLOBAL DEĞİŞKENLER ---
 const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 
-// --- YARDIMCI FONKSİYONLAR ---
+// --- 3. YARDIMCI FONKSİYONLAR ---
 function escapeHTML(str) {
     if (!str) return "";
     const p = document.createElement("p");
@@ -65,7 +76,7 @@ function escapeHTML(str) {
     return p.innerHTML;
 }
 
-// --- VERİ DOĞRULAMA (VALIDATOR) ---
+// --- 4. VERİ DOĞRULAMA (VALIDATOR) ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -98,19 +109,16 @@ const Validator = {
     }
 };
 
-// --- VERİTABANI (INDEXEDDB) VE KİLİT MEKANİZMASI ---
+// --- 5. VERİTABANI İŞLEMLERİ ---
 const dbName = "LuckyDB";
 const storeName = "savedGroups";
 const lockName = "db_write_lock";
 
-// ÇÖZÜM: navigator.locks desteği yoksa güvenli şekilde bypass eden sarmalayıcı
 async function withLock(name, callback) {
     if (window.navigator && navigator.locks && typeof navigator.locks.request === 'function') {
         return navigator.locks.request(name, callback);
-    } else {
-        // Kilit mekanizması yoksa doğrudan çalıştır (Geriye dönük uyumluluk)
-        return callback();
     }
+    return callback();
 }
 
 function openDB() {
@@ -140,23 +148,28 @@ async function atomicSave(item) {
     if (!validatedItem) throw new Error("Geçersiz veri formatı!");
 
     return withLock(lockName, async () => {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(storeName, "readwrite");
-            const store = tx.objectStore(storeName);
-            const getRequest = store.get(validatedItem.id);
+        try {
+            const db = await openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, "readwrite");
+                const store = tx.objectStore(storeName);
+                const getRequest = store.get(validatedItem.id);
 
-            getRequest.onsuccess = () => {
-                const existing = getRequest.result;
-                if (existing && validatedItem.version !== existing.version) {
-                    return reject("Çakışma: Veri başka bir sekmede güncellenmiş.");
-                }
-                validatedItem.version = Date.now();
-                store.put(validatedItem);
-            };
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject("İşlem hatası");
-        });
+                getRequest.onsuccess = () => {
+                    const existing = getRequest.result;
+                    if (existing && validatedItem.version !== existing.version) {
+                        return reject("Çakışma: Veri başka bir sekmede güncellenmiş.");
+                    }
+                    validatedItem.version = Date.now();
+                    store.put(validatedItem);
+                };
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => reject("İşlem hatası: " + e.target.error);
+            });
+        } catch (e) {
+            console.error("atomicSave Kritik Hata:", e);
+            throw e;
+        }
     });
 }
 
@@ -179,14 +192,7 @@ async function getGroupById(id) {
     });
 }
 
-// --- GÜVENLİ RASTGELELİK ---
-function secureRandomInt(max) {
-    const array = new Uint32Array(1);
-    window.crypto.getRandomValues(array);
-    const val = array[0] % max;
-    return val;
-}
-
+// --- 6. GÜVENLİ RASTGELELİK ---
 function secureShuffle(array) {
     const randomBuffer = new Uint32Array(array.length);
     window.crypto.getRandomValues(randomBuffer);
@@ -197,7 +203,7 @@ function secureShuffle(array) {
     return array;
 }
 
-// --- NAVİGASYON VE RENDER ---
+// --- 7. NAVİGASYON VE RENDER ---
 window.onload = () => {
     const s = history.state || {page:"generate", groupId:null};
     renderCurrentState(s.page, s.groupId);
@@ -215,26 +221,31 @@ function navTo(page, groupId=null) {
 }
 
 async function renderCurrentState(page, groupId) {
-    viewContainer.innerHTML = "";
-    resultPanel.style.display = "none";
-    
-    if (page === "generate") {
-        renderGeneratePage();
-    } else if (page === "mySets") {
-        if (groupId) {
+    try {
+        viewContainer.innerHTML = "";
+        resultPanel.style.display = "none";
+        
+        if (page === "generate") {
+            renderGeneratePage();
+        } else if (page === "mySets") {
+            if (groupId) {
+                const group = await getGroupById(groupId);
+                group ? renderViewGroup(groupId) : renderMySetsList();
+            } else {
+                renderMySetsList();
+            }
+        } else if (page === "panel") {
             const group = await getGroupById(groupId);
-            group ? renderViewGroup(groupId) : renderMySetsList();
-        } else {
-            renderMySetsList();
+            if(group) {
+                await renderViewGroup(groupId);
+                openResultPanel(group.max, group.id, false);
+            } else {
+                navTo("mySets");
+            }
         }
-    } else if (page === "panel") {
-        const group = await getGroupById(groupId);
-        if(group) {
-            await renderViewGroup(groupId);
-            openResultPanel(group.max, group.id, false);
-        } else {
-            navTo("mySets");
-        }
+    } catch (e) {
+        console.error("Görünüm Render Hatası:", e);
+        viewContainer.innerHTML = "<div class='container'><div class='card'>Görünüm yüklenemedi. Lütfen sayfayı yenileyin.</div></div>";
     }
 }
 
@@ -413,7 +424,7 @@ async function saveGroup() {
         await atomicSave(group);
         sessionStorage.removeItem("tempGeneratedSets");
         navTo('mySets', group.id);
-    } catch(err) { alert(err); }
+    } catch(err) { console.error(err); }
 }
 
 async function deleteGroup(id) {
@@ -421,7 +432,7 @@ async function deleteGroup(id) {
         try {
             await deleteFromDB(id);
             renderMySetsList();
-        } catch(err) { alert(err); }
+        } catch(err) { console.error(err); }
     }
 }
 
@@ -457,7 +468,7 @@ async function toggleMainResult(el, id, val) {
         el.classList.toggle("result-selected");
         renderViewGroup(id);
     } catch(err) {
-        alert(err);
+        console.error(err);
         renderCurrentState("mySets", id);
     }
 }
@@ -473,7 +484,7 @@ async function toggleJokerResult(el, id, val) {
         el.classList.toggle("result-selected");
         renderViewGroup(id);
     } catch(err) {
-        alert(err);
+        console.error(err);
         renderCurrentState("mySets", id);
     }
 }
@@ -495,7 +506,7 @@ async function cleanResult() {
             await atomicSave(group);
             renderCurrentState("mySets", id);
         }
-    } catch(err) { alert(err); }
+    } catch(err) { console.error(err); }
 }
 
 async function copySpecificGroup(id) {
@@ -509,9 +520,15 @@ function copyCurrentGenerated() {
 
 function copyToClipboard(text) {
     if(navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => alert("Kopyalandı!"));
+        navigator.clipboard.writeText(text).then(() => {
+            const toast = document.createElement("div");
+            toast.style = "position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#4caf50; color:white; padding:10px 20px; border-radius:20px; z-index:10001;";
+            toast.textContent = "Kopyalandı!";
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        });
     } else {
-        alert("Tarayıcınız panoyu desteklemiyor.");
+        alert("Tarayıcı desteği yok.");
     }
 }
 
