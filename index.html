@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
-<title>Lucky Generator Pro - Debug Friendly</title>
+<title>Lucky Generator Pro - Stable State</title>
 <style>
 /* Mevcut stiller korunmuştur */
 body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
@@ -72,7 +72,7 @@ window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", 
 const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
-let lastRequestId = 0; // Edge-case çözümü: Race condition kontrolü
+let lastRequestId = 0; // State çakışmasını önleyen Request ID
 
 // --- 3. YARDIMCI VE DB FONKSİYONLARI (KORUNDU) ---
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
@@ -115,10 +115,13 @@ async function deleteFromDB(id) { return withLock(lockName, async () => { const 
 async function getGroupById(id) { const db = await openDB(); return new Promise(res => { const tx = db.transaction(storeName, "readonly"); tx.objectStore(storeName).get(id).onsuccess = (e) => { res(Validator.validateGroup(e.target.result)); }; }); }
 function secureShuffle(array) { const buf = new Uint32Array(array.length); window.crypto.getRandomValues(buf); for (let i = array.length - 1; i > 0; i--) { const j = buf[i] % (i + 1); [array[i], array[j]] = [array[j], array[i]]; } return array; }
 
-// --- 4. NAVİGASYON VE STATE YÖNETİMİ (GÜNCELLENDİ) ---
+// --- 4. NAVİGASYON VE STATE YÖNETİMİ (GÜNCELLENDİ: RACE CONDITION KONTROLÜ) ---
 
 window.onload = () => {
-    const s = history.state || {page:"generate", groupId:null};
+    if (!history.state) {
+        history.replaceState({page:"generate", groupId:null}, "");
+    }
+    const s = history.state;
     renderCurrentState(s.page, s.groupId);
 };
 
@@ -130,16 +133,16 @@ window.onpopstate = (event) => {
 function navTo(page, groupId = null) {
     const cleanId = groupId ? String(groupId) : null;
     if (history.state?.page === page && history.state?.groupId === cleanId) return;
-    
     history.pushState({page, groupId: cleanId}, "");
     renderCurrentState(page, cleanId);
 }
 
 async function renderCurrentState(page, groupId) {
+    // Yeni bir istek başladı, ID'yi artır
     const currentRequestId = ++lastRequestId; 
     
-    // UI Temizliği
-    viewContainer.innerHTML = "";
+    // UI'yi hemen temizle veya loading göster
+    viewContainer.innerHTML = "<div class='container'>Yükleniyor...</div>";
     resultPanel.style.display = "none";
     
     if (page === "generate") {
@@ -149,17 +152,19 @@ async function renderCurrentState(page, groupId) {
     else if (page === "mySets") {
         if (groupId) {
             const group = await getGroupById(groupId);
+            // DB dönüşünde hala aynı istekte miyiz?
             if (currentRequestId !== lastRequestId) return;
             group ? renderViewGroup(group, currentRequestId) : renderMySetsList(currentRequestId);
         } else {
-            renderMySetsList(currentRequestId);
+            await renderMySetsList(currentRequestId);
         }
     } 
     else if (page === "panel") {
         const group = await getGroupById(groupId);
         if (currentRequestId !== lastRequestId) return;
         if(group) {
-            await renderViewGroup(group, currentRequestId);
+            renderViewGroup(group, currentRequestId);
+            // Panel asenkron render bittikten sonra açılır
             if (currentRequestId === lastRequestId) {
                 openResultPanel(group.max, group.id, false); 
             }
@@ -169,7 +174,7 @@ async function renderCurrentState(page, groupId) {
     }
 }
 
-// --- 5. SAYFA RENDER VE LOGIC (DÜZENLENDİ) ---
+// --- 5. SAYFA RENDER VE LOGIC (GÜNCELLENDİ: ID KONTROLÜ) ---
 
 function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
@@ -196,6 +201,7 @@ async function renderMySetsList(reqId) {
     const groups = await getAllGroups();
     if (reqId !== lastRequestId) return;
 
+    viewContainer.innerHTML = "";
     const container = document.createElement("div");
     container.className = "container";
     container.innerHTML = `<h3>Kayıtlı Kolonlarım</h3>`;
@@ -212,9 +218,10 @@ async function renderMySetsList(reqId) {
     viewContainer.appendChild(container);
 }
 
-async function renderViewGroup(group, reqId) {
+function renderViewGroup(group, reqId) {
     if (reqId !== lastRequestId) return;
     
+    viewContainer.innerHTML = "";
     let resText = (group.results.main.length > 0 || group.results.joker.length > 0) ? `Ana: ${group.results.main.join(",")} | Joker: ${group.results.joker.join(",")}` : "Henüz girilmedi";
     const container = document.createElement("div");
     container.className = "container";
@@ -251,7 +258,7 @@ async function saveGroup() {
 
 async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { console.error(err); } } }
 
-// --- 6. SONUÇ PANELİ VE KIYASLAMA (DÜZENLENDİ) ---
+// --- 6. SONUÇ PANELİ VE KIYASLAMA (GÜNCELLENDİ: TUTARLILIK) ---
 
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId);
@@ -277,6 +284,7 @@ async function toggleMainResult(el, id, val) {
         const i = g.results.main.indexOf(val);
         if (i > -1) g.results.main.splice(i, 1); else if (g.results.main.length < 10) g.results.main.push(val);
         await atomicSave(g); el.classList.toggle("result-selected"); 
+        // Eğer kullanıcı hala bu grubun sayfasındaysa görünümleri güncelle
         if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
     } catch(err) { renderCurrentState(history.state.page, history.state.groupId); }
 }
