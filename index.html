@@ -6,7 +6,6 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
 <title>Lucky Generator Pro - Stable State</title>
 <style>
-/* Mevcut stiller korunmuştur */
 body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
 header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }
 .container{ padding:20px; }
@@ -49,7 +48,6 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
-// --- 1. HATA YÖNETİMİ (KORUNDU) ---
 const ErrorHandler = {
     report: function(type, data) {
         console.error(`[${type}]`, data.message);
@@ -68,13 +66,11 @@ const ErrorHandler = {
 window.onerror = (message, source, lineno, colno, error) => { ErrorHandler.report("Runtime Error", {message, source, lineno, colno, error}); return false; };
 window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", { message: event.reason?.message || "Asenkron işlem başarısız", error: event.reason }); return false; };
 
-// --- 2. GLOBAL DEĞİŞKENLER (GÜNCELLENDİ) ---
 const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
-let lastRequestId = 0; // State çakışmasını önleyen Request ID
+let lastRequestId = 0; 
 
-// --- 3. YARDIMCI VE DB FONKSİYONLARI (KORUNDU) ---
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
@@ -115,7 +111,7 @@ async function deleteFromDB(id) { return withLock(lockName, async () => { const 
 async function getGroupById(id) { const db = await openDB(); return new Promise(res => { const tx = db.transaction(storeName, "readonly"); tx.objectStore(storeName).get(id).onsuccess = (e) => { res(Validator.validateGroup(e.target.result)); }; }); }
 function secureShuffle(array) { const buf = new Uint32Array(array.length); window.crypto.getRandomValues(buf); for (let i = array.length - 1; i > 0; i--) { const j = buf[i] % (i + 1); [array[i], array[j]] = [array[j], array[i]]; } return array; }
 
-// --- 4. NAVİGASYON VE STATE YÖNETİMİ (GÜNCELLENDİ: RACE CONDITION KONTROLÜ) ---
+// --- NAVİGASYON (GÜNCELLENDİ) ---
 
 window.onload = () => {
     if (!history.state) {
@@ -138,43 +134,43 @@ function navTo(page, groupId = null) {
 }
 
 async function renderCurrentState(page, groupId) {
-    // Yeni bir istek başladı, ID'yi artır
     const currentRequestId = ++lastRequestId; 
     
-    // UI'yi hemen temizle veya loading göster
+    // Geçiş anında UI temizliği (State uyumsuzluğu belirtisini siler)
     viewContainer.innerHTML = "<div class='container'>Yükleniyor...</div>";
     resultPanel.style.display = "none";
     
-    if (page === "generate") {
-        if (currentRequestId !== lastRequestId) return;
-        renderGeneratePage();
-    } 
-    else if (page === "mySets") {
-        if (groupId) {
-            const group = await getGroupById(groupId);
-            // DB dönüşünde hala aynı istekte miyiz?
-            if (currentRequestId !== lastRequestId) return;
-            group ? renderViewGroup(group, currentRequestId) : renderMySetsList(currentRequestId);
-        } else {
-            await renderMySetsList(currentRequestId);
-        }
-    } 
-    else if (page === "panel") {
-        const group = await getGroupById(groupId);
-        if (currentRequestId !== lastRequestId) return;
-        if(group) {
-            renderViewGroup(group, currentRequestId);
-            // Panel asenkron render bittikten sonra açılır
-            if (currentRequestId === lastRequestId) {
-                openResultPanel(group.max, group.id, false); 
+    try {
+        if (page === "generate") {
+            if (currentRequestId === lastRequestId) renderGeneratePage();
+        } 
+        else if (page === "mySets") {
+            if (groupId) {
+                const group = await getGroupById(groupId);
+                if (currentRequestId === lastRequestId) {
+                    group ? renderViewGroup(group, currentRequestId) : renderMySetsList(currentRequestId);
+                }
+            } else {
+                await renderMySetsList(currentRequestId);
             }
-        } else {
-            navTo("mySets");
+        } 
+        else if (page === "panel") {
+            const group = await getGroupById(groupId);
+            if (currentRequestId === lastRequestId) {
+                if(group) {
+                    renderViewGroup(group, currentRequestId);
+                    openResultPanel(group.max, group.id, false); 
+                } else {
+                    navTo("mySets");
+                }
+            }
         }
+    } catch (e) {
+        if (currentRequestId === lastRequestId) ErrorHandler.report("Render Error", e);
     }
 }
 
-// --- 5. SAYFA RENDER VE LOGIC (GÜNCELLENDİ: ID KONTROLÜ) ---
+// --- RENDER LOGIC (GÜNCELLENDİ) ---
 
 function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
@@ -258,8 +254,6 @@ async function saveGroup() {
 
 async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { console.error(err); } } }
 
-// --- 6. SONUÇ PANELİ VE KIYASLAMA (GÜNCELLENDİ: TUTARLILIK) ---
-
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId);
     if(!group) return;
@@ -284,7 +278,6 @@ async function toggleMainResult(el, id, val) {
         const i = g.results.main.indexOf(val);
         if (i > -1) g.results.main.splice(i, 1); else if (g.results.main.length < 10) g.results.main.push(val);
         await atomicSave(g); el.classList.toggle("result-selected"); 
-        // Eğer kullanıcı hala bu grubun sayfasındaysa görünümleri güncelle
         if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
     } catch(err) { renderCurrentState(history.state.page, history.state.groupId); }
 }
@@ -319,7 +312,6 @@ async function cleanResult() {
     } catch(e) {}
 }
 
-// --- 7. KOPYALAMA VE YARDIMCILAR (KORUNDU) ---
 async function copySpecificGroup(id) { const g = await getGroupById(id); copyToClipboard(formatGroupForCopy(g)); }
 function copyCurrentGenerated() { copyToClipboard(formatGroupForCopy({name: "Geçici Liste", sets: generatedSets})); }
 function copyToClipboard(text) {
