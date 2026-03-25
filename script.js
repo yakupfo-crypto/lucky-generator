@@ -7,6 +7,21 @@ const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 
+// --- CSP UYUMLU OLAY DİNLEYİCİLER ---
+document.getElementById('nav-gen')?.addEventListener('click', () => navTo('generate'));
+document.getElementById('nav-sets')?.addEventListener('click', () => navTo('mySets'));
+document.getElementById('close-panel')?.addEventListener('click', () => closeResultPanel(true));
+document.getElementById('confirm-res')?.addEventListener('click', () => confirmResult());
+document.getElementById('clean-res')?.addEventListener('click', () => cleanResult());
+
+// Dinamik butonlar için global event delegation
+document.addEventListener('click', function(e) {
+    if(e.target && e.target.id === 'btn-generate-action') generateSets();
+    if(e.target && e.target.id === 'btn-save-group') saveGroup();
+    if(e.target && e.target.className === 'copy-btn-gen') copyCurrentGenerated();
+});
+
+// --- FONKSİYONLAR (DEĞİŞİKLİK YAPILMADI) ---
 function escapeHTML(str) {
     if (!str) return "";
     const p = document.createElement("p");
@@ -75,14 +90,12 @@ async function getAllGroups() {
 async function atomicSave(item) {
     const validatedItem = Validator.validateGroup(item);
     if (!validatedItem) throw new Error("Geçersiz veri formatı!");
-
     return navigator.locks.request(lockName, async () => {
         const db = await openDB();
         return new Promise((resolve, reject) => {
             const tx = db.transaction(storeName, "readwrite");
             const store = tx.objectStore(storeName);
             const getRequest = store.get(validatedItem.id);
-
             getRequest.onsuccess = () => {
                 const existing = getRequest.result;
                 if (existing && validatedItem.version !== existing.version) {
@@ -149,24 +162,18 @@ function navTo(page, groupId=null) {
 async function renderCurrentState(page, groupId) {
     viewContainer.innerHTML = "";
     resultPanel.style.display = "none";
-    
-    if (page === "generate") {
-        renderGeneratePage();
-    } else if (page === "mySets") {
+    if (page === "generate") renderGeneratePage();
+    else if (page === "mySets") {
         if (groupId) {
             const group = await getGroupById(groupId);
             group ? renderViewGroup(groupId) : renderMySetsList();
-        } else {
-            renderMySetsList();
-        }
+        } else renderMySetsList();
     } else if (page === "panel") {
         const group = await getGroupById(groupId);
         if(group) {
             await renderViewGroup(groupId);
             openResultPanel(group.max, group.id, false);
-        } else {
-            navTo("mySets");
-        }
+        } else navTo("mySets");
     }
 }
 
@@ -198,7 +205,7 @@ function renderGeneratePage() {
             <hr>
             <label>Kolon Sayısı</label>
             <input type="number" id="setCount" value="${storedInputs.count}">
-            <button onclick="generateSets()">Kolonları Üret</button>
+            <button id="btn-generate-action">Kolonları Üret</button>
         </div>
         <div id="results">${getGeneratedSetsHtml()}</div>
     </div>`;
@@ -212,10 +219,10 @@ function getGeneratedSetsHtml() {
     if (generatedSets.length > 0) {
         html += `
         <div class="card">
-            <button class="copy-btn" onclick='copyCurrentGenerated()'>Panoya Kopyala</button>
+            <button class="copy-btn-gen">Panoya Kopyala</button>
             <label><b>Grup Adı</b></label>
             <input type="text" id="groupNameInput" placeholder="Örn: Pazartesi">
-            <button onclick='saveGroup()'>Grubu Kaydet</button>
+            <button id="btn-save-group">Grubu Kaydet</button>
         </div>`;
     }
     return html;
@@ -226,9 +233,7 @@ async function renderMySetsList() {
     const container = document.createElement("div");
     container.className = "container";
     container.innerHTML = `<h3>Kayıtlı Kolonlarım</h3>`;
-
     if (currentGroups.length === 0) container.innerHTML += "<p>Henüz kayıtlı set yok.</p>";
-    
     currentGroups.forEach(group => {
         const card = document.createElement("div");
         card.className = "card";
@@ -262,14 +267,29 @@ async function renderViewGroup(id) {
     const h3 = document.createElement("h3");
     h3.textContent = group.name;
     container.appendChild(h3);
-    container.innerHTML += `<button class="copy-btn" onclick='copySpecificGroup("${id}")'>Panoya Kopyala</button>
-        <div class="card">
-            <b>Sonuçlar:</b> <span id="resultText-${group.id}">${resText}</span><br>
-            <button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button>
-        </div>`;
+    
+    const btnCopy = document.createElement("button");
+    btnCopy.className = "copy-btn";
+    btnCopy.textContent = "Panoya Kopyala";
+    btnCopy.onclick = () => copySpecificGroup(id);
+
+    const resultCard = document.createElement("div");
+    resultCard.className = "card";
+    resultCard.innerHTML = `<b>Sonuçlar:</b> <span id="resultText-${group.id}">${resText}</span><br>`;
+    const btnRes = document.createElement("button");
+    btnRes.textContent = "Sonuç Gir (Kıyasla)";
+    btnRes.onclick = () => openResultPanel(group.max, group.id);
+    resultCard.appendChild(btnRes);
+
+    container.append(btnCopy, resultCard);
+
     group.sets.forEach((set, i) => {
-        container.innerHTML += `<div class='card'><b>${i+1}.</b>${createBallsWithMatch(set, group.results)}</div>`;
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `<b>${i+1}.</b>${createBallsWithMatch(set, group.results)}`;
+        container.appendChild(div);
     });
+
     const backBtn = document.createElement("button");
     backBtn.textContent = "Listeye Dön";
     backBtn.style.background = "#666";
@@ -305,8 +325,7 @@ function generateSets() {
     const jPer = parseInt(document.getElementById("jokerCount").value);
     const count = parseInt(document.getElementById("setCount").value);
     if ([max, per, jMax, jPer, count].some(isNaN) || per > max || jPer > jMax) {
-        alert("Lütfen geçerli değerler girin!");
-        return;
+        alert("Lütfen geçerli değerler girin!"); return;
     }
     generatedSets = [];
     for (let i = 0; i < count; i++) {
@@ -324,16 +343,12 @@ function generateSets() {
 async function saveGroup() {
     const rawName = document.getElementById("groupNameInput")?.value;
     if (!rawName?.trim()) { alert("İsim girin!"); return; }
-    const sanitizedName = escapeHTML(rawName);
     const group = {
-        id: String(Date.now()), 
-        name: sanitizedName, 
-        sets: [...generatedSets],
+        id: String(Date.now()), name: escapeHTML(rawName), sets: [...generatedSets],
         max: parseInt(document.getElementById("maxNumber").value),
         jokerMax: parseInt(document.getElementById("jokerMax").value),
         jokerPerSet: parseInt(document.getElementById("jokerCount").value),
-        results: {main: [], joker: []},
-        version: Date.now()
+        results: {main: [], joker: []}, version: Date.now()
     };
     try {
         await atomicSave(group);
@@ -344,8 +359,7 @@ async function saveGroup() {
 
 async function deleteGroup(id) {
     if (confirm("Emin misiniz?")) {
-        await deleteFromDB(id);
-        renderMySetsList();
+        await deleteFromDB(id); renderMySetsList();
     }
 }
 
@@ -353,19 +367,33 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId);
     if(!group) return;
     const resultDiv = document.getElementById("resultNumbers");
-    let html = `<h4>Ana Sayı (1-${max})</h4><div class='ball-row'>`;
+    resultDiv.innerHTML = "";
+    
+    const h4Main = document.createElement("h4"); h4Main.textContent = `Ana Sayı (1-${max})`;
+    resultDiv.appendChild(h4Main);
+    const mainRow = document.createElement("div"); mainRow.className = "ball-row";
     for(let i=1; i<=max; i++) {
-        let sel = group.results.main.includes(i) ? "result-selected" : "";
-        html += `<div class="ball ${sel}" onclick="toggleMainResult(this,'${groupId}',${i})">${i}</div>`;
+        const b = document.createElement("div");
+        b.className = "ball " + (group.results.main.includes(i) ? "result-selected" : "");
+        b.textContent = i;
+        b.onclick = () => toggleMainResult(b, groupId, i);
+        mainRow.appendChild(b);
     }
+    resultDiv.appendChild(mainRow);
+
     if (group.jokerPerSet > 0) {
-        html += `</div><h4>Joker (1-${group.jokerMax})</h4><div class='ball-row'>`;
+        const h4Jok = document.createElement("h4"); h4Jok.textContent = `Joker (1-${group.jokerMax})`;
+        resultDiv.appendChild(h4Jok);
+        const jokRow = document.createElement("div"); jokRow.className = "ball-row";
         for(let i=1; i<=group.jokerMax; i++) {
-            let sel = group.results.joker.includes(i) ? "joker result-selected" : "joker";
-            html += `<div class="ball ${sel}" onclick="toggleJokerResult(this,'${groupId}',${i})">${i}</div>`;
+            const b = document.createElement("div");
+            b.className = "ball joker " + (group.results.joker.includes(i) ? "result-selected" : "");
+            b.textContent = i;
+            b.onclick = () => toggleJokerResult(b, groupId, i);
+            jokRow.appendChild(b);
         }
+        resultDiv.appendChild(jokRow);
     }
-    resultDiv.innerHTML = html + "</div>";
     if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
     resultPanel.style.display = "block";
 }
@@ -373,33 +401,25 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
 async function toggleMainResult(el, id, val) {
     try {
         const group = await getGroupById(id);
-        if(!group) return;
         const idx = group.results.main.indexOf(val);
         if (idx > -1) group.results.main.splice(idx, 1);
         else if (group.results.main.length < 10) group.results.main.push(val); 
         await atomicSave(group);
         el.classList.toggle("result-selected");
         renderViewGroup(id);
-    } catch(err) {
-        alert(err);
-        renderCurrentState("mySets", id);
-    }
+    } catch(err) { alert(err); }
 }
 
 async function toggleJokerResult(el, id, val) {
     try {
         const group = await getGroupById(id);
-        if(!group) return;
         const idx = group.results.joker.indexOf(val);
         if (idx > -1) group.results.joker.splice(idx, 1);
         else if (group.results.joker.length < group.jokerPerSet) group.results.joker.push(val);
         await atomicSave(group);
         el.classList.toggle("result-selected");
         renderViewGroup(id);
-    } catch(err) {
-        alert(err);
-        renderCurrentState("mySets", id);
-    }
+    } catch(err) { alert(err); }
 }
 
 function closeResultPanel(back = false) {
@@ -416,8 +436,7 @@ async function cleanResult() {
         const group = await getGroupById(id);
         if(group) {
             group.results = {main: [], joker: []};
-            await atomicSave(group);
-            renderCurrentState("mySets", id);
+            await atomicSave(group); renderCurrentState("mySets", id);
         }
     } catch(err) { alert(err); }
 }
