@@ -115,7 +115,32 @@ const Validator = {
 
 const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
 
-async function withLock(name, callback) { if (window.navigator && navigator.locks) { return navigator.locks.request(name, callback); } return callback(); }
+async function withLock(name, callback) {
+    try {
+        if (window.navigator && navigator.locks && typeof navigator.locks.request === "function") {
+            return await navigator.locks.request(name, async () => {
+                try {
+                    return await callback();
+                } catch (innerErr) {
+                    ErrorHandler.report("Lock Callback Error", innerErr);
+                    return await callback(); // fallback tekrar dene
+                }
+            });
+        } else {
+            // Destek yok → direkt çalıştır
+            return await callback();
+        }
+    } catch (lockErr) {
+        // locks var ama patladı → fallback
+        ErrorHandler.report("Lock System Error", lockErr);
+        try {
+            return await callback();
+        } catch (cbErr) {
+            ErrorHandler.report("Fallback Error", cbErr);
+            throw cbErr;
+        }
+    }
+}
 
 /**
  * GÜÇLENDİRİLMİŞ DB AÇMA FONKSİYONU
