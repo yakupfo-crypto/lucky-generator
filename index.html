@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
-<title>Lucky Generator Pro - Triple Layer Storage</title>
+<title>Lucky Generator Pro - Stable State</title>
 <style>
 body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
 header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position: relative; }
@@ -24,9 +24,12 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 .copy-btn { background: #4caf50; margin-bottom: 10px; }
 #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index:10002; pointer-events:none; }
 .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
+
+/* Güvenlik Paneli Stili */
 #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
 .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
 .engine-legacy { background: #ffa000; }
+
 @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
 </style>
 </head>
@@ -55,18 +58,15 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
-/**
- * 🛠 HATA VE GÜVENLİK YÖNETİMİ
- */
 const ErrorHandler = {
     report: function(type, data) {
-        console.error(`[${type}]`, data);
+        console.error(`[${type}]`, data.message || data);
         const monitor = document.getElementById("error-monitor");
         if(monitor) {
             const toast = document.createElement("div");
             toast.className = "error-toast";
-            const msg = data.message || "Bilinmeyen Hata";
-            toast.innerHTML = `<strong>[${type}]</strong><br><small>${msg.substring(0, 80)}</small>`;
+            const msg = (data.message || String(data)).substring(0, 80);
+            toast.innerHTML = `<strong>[${type}]</strong> Bir hata oluştu.<br><small>${msg}...</small>`;
             toast.onclick = () => toast.remove();
             monitor.appendChild(toast);
             setTimeout(() => { if(toast.parentNode) toast.remove(); }, 6000);
@@ -74,133 +74,15 @@ const ErrorHandler = {
     }
 };
 
-window.onerror = (message, source, lineno, colno, error) => { ErrorHandler.report("Sistem Hatası", {message}); return false; };
-window.onunhandledrejection = (event) => { ErrorHandler.report("Veri Hatası", { message: event.reason?.message || "İşlem başarısız" }); };
+window.onerror = (message, source, lineno, colno, error) => { ErrorHandler.report("Runtime Error", {message, source, lineno, colno, error}); return false; };
+window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", { message: event.reason?.message || "Asenkron işlem başarısız", error: event.reason }); return false; };
 
-/**
- * 💾 TRIPLE-LAYER STORAGE (RAM + INDEXEDDB + LOCALSTORAGE FALLBACK)
- */
-const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock", lsBackupKey = "lucky_backup_data";
-let memoryFallback = []; 
-
-function openDB() {
-    return new Promise((res, rej) => {
-        const timeout = setTimeout(() => rej(new Error("DB Zaman Aşımı")), 4000);
-        try {
-            if (!window.indexedDB) throw new Error("IndexedDB desteklenmiyor");
-            const req = indexedDB.open(dbName, 1);
-            req.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: "id" });
-            };
-            req.onsuccess = () => { clearTimeout(timeout); res(req.result); };
-            req.onerror = (e) => { clearTimeout(timeout); rej(e.target.error); };
-            req.onblocked = () => { clearTimeout(timeout); rej(new Error("DB Kilitli")); };
-        } catch (e) { clearTimeout(timeout); rej(e); }
-    });
-}
-
-async function withLock(name, callback) { 
-    if (window.navigator && navigator.locks) { return navigator.locks.request(name, callback); } 
-    return callback(); 
-}
-
-const LSBackup = {
-    save: (data) => { try { localStorage.setItem(lsBackupKey, JSON.stringify(data)); } catch(e) {} },
-    load: () => { try { return JSON.parse(localStorage.getItem(lsBackupKey)) || []; } catch(e) { return []; } }
-};
-
-async function getAllGroups() {
-    try {
-        const db = await openDB();
-        const dbResults = await new Promise((res, rej) => {
-            const tx = db.transaction(storeName, "readonly");
-            const req = tx.objectStore(storeName).getAll();
-            req.onsuccess = (e) => res(e.target.result || []);
-            req.onerror = () => rej(new Error("Okuma başarısız"));
-        });
-        const combined = [...LSBackup.load(), ...dbResults];
-        const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
-        memoryFallback = unique.map(Validator.validateGroup).filter(Boolean);
-        return memoryFallback.sort((a,b) => (b.version || 0) - (a.version || 0));
-    } catch (e) {
-        console.warn("DB Erişilemedi, LS Fallback çalışıyor");
-        memoryFallback = LSBackup.load().map(Validator.validateGroup).filter(Boolean);
-        return memoryFallback.sort((a,b) => (b.version || 0) - (a.version || 0));
-    }
-}
-
-async function atomicSave(item) {
-    const val = Validator.validateGroup(item);
-    if (!val) throw new Error("Veri doğrulama hatası!");
-    const idx = memoryFallback.findIndex(g => g.id === val.id);
-    if(idx > -1) memoryFallback[idx] = val; else memoryFallback.push(val);
-
-    return withLock(lockName, async () => {
-        try {
-            const db = await openDB();
-            await new Promise((res, rej) => {
-                const tx = db.transaction(storeName, "readwrite");
-                const store = tx.objectStore(storeName);
-                tx.oncomplete = () => res(true);
-                tx.onerror = (e) => rej(e.target.error);
-                store.put(val);
-            });
-            LSBackup.save(memoryFallback);
-            return true;
-        } catch (e) {
-            LSBackup.save(memoryFallback);
-            ErrorHandler.report("GÜVENLİ MOD", { message: "Veritabanı hatası: Veri LS üzerine yedeklendi." });
-            return true; 
-        }
-    });
-}
-
-// 🛡️ DÜZENLENEN FONKSİYON: Hata yönetimli silme
-async function deleteFromDB(id) {
-    const originalMemory = [...memoryFallback]; // Hata durumunda geri yüklemek için
-    memoryFallback = memoryFallback.filter(g => g.id !== id);
-    LSBackup.save(memoryFallback); 
-
-    try {
-        const db = await openDB();
-        return await new Promise((res, rej) => {
-            const tx = db.transaction(storeName, "readwrite");
-            const store = tx.objectStore(storeName);
-            const req = store.delete(id);
-            
-            tx.oncomplete = () => res(true);
-            tx.onerror = (e) => {
-                // Rollback: RAM ve LS'yi eski haline getir
-                memoryFallback = originalMemory;
-                LSBackup.save(memoryFallback);
-                rej(new Error("DB silme işlemi başarısız: " + e.target.error));
-            };
-            req.onerror = (e) => rej(e.target.error);
-        });
-    } catch (e) {
-        // DB'ye hiç ulaşılamazsa RAM zaten silinmişti ama kullanıcıyı uyaralım
-        throw e; 
-    }
-}
-
-async function getGroupById(id) {
-    const mem = memoryFallback.find(g => g.id === id);
-    if(mem) return mem;
-    const all = await getAllGroups();
-    return all.find(g => g.id === id) || null;
-}
-
-/**
- * 🧪 VALIDASYON VE DİĞER FONKSİYONLAR
- */
 const viewContainer = document.getElementById("view-container");
 const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 let lastRequestId = 0; 
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
-
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -231,30 +113,146 @@ const Validator = {
     }
 };
 
+const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
+
+async function withLock(name, callback) { if (window.navigator && navigator.locks) { return navigator.locks.request(name, callback); } return callback(); }
+
+/**
+ * GÜÇLENDİRİLMİŞ DB AÇMA FONKSİYONU
+ */
+function openDB() {
+    return new Promise((res, rej) => {
+        const timeout = setTimeout(() => rej(new Error("DB Zaman Aşımı: Veritabanı yanıt vermiyor.")), 5000);
+        try {
+            if (!window.indexedDB) throw new Error("IndexedDB desteklenmiyor.");
+            const req = indexedDB.open(dbName, 1);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: "id" });
+            };
+            req.onsuccess = () => { clearTimeout(timeout); res(req.result); };
+            req.onerror = (e) => {
+                clearTimeout(timeout);
+                const msg = e.target.error?.name === "QuotaExceededError" ? "Depolama alanı dolu!" : "DB Erişimi Reddedildi (Gizli sekme?)";
+                rej(new Error(msg));
+            };
+            req.onblocked = () => { clearTimeout(timeout); rej(new Error("DB Bloklandı: Diğer sekmeleri kapatın.")); };
+        } catch (err) { clearTimeout(timeout); rej(err); }
+    });
+}
+
+/**
+ * GÜNCELLEME: Global hata yönetimi ile sessiz veri kaybını önleyen okuma
+ */
+async function getAllGroups() {
+    let db;
+    try {
+        db = await openDB();
+        return await new Promise((res, rej) => {
+            const tx = db.transaction(storeName, "readonly");
+            const store = tx.objectStore(storeName);
+            const req = store.getAll();
+            req.onsuccess = (e) => res((e.target.result || []).map(Validator.validateGroup).filter(Boolean));
+            req.onerror = () => rej(new Error("Veriler yüklenemedi."));
+            tx.oncomplete = () => db.close();
+        });
+    } catch (e) {
+        if(db) db.close();
+        ErrorHandler.report("Load Error", e);
+        return [];
+    }
+}
+
+/**
+ * GÜÇLENDİRİLMİŞ ATOMİK KAYIT
+ */
+async function atomicSave(item) {
+    const val = Validator.validateGroup(item);
+    if (!val) throw new Error("Geçersiz veri!");
+    return withLock(lockName, async () => {
+        let db;
+        try {
+            db = await openDB();
+            return await new Promise((res, rej) => {
+                const tx = db.transaction(storeName, "readwrite");
+                const store = tx.objectStore(storeName);
+                tx.onerror = (e) => {
+                    const error = e.target.error;
+                    rej(new Error(error.name === "QuotaExceededError" ? "Cihaz hafızası dolu!" : "Kayıt hatası: " + error.message));
+                };
+                const getReq = store.get(val.id);
+                getReq.onsuccess = () => {
+                    const ext = getReq.result;
+                    if (ext && val.version !== ext.version) return rej(new Error("Çakışma: Veri güncel değil."));
+                    val.version = Date.now();
+                    store.put(val);
+                };
+                tx.oncomplete = () => { db.close(); res(); };
+            });
+        } catch (err) {
+            if (db) db.close();
+            ErrorHandler.report("DB Save Error", err);
+            throw err;
+        }
+    });
+}
+
+async function deleteFromDB(id) {
+    return withLock(lockName, async () => {
+        let db;
+        try {
+            db = await openDB();
+            const tx = db.transaction(storeName, "readwrite");
+            tx.objectStore(storeName).delete(id);
+            return new Promise((res) => {
+                tx.oncomplete = () => { db.close(); res(); };
+            });
+        } catch(e) { if(db) db.close(); throw e; }
+    });
+}
+
+async function getGroupById(id) {
+    let db;
+    try {
+        db = await openDB();
+        return await new Promise((res, rej) => {
+            const tx = db.transaction(storeName, "readonly");
+            const req = tx.objectStore(storeName).get(id);
+            req.onsuccess = (e) => res(Validator.validateGroup(e.target.result));
+            req.onerror = () => rej(new Error("Grup bulunamadı."));
+            tx.oncomplete = () => db.close();
+        });
+    } catch(e) { if(db) db.close(); return null; }
+}
+
 function updateCryptoStatus(isSecure) {
     const statusEl = document.getElementById("crypto-status");
     if(!statusEl) return;
-    statusEl.innerHTML = isSecure ? `Motor: <span class="engine-badge">Web Crypto (Yüksek)</span>` : `Motor: <span class="engine-badge engine-legacy">Standard (Eski)</span>`;
-    setTimeout(() => { if(statusEl) statusEl.innerHTML = "Motor: Bekleniyor..."; }, 10000); 
+    statusEl.innerHTML = isSecure ? `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>` : `Motor: <span class="engine-badge engine-legacy">Math.random (Eski)</span>`;
+    setTimeout(() => { statusEl.innerHTML = "Motor: Bekleniyor..."; }, 10000); 
 }
 
 function secureShuffle(array) {
     const len = array.length;
     if (len <= 1) return array;
     const cryptoObj = window.crypto || window.msCrypto;
-    let finalMethodIsSecure = false;
+    let finalIsSecure = false;
     for (let i = len - 1; i > 0; i--) {
         const range = i + 1;
         let j;
         if (cryptoObj && cryptoObj.getRandomValues) {
             const buf = new Uint32Array(1);
-            cryptoObj.getRandomValues(buf);
-            j = buf[0] % range;
-            finalMethodIsSecure = true;
-        } else { j = Math.floor(Math.random() * range); }
+            const maxTick = Math.floor(0x100000000 / range) * range;
+            let randomVal;
+            do { cryptoObj.getRandomValues(buf); randomVal = buf[0]; } while (randomVal >= maxTick);
+            j = randomVal % range;
+            finalIsSecure = true;
+        } else {
+            j = Math.floor(Math.random() * range);
+        }
         [array[i], array[j]] = [array[j], array[i]];
     }
-    updateCryptoStatus(finalMethodIsSecure);
+    updateCryptoStatus(finalIsSecure);
     return array;
 }
 
@@ -270,7 +268,7 @@ async function renderCurrentState(page, groupId) {
         if (page === "generate") { if (currentRequestId === lastRequestId) renderGeneratePage(); } 
         else if (page === "mySets") { if (groupId) { const group = await getGroupById(groupId); if (currentRequestId === lastRequestId) { group ? renderViewGroup(group, currentRequestId) : renderMySetsList(currentRequestId); } } else { await renderMySetsList(currentRequestId); } } 
         else if (page === "panel") { const group = await getGroupById(groupId); if (currentRequestId === lastRequestId) { if(group) { renderViewGroup(group, currentRequestId); openResultPanel(group.max, group.id, false); } else { navTo("mySets"); } } }
-    } catch (e) { if (currentRequestId === lastRequestId) ErrorHandler.report("Görünüm Hatası", e); }
+    } catch (e) { if (currentRequestId === lastRequestId) ErrorHandler.report("Render Error", e); }
 }
 
 function renderGeneratePage() {
@@ -328,20 +326,10 @@ function generateSets() {
 async function saveGroup() {
     const rawName = document.getElementById("groupNameInput")?.value; if (!rawName?.trim()) { alert("İsim girin!"); return; }
     const group = { id: String(Date.now()), name: escapeHTML(rawName), sets: [...generatedSets], max: parseInt(document.getElementById("maxNumber").value), jokerMax: parseInt(document.getElementById("jokerMax").value), jokerPerSet: parseInt(document.getElementById("jokerCount").value), results: {main: [], joker: []}, version: Date.now() };
-    try { await atomicSave(group); sessionStorage.removeItem("tempGeneratedSets"); navTo('mySets', group.id); } catch(err) { ErrorHandler.report("Kaydetme Hatası", err); }
+    try { await atomicSave(group); sessionStorage.removeItem("tempGeneratedSets"); navTo('mySets', group.id); } catch(err) { /* atomicSave zaten report ediyor */ }
 }
 
-// 🛡️ DÜZENLENEN FONKSİYON: Gerçek hata yakalamalı silme
-async function deleteGroup(id) { 
-    if (confirm("Emin misiniz?")) { 
-        try { 
-            await deleteFromDB(id); 
-            await renderMySetsList(lastRequestId); 
-        } catch(err) { 
-            ErrorHandler.report("Silme Hatası", {message: "Kayıt veritabanından silinemedi."}); 
-        } 
-    } 
-}
+async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { ErrorHandler.report("Delete Error", err); } } }
 
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); if(!group) return;
@@ -362,7 +350,7 @@ async function toggleMainResult(el, id, val) {
         const g = await getGroupById(id); if(!g) return;
         const i = g.results.main.indexOf(val); if (i > -1) g.results.main.splice(i, 1); else if (g.results.main.length < 10) g.results.main.push(val);
         await atomicSave(g); el.classList.toggle("result-selected"); if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
-    } catch(err) { ErrorHandler.report("Güncelleme Hatası", err); }
+    } catch(err) { renderCurrentState(history.state.page, history.state.groupId); }
 }
 
 async function toggleJokerResult(el, id, val) {
@@ -370,7 +358,7 @@ async function toggleJokerResult(el, id, val) {
         const g = await getGroupById(id); if(!g) return;
         const i = g.results.joker.indexOf(val); if (i > -1) g.results.joker.splice(i, 1); else if (g.results.joker.length < g.jokerPerSet) g.results.joker.push(val);
         await atomicSave(g); el.classList.toggle("result-selected"); if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
-    } catch(err) { ErrorHandler.report("Güncelleme Hatası", err); }
+    } catch(err) { renderCurrentState(history.state.page, history.state.groupId); }
 }
 
 function closeResultPanel(back = false) { if (back && history.state?.page === "panel") { history.back(); } else { resultPanel.style.display = "none"; } }
