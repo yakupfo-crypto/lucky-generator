@@ -115,28 +115,49 @@ const Validator = {
 
 const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
 
+// Basit in-memory fallback lock
+const fallbackLocks = new Map();
+
 async function withLock(name, callback) {
-    try {
-        if (window.navigator && navigator.locks && typeof navigator.locks.request === "function") {
-            return await navigator.locks.request(name, async () => {
-                try {
-                    return await callback();
-                } catch (innerErr) {
-                    ErrorHandler.report("Lock Callback Error", innerErr);
-                    return await callback(); // fallback tekrar dene
-                }
-            });
-        } else {
-            // Destek yok → direkt çalıştır
-            return await callback();
+    const LOCK_TIMEOUT = 4000;
+
+    // fallback mutex
+    async function runWithFallbackLock() {
+        while (fallbackLocks.get(name)) {
+            await new Promise(r => setTimeout(r, 10)); // spin-wait (hafif)
         }
-    } catch (lockErr) {
-        // locks var ama patladı → fallback
-        ErrorHandler.report("Lock System Error", lockErr);
+        fallbackLocks.set(name, true);
         try {
             return await callback();
+        } finally {
+            fallbackLocks.delete(name);
+        }
+    }
+
+    try {
+        if (window.navigator && navigator.locks && typeof navigator.locks.request === "function") {
+            const lockPromise = navigator.locks.request(name, async () => {
+                return await callback(); // 🔥 retry YOK
+            });
+
+            // timeout koruması
+            return await Promise.race([
+                lockPromise,
+                new Promise((_, rej) =>
+                    setTimeout(() => rej(new Error("Lock timeout")), LOCK_TIMEOUT)
+                )
+            ]);
+        } else {
+            return await runWithFallbackLock();
+        }
+    } catch (err) {
+        ErrorHandler.report("Lock System Error", err);
+
+        // fallback'a düş
+        try {
+            return await runWithFallbackLock();
         } catch (cbErr) {
-            ErrorHandler.report("Fallback Error", cbErr);
+            ErrorHandler.report("Fallback Lock Error", cbErr);
             throw cbErr;
         }
     }
