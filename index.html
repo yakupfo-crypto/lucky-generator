@@ -26,7 +26,6 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
 #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
 .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
-.engine-legacy { background: #ff9800; }
 @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
 </style>
 </head>
@@ -65,7 +64,6 @@ const ErrorHandler = {
             const toast = document.createElement("div");
             toast.className = "error-toast";
             const msg = escapeHTML((data.message || String(data)).substring(0, 80));
-            // Güvenli: type ve msg escapeHTML ile temizlendi
             toast.innerHTML = `<strong>[${escapeHTML(type)}]</strong> Bir hata oluştu.<br><small>${msg}...</small>`;
             toast.onclick = () => toast.remove();
             monitor.appendChild(toast);
@@ -83,27 +81,24 @@ let lastRequestId = 0;
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
 
 const CryptoEngine = {
+    // KESİN KONTROL: Sadece gerçek kriptografik motorları kabul et
     isSecure: !!(window.crypto && window.crypto.getRandomValues) || !!(window.msCrypto && window.msCrypto.getRandomValues),
+    
     nextUint32: function(max) {
         const cryptoObj = window.crypto || window.msCrypto;
-        if (this.isSecure) {
-            const buf = new Uint32Array(1);
-            const limit = Math.floor(0x100000000 / max) * max;
-            let val;
-            do { cryptoObj.getRandomValues(buf); val = buf[0]; } while (val >= limit);
-            return val % max;
-        } else {
-            const entropy = (performance.now() * 1000) % 1;
-            return Math.floor(((Math.random() + entropy) % 1) * max);
-        }
+        // Sıfır Risk: isSecure değilse bu fonksiyonun çağrılması imkansız olmalı ama yine de bir güvenlik bariyeri:
+        if (!this.isSecure) throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
+
+        const buf = new Uint32Array(1);
+        const limit = Math.floor(0x100000000 / max) * max;
+        let val;
+        do { cryptoObj.getRandomValues(buf); val = buf[0]; } while (val >= limit);
+        return val % max;
     },
     updateUI: function() {
         const statusEl = getEl("crypto-status");
         if(!statusEl) return;
-        // Güvenli: Statik HTML yapısı
-        statusEl.innerHTML = this.isSecure 
-            ? `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>` 
-            : `Motor: <span class="engine-badge engine-legacy">Hybrid Fallback</span>`;
+        statusEl.innerHTML = `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>`;
         setTimeout(() => { if(getEl("crypto-status")) getEl("crypto-status").textContent = "Motor: Hazır"; }, 10000);
     }
 };
@@ -117,6 +112,7 @@ function secureShuffle(array) {
     return array;
 }
 
+// --- VERİ TABANI VE VALIDATOR FONKSİYONLARI (DEĞİŞMEDİ) ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -148,9 +144,7 @@ const Validator = {
 };
 
 const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
-
 async function withLock(name, callback) { if (window.navigator && navigator.locks) { return navigator.locks.request(name, callback); } return callback(); }
-
 function openDB() {
     return new Promise((res, rej) => {
         const req = indexedDB.open(dbName, 1);
@@ -225,7 +219,30 @@ async function getGroupById(id) {
     } catch(e) { if(db) db.close(); return null; }
 }
 
-window.onload = () => { if (!history.state) { history.replaceState({page:"generate", groupId:null}, ""); } const s = history.state; renderCurrentState(s.page, s.groupId); };
+// --- UYGULAMA MANTIĞI VE RENDER ---
+
+window.onload = () => { 
+    // GÜVENLİK KİLİDİ: Uygulama yüklenirken motoru kontrol et
+    if (!CryptoEngine.isSecure) {
+        document.body.innerHTML = `
+            <div style="padding:40px; text-align:center; font-family:Arial; color:#d32f2f; background:#fff; height:100vh;">
+                <h2 style="font-size:30px;">⚠️ Güvenlik Engeli</h2>
+                <hr>
+                <p style="font-size:18px; color:#333;">Cihazınızın tarayıcısı <b>"Kriptografik Rastgele Sayı"</b> motorunu desteklemiyor.</p>
+                <p style="color:#666;">Sıfır risk prensibi gereği, düşük kaliteli üretim yapılmasına izin verilmemiştir.</p>
+                <div style="margin-top:30px; padding:15px; background:#f9f9f9; border-radius:10px; display:inline-block; border:1px solid #ddd;">
+                    <b>Çözüm:</b> Lütfen tarayıcınızı (Chrome, Safari, Edge) güncelleyin veya modern bir tarayıcı kullanın.
+                </div>
+            </div>`;
+        throw new Error("Güvenli olmayan motor kullanımı engellendi.");
+    }
+
+    // Motor güvenliyse uygulamayı başlat
+    if (!history.state) { history.replaceState({page:"generate", groupId:null}, ""); } 
+    const s = history.state; 
+    renderCurrentState(s.page, s.groupId); 
+};
+
 window.onpopstate = (event) => { const state = event.state || {page:"generate", groupId:null}; renderCurrentState(state.page, state.groupId); };
 function navTo(page, groupId = null) { history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); renderCurrentState(page, groupId); }
 
@@ -265,14 +282,12 @@ function renderGeneratePage() {
         if(inputs) storedInputs = JSON.parse(inputs);
     } catch(e) { generatedSets = []; }
 
-    // Güvenli: Sayısal değerler Number cast edildi
     container.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam</b></label><input type="number" id="maxNumber" value="${Number(storedInputs.max)}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${Number(storedInputs.per)}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${Number(storedInputs.jMax)}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${Number(storedInputs.jPer)}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${Number(storedInputs.count)}"><button onclick="generateSets()">Kolonları Üret</button></div><div id="results">${getGeneratedSetsHtml()}</div></div>`;
 }
 
 function getGeneratedSetsHtml() {
     let html = "";
     generatedSets.forEach((set, i) => { 
-        // Güvenli: i sayısı ve createBalls çıktısı kontrol altında
         html += `<div class='card'><b>${Number(i)+1}. Kolon</b>${createBalls(set)}</div>`; 
     }); 
     if (generatedSets.length > 0) { 
@@ -285,16 +300,13 @@ async function renderMySetsList(reqId) {
     const groups = await getAllGroups(); 
     const view = getEl("view-container");
     if (!view || reqId !== lastRequestId) return;
-
     view.innerHTML = ""; 
     const container = document.createElement("div"); 
     container.className = "container"; 
     container.innerHTML = `<h3>Kayıtlı Kolonlarım</h3>`;
-    
     if (groups.length === 0) container.innerHTML += "<p>Henüz kayıtlı set yok.</p>";
     groups.forEach(group => {
         const card = document.createElement("div"); card.className = "card";
-        // Güvenli: group.name escapeHTML süzgecinden geçti (Validator içinde yapılıyor)
         card.innerHTML = `<b>${escapeHTML(group.name)}</b><div style="margin-top:5px">Kolon: ${Number(group.sets.length)}</div>`;
         const btnView = document.createElement("button"); btnView.textContent = "Görüntüle"; btnView.onclick = () => navTo("mySets", group.id);
         const btnDel = document.createElement("button"); btnDel.textContent = "Sil"; btnDel.style.background = "#d32f2f"; btnDel.style.marginTop = "5px"; btnDel.onclick = () => deleteGroup(group.id);
@@ -306,21 +318,16 @@ async function renderMySetsList(reqId) {
 function renderViewGroup(group, reqId) {
     const view = getEl("view-container");
     if (!view || reqId !== lastRequestId) return;
-    
     view.innerHTML = ""; 
     const safeMain = group.results.main.map(Number).join(",");
     const safeJoker = group.results.joker.map(Number).join(",");
     let resText = (group.results.main.length > 0 || group.results.joker.length > 0) ? `Ana: ${safeMain} | Joker: ${safeJoker}` : "Henüz girilmedi";
-    
     const container = document.createElement("div"); 
     container.className = "container";
-    // Güvenli: group.name, id ve resText süzgeçten geçirildi
     container.innerHTML = `<h3>${escapeHTML(group.name)}</h3><button class="copy-btn" onclick='copySpecificGroup("${escapeHTML(group.id)}")'>Panoya Kopyala</button><div class="card"><b>Sonuçlar:</b> <span>${escapeHTML(resText)}</span><br><button onclick="openResultPanel(${Number(group.max)},'${escapeHTML(group.id)}')">Sonuç Gir (Kıyasla)</button></div>`;
-    
     group.sets.forEach((set, i) => { 
         container.innerHTML += `<div class='card'><b>${Number(i)+1}.</b>${createBallsWithMatch(set, group.results)}</div>`; 
     });
-    
     const backBtn = document.createElement("button"); backBtn.textContent = "Listeye Dön"; backBtn.style.background = "#666"; backBtn.onclick = () => navTo("mySets");
     container.appendChild(backBtn); view.appendChild(container);
 }
@@ -348,10 +355,8 @@ function createBallsWithMatch(set, res) {
 function generateSets() {
     const elMax = getEl("maxNumber"), elPer = getEl("perSet"), elJMax = getEl("jokerMax"), elJPer = getEl("jokerCount"), elCount = getEl("setCount");
     if(!elMax || !elPer || !elJMax || !elJPer || !elCount) return;
-
     const max = parseInt(elMax.value), per = parseInt(elPer.value), jMax = parseInt(elJMax.value), jPer = parseInt(elJPer.value), count = parseInt(elCount.value);
     if ([max, per, jMax, jPer, count].some(isNaN) || per > max || jPer > jMax || max < 1) { alert("Geçersiz değerler!"); return; }
-    
     generatedSets = [];
     for (let i = 0; i < count; i++) {
         let n = secureShuffle(Array.from({length: max}, (_, k) => k + 1)).slice(0, per).sort((a,b)=>a-b);
@@ -360,7 +365,6 @@ function generateSets() {
     }
     sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
     sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
-    
     const resultsDiv = getEl("results");
     if(resultsDiv) resultsDiv.innerHTML = getGeneratedSetsHtml();
 }
@@ -368,7 +372,6 @@ function generateSets() {
 async function saveGroup() {
     const elName = getEl("groupNameInput");
     if (!elName || !elName.value.trim()) { alert("İsim girin!"); return; }
-    
     const elMax = getEl("maxNumber"), elJMax = getEl("jokerMax"), elJCount = getEl("jokerCount");
     const group = { 
         id: String(Date.now()), 
@@ -389,8 +392,6 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); if(!group) return;
     const resDiv = getEl("resultNumbers");
     if(!resDiv) return;
-
-    // Güvenli: max ve id değerleri Number/escapeHTML ile korunuyor
     let h = `<h4>Ana Sayı (1-${Number(max)})</h4><div class='ball-row'>`;
     for(let i=1; i<=max; i++) {
         const selClass = group.results.main.includes(i) ? "result-selected" : "";
@@ -404,7 +405,6 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
         }
     }
     resDiv.innerHTML = h + "</div>";
-    
     if (shouldPushState && history.state?.page !== "panel") history.pushState({page: "panel", groupId: String(groupId)}, "");
     const panel = getEl("resultPanel");
     if(panel) panel.style.display = "block";
