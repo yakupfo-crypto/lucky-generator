@@ -55,7 +55,6 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
-// --- GÜVENLİ DOM ERİŞİM YARDIMCISI ---
 const getEl = (id) => document.getElementById(id);
 
 const ErrorHandler = {
@@ -65,8 +64,9 @@ const ErrorHandler = {
         if(monitor) {
             const toast = document.createElement("div");
             toast.className = "error-toast";
-            const msg = (data.message || String(data)).substring(0, 80);
-            toast.innerHTML = `<strong>[${type}]</strong> Bir hata oluştu.<br><small>${msg}...</small>`;
+            const msg = escapeHTML((data.message || String(data)).substring(0, 80));
+            // Güvenli: type ve msg escapeHTML ile temizlendi
+            toast.innerHTML = `<strong>[${escapeHTML(type)}]</strong> Bir hata oluştu.<br><small>${msg}...</small>`;
             toast.onclick = () => toast.remove();
             monitor.appendChild(toast);
             setTimeout(() => { if(toast.parentNode) toast.remove(); }, 6000);
@@ -100,10 +100,11 @@ const CryptoEngine = {
     updateUI: function() {
         const statusEl = getEl("crypto-status");
         if(!statusEl) return;
+        // Güvenli: Statik HTML yapısı
         statusEl.innerHTML = this.isSecure 
             ? `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>` 
             : `Motor: <span class="engine-badge engine-legacy">Hybrid Fallback</span>`;
-        setTimeout(() => { if(getEl("crypto-status")) getEl("crypto-status").innerHTML = "Motor: Hazır"; }, 10000);
+        setTimeout(() => { if(getEl("crypto-status")) getEl("crypto-status").textContent = "Motor: Hazır"; }, 10000);
     }
 };
 
@@ -233,7 +234,7 @@ async function renderCurrentState(page, groupId) {
     const container = getEl("view-container");
     if(!container) return;
     
-    container.innerHTML = "<div class='container'>Yükleniyor...</div>";
+    container.textContent = "Yükleniyor...";
     const panel = getEl("resultPanel");
     if(panel) panel.style.display = "none";
 
@@ -264,13 +265,19 @@ function renderGeneratePage() {
         if(inputs) storedInputs = JSON.parse(inputs);
     } catch(e) { generatedSets = []; }
 
-    container.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam</b></label><input type="number" id="maxNumber" value="${storedInputs.max}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${storedInputs.per}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${storedInputs.jMax}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${storedInputs.jPer}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${storedInputs.count}"><button onclick="generateSets()">Kolonları Üret</button></div><div id="results">${getGeneratedSetsHtml()}</div></div>`;
+    // Güvenli: Sayısal değerler Number cast edildi
+    container.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam</b></label><input type="number" id="maxNumber" value="${Number(storedInputs.max)}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${Number(storedInputs.per)}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${Number(storedInputs.jMax)}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${Number(storedInputs.jPer)}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${Number(storedInputs.count)}"><button onclick="generateSets()">Kolonları Üret</button></div><div id="results">${getGeneratedSetsHtml()}</div></div>`;
 }
 
 function getGeneratedSetsHtml() {
     let html = "";
-    generatedSets.forEach((set, i) => { html += `<div class='card'><b>${i+1}. Kolon</b>${createBalls(set)}</div>`; });
-    if (generatedSets.length > 0) { html += `<div class="card"><button class="copy-btn" onclick='copyCurrentGenerated()'>Panoya Kopyala</button><label><b>Grup Adı</b></label><input type="text" id="groupNameInput" placeholder="Örn: Pazartesi"><button onclick='saveGroup()'>Grubu Kaydet</button></div>`; }
+    generatedSets.forEach((set, i) => { 
+        // Güvenli: i sayısı ve createBalls çıktısı kontrol altında
+        html += `<div class='card'><b>${Number(i)+1}. Kolon</b>${createBalls(set)}</div>`; 
+    }); 
+    if (generatedSets.length > 0) { 
+        html += `<div class="card"><button class="copy-btn" onclick='copyCurrentGenerated()'>Panoya Kopyala</button><label><b>Grup Adı</b></label><input type="text" id="groupNameInput" placeholder="Örn: Pazartesi"><button onclick='saveGroup()'>Grubu Kaydet</button></div>`; 
+    }
     return html;
 }
 
@@ -287,7 +294,8 @@ async function renderMySetsList(reqId) {
     if (groups.length === 0) container.innerHTML += "<p>Henüz kayıtlı set yok.</p>";
     groups.forEach(group => {
         const card = document.createElement("div"); card.className = "card";
-        card.innerHTML = `<b>${group.name}</b><div style="margin-top:5px">Kolon: ${group.sets.length}</div>`;
+        // Güvenli: group.name escapeHTML süzgecinden geçti (Validator içinde yapılıyor)
+        card.innerHTML = `<b>${escapeHTML(group.name)}</b><div style="margin-top:5px">Kolon: ${Number(group.sets.length)}</div>`;
         const btnView = document.createElement("button"); btnView.textContent = "Görüntüle"; btnView.onclick = () => navTo("mySets", group.id);
         const btnDel = document.createElement("button"); btnDel.textContent = "Sil"; btnDel.style.background = "#d32f2f"; btnDel.style.marginTop = "5px"; btnDel.onclick = () => deleteGroup(group.id);
         card.append(btnView, btnDel); container.appendChild(card);
@@ -300,31 +308,44 @@ function renderViewGroup(group, reqId) {
     if (!view || reqId !== lastRequestId) return;
     
     view.innerHTML = ""; 
-    let resText = (group.results.main.length > 0 || group.results.joker.length > 0) ? `Ana: ${group.results.main.join(",")} | Joker: ${group.results.joker.join(",")}` : "Henüz girilmedi";
+    const safeMain = group.results.main.map(Number).join(",");
+    const safeJoker = group.results.joker.map(Number).join(",");
+    let resText = (group.results.main.length > 0 || group.results.joker.length > 0) ? `Ana: ${safeMain} | Joker: ${safeJoker}` : "Henüz girilmedi";
+    
     const container = document.createElement("div"); 
     container.className = "container";
-    container.innerHTML = `<h3>${group.name}</h3><button class="copy-btn" onclick='copySpecificGroup("${group.id}")'>Panoya Kopyala</button><div class="card"><b>Sonuçlar:</b> <span>${resText}</span><br><button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button></div>`;
-    group.sets.forEach((set, i) => { container.innerHTML += `<div class='card'><b>${i+1}.</b>${createBallsWithMatch(set, group.results)}</div>`; });
+    // Güvenli: group.name, id ve resText süzgeçten geçirildi
+    container.innerHTML = `<h3>${escapeHTML(group.name)}</h3><button class="copy-btn" onclick='copySpecificGroup("${escapeHTML(group.id)}")'>Panoya Kopyala</button><div class="card"><b>Sonuçlar:</b> <span>${escapeHTML(resText)}</span><br><button onclick="openResultPanel(${Number(group.max)},'${escapeHTML(group.id)}')">Sonuç Gir (Kıyasla)</button></div>`;
+    
+    group.sets.forEach((set, i) => { 
+        container.innerHTML += `<div class='card'><b>${Number(i)+1}.</b>${createBallsWithMatch(set, group.results)}</div>`; 
+    });
+    
     const backBtn = document.createElement("button"); backBtn.textContent = "Listeye Dön"; backBtn.style.background = "#666"; backBtn.onclick = () => navTo("mySets");
     container.appendChild(backBtn); view.appendChild(container);
 }
 
 function createBalls(set) { 
     let b = "<div class='ball-row'>"; 
-    set.numbers.forEach(n => b += `<div class="ball selected">${n}</div>`); 
-    set.jokers.forEach(j => b += `<div class="ball joker">${j}</div>`); 
+    set.numbers.forEach(n => b += `<div class="ball selected">${Number(n)}</div>`); 
+    set.jokers.forEach(j => b += `<div class="ball joker">${Number(j)}</div>`); 
     return b + "</div>"; 
 }
 
 function createBallsWithMatch(set, res) { 
     let b = "<div class='ball-row'>"; 
-    set.numbers.forEach(n => { b += `<div class="ball selected ${res.main.includes(n) ? "result-selected" : ""}">${n}</div>`; }); 
-    set.jokers.forEach(j => { b += `<div class="ball joker ${res.joker.includes(j) ? "result-selected" : ""}">${j}</div>`; }); 
+    set.numbers.forEach(n => { 
+        const matchClass = res.main.includes(n) ? "result-selected" : "";
+        b += `<div class="ball selected ${matchClass}">${Number(n)}</div>`; 
+    }); 
+    set.jokers.forEach(j => { 
+        const matchClass = res.joker.includes(j) ? "result-selected" : "";
+        b += `<div class="ball joker ${matchClass}">${Number(j)}</div>`; 
+    }); 
     return b + "</div>"; 
 }
 
 function generateSets() {
-    // SAF DOM ACCESS: Inputlar yoksa fonksiyondan çık
     const elMax = getEl("maxNumber"), elPer = getEl("perSet"), elJMax = getEl("jokerMax"), elJPer = getEl("jokerCount"), elCount = getEl("setCount");
     if(!elMax || !elPer || !elJMax || !elJPer || !elCount) return;
 
@@ -369,11 +390,18 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
     const resDiv = getEl("resultNumbers");
     if(!resDiv) return;
 
-    let h = `<h4>Ana Sayı (1-${max})</h4><div class='ball-row'>`;
-    for(let i=1; i<=max; i++) h += `<div class="ball ${group.results.main.includes(i) ? "result-selected" : ""}" onclick="toggleMainResult(this,'${groupId}',${i})">${i}</div>`;
+    // Güvenli: max ve id değerleri Number/escapeHTML ile korunuyor
+    let h = `<h4>Ana Sayı (1-${Number(max)})</h4><div class='ball-row'>`;
+    for(let i=1; i<=max; i++) {
+        const selClass = group.results.main.includes(i) ? "result-selected" : "";
+        h += `<div class="ball ${selClass}" onclick="toggleMainResult(this,'${escapeHTML(groupId)}',${i})">${i}</div>`;
+    }
     if (group.jokerPerSet > 0) {
-        h += `</div><h4>Joker (1-${group.jokerMax})</h4><div class='ball-row'>`;
-        for(let i=1; i<=group.jokerMax; i++) h += `<div class="ball joker ${group.results.joker.includes(i) ? "result-selected" : ""}" onclick="toggleJokerResult(this,'${groupId}',${i})">${i}</div>`;
+        h += `</div><h4>Joker (1-${Number(group.jokerMax)})</h4><div class='ball-row'>`;
+        for(let i=1; i<=group.jokerMax; i++) {
+            const selClass = group.results.joker.includes(i) ? "result-selected" : "";
+            h += `<div class="ball joker ${selClass}" onclick="toggleJokerResult(this,'${escapeHTML(groupId)}',${i})">${i}</div>`;
+        }
     }
     resDiv.innerHTML = h + "</div>";
     
