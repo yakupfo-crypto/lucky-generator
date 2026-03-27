@@ -26,20 +26,36 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
 #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
 .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
-@keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
 
-/* Güvenlik Kilidi Modal Tasarımı */
-.security-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
-.security-modal { background: white; width: 85%; max-width: 400px; border-radius: 28px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-.security-content { padding: 24px; color: #1c1b1f; }
-.security-content h3 { margin: 0 0 16px 0; font-size: 20px; font-weight: 500; color: #1c1b1f; }
-.security-content p { margin: 0; font-size: 16px; color: #49454f; line-height: 1.5; }
-.security-actions { padding: 8px 16px 16px 0; text-align: right; }
-.security-btn { background: transparent; border: none; color: #00639b; font-size: 16px; font-weight: 500; cursor: pointer; padding: 10px 24px; border-radius: 20px; }
-.security-btn:active { background: rgba(0,99,155,0.1); }
+/* GÜVENLİK KİLİDİ MODAL STİLLERİ */
+#security-lock-overlay { 
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+    background: rgba(0,0,0,0.85); z-index: 99999; 
+    display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px);
+}
+.lock-card { 
+    background: white; padding: 30px; border-radius: 15px; max-width: 85%; 
+    text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
+}
+.lock-card h2 { color: #d32f2f; margin-top: 0; }
+.lock-card p { color: #333; line-height: 1.5; }
+.lock-btn { background: #d32f2f; margin-top: 15px; }
+
+@keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
 </style>
 </head>
 <body>
+
+<div id="security-lock-overlay">
+    <div class="lock-card">
+        <h2>⚠️ Güvenlik Kilidi</h2>
+        <p>Tarayıcınız <b>Kriptografik Rastgele Sayı (Web Crypto API)</b> desteği sunmuyor. Güvenliğiniz için uygulama kilitlendi.</p>
+        <div style="font-size: 13px; color: #666; background: #f0f0f0; padding: 10px; border-radius: 5px;">
+            Hileli çekiliş ihtimalini önlemek için güvenli motor zorunludur.
+        </div>
+        <button class="lock-btn" onclick="document.getElementById('security-lock-overlay').style.display='none'">Anladım, Kapat</button>
+    </div>
+</div>
 
 <div id="error-monitor"></div> 
 <header>
@@ -65,29 +81,6 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 
 <script>
 const getEl = (id) => document.getElementById(id);
-
-// --- GÜVENLİK KİLİDİ MEKANİZMASI ---
-const SecurityLock = {
-    trigger: function() {
-        const overlay = document.createElement("div");
-        overlay.className = "security-overlay";
-        overlay.innerHTML = `
-            <div class="security-modal">
-                <div class="security-content">
-                    <h3>yakupfo-crypto.github.io web sitesinin mesajı</h3>
-                    <p>Kritik Hata: Uygulama veriyi korumak için durduruldu. Cihazınız güvenli sayı üretimini desteklemiyor.</p>
-                </div>
-                <div class="security-actions">
-                    <button class="security-btn" onclick="SecurityLock.killApp()">Tamam</button>
-                </div>
-            </div>`;
-        document.body.appendChild(overlay);
-    },
-    killApp: function() {
-        document.body.innerHTML = "";
-        window.location.href = "about:blank";
-    }
-};
 
 const ErrorHandler = {
     report: function(type, data) {
@@ -116,11 +109,12 @@ function escapeHTML(str) { if (!str) return ""; const p = document.createElement
 const CryptoEngine = {
     isSecure: !!(window.crypto && window.crypto.getRandomValues) || !!(window.msCrypto && window.msCrypto.getRandomValues),
     nextUint32: function(max) {
+        const cryptoObj = window.crypto || window.msCrypto;
         if (!this.isSecure) {
-            SecurityLock.trigger();
+            // Güvenlik kilidini tetikle (arayüz zaten kilitli olmalı ama yine de önlem)
+            getEl("security-lock-overlay").style.display = "flex";
             throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
         }
-        const cryptoObj = window.crypto || window.msCrypto;
         const buf = new Uint32Array(1);
         const limit = Math.floor(0x100000000 / max) * max;
         let val;
@@ -130,12 +124,8 @@ const CryptoEngine = {
     updateUI: function() {
         const statusEl = getEl("crypto-status");
         if(!statusEl) return;
-        if(this.isSecure) {
-            statusEl.innerHTML = `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>`;
-            setTimeout(() => { if(getEl("crypto-status")) getEl("crypto-status").textContent = "Motor: Hazır"; }, 10000);
-        } else {
-            statusEl.innerHTML = `Motor: <span class="engine-badge" style="background:#d32f2f">GÜVENSİZ</span>`;
-        }
+        statusEl.innerHTML = `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>`;
+        setTimeout(() => { if(getEl("crypto-status")) getEl("crypto-status").textContent = "Motor: Hazır"; }, 10000);
     }
 };
 
@@ -268,14 +258,14 @@ async function getGroupById(id) {
 // --- UYGULAMA MANTIĞI VE RENDER ---
 
 window.onload = async () => { 
-    // KRİTİK GÜVENLİK KONTROLÜ
+    // GÜVENLİK KİLİDİ (MODAL ENTEGRASYONU)
     if (!CryptoEngine.isSecure) {
-        SecurityLock.trigger();
-        return; // İşlemleri durdur
+        getEl("security-lock-overlay").style.display = "flex";
+        // Alttaki fonksiyonların çalışmasını durdurmak için hata fırlat
+        throw new Error("Güvenli olmayan motor kullanımı engellendi.");
     }
 
     await requestPersistence();
-
     if (!history.state) { history.replaceState({page:"generate", groupId:null}, ""); } 
     const s = history.state; 
     renderCurrentState(s.page, s.groupId); 
@@ -408,13 +398,14 @@ function generateSets() {
 async function saveGroup() {
     const elName = getEl("groupNameInput");
     if (!elName || !elName.value.trim()) { alert("İsim girin!"); return; }
+    const elMax = getEl("maxNumber"), elJMax = getEl("jokerMax"), elJCount = getEl("jokerCount");
     const group = { 
         id: String(Date.now()), 
         name: escapeHTML(elName.value), 
         sets: [...generatedSets], 
-        max: getEl("maxNumber") ? parseInt(getEl("maxNumber").value) : 49, 
-        jokerMax: getEl("jokerMax") ? parseInt(getEl("jokerMax").value) : 0, 
-        jokerPerSet: getEl("jokerCount") ? parseInt(getEl("jokerCount").value) : 0, 
+        max: elMax ? parseInt(elMax.value) : 49, 
+        jokerMax: elJMax ? parseInt(elJMax.value) : 0, 
+        jokerPerSet: elJCount ? parseInt(elJCount.value) : 0, 
         results: {main: [], joker: []}, 
         version: Date.now() 
     };
