@@ -80,11 +80,33 @@ let lastRequestId = 0;
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
 
+// --- KRİPTO MOTORU VE GÜVENLİK KİLİDİ ---
 const CryptoEngine = {
     isSecure: !!(window.crypto && window.crypto.getRandomValues) || !!(window.msCrypto && window.msCrypto.getRandomValues),
+    
+    // Sert Kilit Mekanizması
+    activateSecurityLock: function() {
+        // Görseldeki mesajı göster
+        alert("yakupfo-crypto.github.io web sitesinin mesajı\n\nKritik Hata: Uygulama veriyi korumak için durduruldu.");
+        
+        // Arayüzü tamamen kilitler
+        document.body.innerHTML = `
+            <div style="padding:40px; text-align:center; font-family:Arial, sans-serif; color:#d32f2f; background:#fff; height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+                <h2 style="font-size:30px;">⚠️ Güvenlik Engeli</h2>
+                <hr style="width:80%; border:1px solid #eee;">
+                <p style="font-size:18px; color:#333; max-width:500px;">Cihazınızın tarayıcısı <b>"Kriptografik Rastgele Sayı"</b> motorunu desteklemiyor.</p>
+                <div style="margin-top:30px; padding:15px; background:#f9f9f9; border-radius:10px; border:1px solid #ddd;">
+                    <b>Çözüm:</b> Lütfen tarayıcınızı güncelleyin veya destekleyen bir tarayıcı kullanın.
+                </div>
+            </div>`;
+    },
+
     nextUint32: function(max) {
         const cryptoObj = window.crypto || window.msCrypto;
-        if (!this.isSecure) throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
+        if (!this.isSecure) {
+            this.activateSecurityLock();
+            throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
+        }
         const buf = new Uint32Array(1);
         const limit = Math.floor(0x100000000 / max) * max;
         let val;
@@ -108,7 +130,7 @@ function secureShuffle(array) {
     return array;
 }
 
-// --- VERİ TABANI VE VALIDATOR FONKSİYONLARI ---
+// --- VERİ TABANI VE VALIDATOR ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -141,12 +163,9 @@ const Validator = {
 
 const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
 
-// YENİ: Depolama Kalıcılığı İsteği
 async function requestPersistence() {
     if (navigator.storage && navigator.storage.persist) {
-        const isPersisted = await navigator.storage.persist();
-        console.log(`Veri kalıcılığı durumu: ${isPersisted ? "Kalıcı" : "Geçici"}`);
-        return isPersisted;
+        return await navigator.storage.persist();
     }
     return false;
 }
@@ -182,7 +201,6 @@ async function getAllGroups() {
 async function atomicSave(item) {
     const val = Validator.validateGroup(item);
     if (!val) throw new Error("Geçersiz veri!");
-    // Kaydetmeden önce kalıcılık isteğini yenile (isteğe bağlı)
     await requestPersistence(); 
     return withLock(lockName, async () => {
         let db;
@@ -232,23 +250,13 @@ async function getGroupById(id) {
 // --- UYGULAMA MANTIĞI VE RENDER ---
 
 window.onload = async () => { 
-    // GÜVENLİK KİLİDİ
+    // GÜVENLİK KONTROLÜ (Açılışta ilk iş)
     if (!CryptoEngine.isSecure) {
-        document.body.innerHTML = `
-            <div style="padding:40px; text-align:center; font-family:Arial; color:#d32f2f; background:#fff; height:100vh;">
-                <h2 style="font-size:30px;">⚠️ Güvenlik Engeli</h2>
-                <hr>
-                <p style="font-size:18px; color:#333;">Cihazınızın tarayıcısı <b>"Kriptografik Rastgele Sayı"</b> motorunu desteklemiyor.</p>
-                <div style="margin-top:30px; padding:15px; background:#f9f9f9; border-radius:10px; display:inline-block; border:1px solid #ddd;">
-                    <b>Çözüm:</b> Lütfen tarayıcınızı güncelleyin.
-                </div>
-            </div>`;
-        throw new Error("Güvenli olmayan motor kullanımı engellendi.");
+        CryptoEngine.activateSecurityLock();
+        return; // İşlemleri durdur
     }
 
-    // Uygulama başlarken kalıcılık izni iste
     await requestPersistence();
-
     if (!history.state) { history.replaceState({page:"generate", groupId:null}, ""); } 
     const s = history.state; 
     renderCurrentState(s.page, s.groupId); 
