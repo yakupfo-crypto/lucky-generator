@@ -27,6 +27,26 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
 .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
 @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
+
+/* --- GÜVENLİK KİLİDİ MODAL STİLLERİ --- */
+#security-lock-overlay { 
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+    background: rgba(0,0,0,0.5); z-index: 99999; 
+    display: flex; align-items: center; justify-content: center; 
+}
+.security-modal { 
+    background: white; width: 85%; max-width: 400px; 
+    border-radius: 28px; padding: 25px; 
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+.security-modal h2 { margin: 0 0 20px 0; font-size: 22px; color: #202124; font-weight: 400; line-height: 1.4; }
+.security-modal p { margin: 0 0 30px 0; font-size: 15px; color: #5f6368; line-height: 1.5; }
+.security-modal .action-area { text-align: right; }
+.security-modal button { 
+    background: none; color: #1a73e8; font-weight: bold; 
+    width: auto; padding: 10px 15px; font-size: 16px; 
+}
 </style>
 </head>
 <body>
@@ -80,31 +100,12 @@ let lastRequestId = 0;
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
 
-// --- KRİPTO MOTORU VE GÜVENLİK KİLİDİ ---
 const CryptoEngine = {
     isSecure: !!(window.crypto && window.crypto.getRandomValues) || !!(window.msCrypto && window.msCrypto.getRandomValues),
-    
-    // Sert Kilit Mekanizması
-    activateSecurityLock: function() {
-        // Görseldeki mesajı göster
-        alert("yakupfo-crypto.github.io web sitesinin mesajı\n\nKritik Hata: Uygulama veriyi korumak için durduruldu.");
-        
-        // Arayüzü tamamen kilitler
-        document.body.innerHTML = `
-            <div style="padding:40px; text-align:center; font-family:Arial, sans-serif; color:#d32f2f; background:#fff; height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-                <h2 style="font-size:30px;">⚠️ Güvenlik Engeli</h2>
-                <hr style="width:80%; border:1px solid #eee;">
-                <p style="font-size:18px; color:#333; max-width:500px;">Cihazınızın tarayıcısı <b>"Kriptografik Rastgele Sayı"</b> motorunu desteklemiyor.</p>
-                <div style="margin-top:30px; padding:15px; background:#f9f9f9; border-radius:10px; border:1px solid #ddd;">
-                    <b>Çözüm:</b> Lütfen tarayıcınızı güncelleyin veya destekleyen bir tarayıcı kullanın.
-                </div>
-            </div>`;
-    },
-
     nextUint32: function(max) {
         const cryptoObj = window.crypto || window.msCrypto;
         if (!this.isSecure) {
-            this.activateSecurityLock();
+            showSecurityLock(); // Sayı üretilmeye çalışılırsa kilidi tekrar göster
             throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
         }
         const buf = new Uint32Array(1);
@@ -121,7 +122,30 @@ const CryptoEngine = {
     }
 };
 
+/* --- GÜVENLİK KİLİDİ ENTEGRASYONU (Birebir Görseldeki Mesaj) --- */
+function showSecurityLock() {
+    // Eğer kilit zaten varsa tekrar oluşturma
+    if (getEl("security-lock-overlay")) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "security-lock-overlay";
+    overlay.innerHTML = `
+        <div class="security-modal">
+            <h2>yakupfo-crypto.github.io web sitesinin mesajı</h2>
+            <p>Kritik Hata: Uygulama veriyi korumak için durduruldu.</p>
+            <div class="action-area">
+                <button onclick="location.reload()">Tamam</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    // Arka plandaki tüm etkileşimi kesmek için app div'ini gizle
+    const app = getEl("app");
+    if(app) app.style.display = "none";
+}
+
 function secureShuffle(array) {
+    if (!CryptoEngine.isSecure) { showSecurityLock(); return array; }
     for (let i = array.length - 1; i > 0; i--) {
         const j = CryptoEngine.nextUint32(i + 1);
         [array[i], array[j]] = [array[j], array[i]];
@@ -130,7 +154,7 @@ function secureShuffle(array) {
     return array;
 }
 
-// --- VERİ TABANI VE VALIDATOR ---
+// --- VERİ TABANI VE VALIDATOR FONKSİYONLARI ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -250,10 +274,10 @@ async function getGroupById(id) {
 // --- UYGULAMA MANTIĞI VE RENDER ---
 
 window.onload = async () => { 
-    // GÜVENLİK KONTROLÜ (Açılışta ilk iş)
+    /* GÜVENLİK KİLİDİ KONTROLÜ */
     if (!CryptoEngine.isSecure) {
-        CryptoEngine.activateSecurityLock();
-        return; // İşlemleri durdur
+        showSecurityLock();
+        return; // İşlemleri burada kesiyoruz
     }
 
     await requestPersistence();
@@ -262,10 +286,20 @@ window.onload = async () => {
     renderCurrentState(s.page, s.groupId); 
 };
 
-window.onpopstate = (event) => { const state = event.state || {page:"generate", groupId:null}; renderCurrentState(state.page, state.groupId); };
-function navTo(page, groupId = null) { history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); renderCurrentState(page, groupId); }
+window.onpopstate = (event) => { 
+    if (!CryptoEngine.isSecure) { showSecurityLock(); return; }
+    const state = event.state || {page:"generate", groupId:null}; 
+    renderCurrentState(state.page, state.groupId); 
+};
+
+function navTo(page, groupId = null) { 
+    if (!CryptoEngine.isSecure) { showSecurityLock(); return; }
+    history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); 
+    renderCurrentState(page, groupId); 
+}
 
 async function renderCurrentState(page, groupId) {
+    if (!CryptoEngine.isSecure) return;
     const currentRequestId = ++lastRequestId; 
     const container = getEl("view-container");
     if(!container) return;
@@ -299,7 +333,7 @@ function renderGeneratePage() {
         generatedSets = Array.isArray(parsedSets) ? parsedSets.map(Validator.validateSet).filter(Boolean) : [];
         if(inputs) storedInputs = JSON.parse(inputs);
     } catch(e) { generatedSets = []; }
-    container.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam</b></label><input type="number" id="maxNumber" value="${Number(storedInputs.max)}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${Number(storedInputs.per)}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${Number(storedInputs.jMax)}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${Number(storedInputs.jPer)}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${Number(storedInputs.count)}"><button onclick="generateSets()">Kolonları Üret</button></div><div id="results">${getGeneratedSetsHtml()}</div></div>`;
+    container.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam Sayı</b></label><input type="number" id="maxNumber" value="${Number(storedInputs.max)}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${Number(storedInputs.per)}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${Number(storedInputs.jMax)}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${Number(storedInputs.jPer)}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${Number(storedInputs.count)}"><button onclick="generateSets()">Kolonları Üret</button></div><div id="results">${getGeneratedSetsHtml()}</div></div>`;
 }
 
 function getGeneratedSetsHtml() {
@@ -370,6 +404,7 @@ function createBallsWithMatch(set, res) {
 }
 
 function generateSets() {
+    if (!CryptoEngine.isSecure) { showSecurityLock(); return; }
     const elMax = getEl("maxNumber"), elPer = getEl("perSet"), elJMax = getEl("jokerMax"), elJPer = getEl("jokerCount"), elCount = getEl("setCount");
     if(!elMax || !elPer || !elJMax || !elJPer || !elCount) return;
     const max = parseInt(elMax.value), per = parseInt(elPer.value), jMax = parseInt(elJMax.value), jPer = parseInt(elJPer.value), count = parseInt(elCount.value);
@@ -387,6 +422,7 @@ function generateSets() {
 }
 
 async function saveGroup() {
+    if (!CryptoEngine.isSecure) { showSecurityLock(); return; }
     const elName = getEl("groupNameInput");
     if (!elName || !elName.value.trim()) { alert("İsim girin!"); return; }
     const elMax = getEl("maxNumber"), elJMax = getEl("jokerMax"), elJCount = getEl("jokerCount");
@@ -406,6 +442,7 @@ async function saveGroup() {
 async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { } } }
 
 async function openResultPanel(max, groupId, shouldPushState = true) {
+    if (!CryptoEngine.isSecure) { showSecurityLock(); return; }
     const group = await getGroupById(groupId); if(!group) return;
     const resDiv = getEl("resultNumbers");
     if(!resDiv) return;
