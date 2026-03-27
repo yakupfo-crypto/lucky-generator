@@ -28,7 +28,7 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 /* Güvenlik Paneli Stili */
 #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
 .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
-.engine-legacy { background: #ffa000; }
+.engine-legacy { background: #ff9800; } /* Fallback durumunda turuncu uyarı */
 
 @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
 </style>
@@ -83,6 +83,57 @@ let generatedSets = [];
 let lastRequestId = 0; 
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
+
+// --- GÜÇLENDİRİLMİŞ KRİPTO MOTORU ---
+const CryptoEngine = {
+    // window.crypto veya window.msCrypto (Eski IE/Edge) kontrolü
+    isSecure: !!(window.crypto && window.crypto.getRandomValues) || !!(window.msCrypto && window.msCrypto.getRandomValues),
+    
+    nextUint32: function(max) {
+        const cryptoObj = window.crypto || window.msCrypto;
+        if (this.isSecure) {
+            const buf = new Uint32Array(1);
+            const limit = Math.floor(0x100000000 / max) * max;
+            let val;
+            do {
+                cryptoObj.getRandomValues(buf);
+                val = buf[0];
+            } while (val >= limit);
+            return val % max;
+        } else {
+            // Fallback: Math.random + Zaman Entropisi (Eski WebView fix)
+            // performance.now() mikrosaniye hassasiyetindedir.
+            const entropy = (performance.now() * 1000) % 1;
+            const seed = Math.random() + entropy;
+            return Math.floor((seed % 1) * max);
+        }
+    },
+
+    updateUI: function() {
+        const statusEl = document.getElementById("crypto-status");
+        if(!statusEl) return;
+        statusEl.innerHTML = this.isSecure 
+            ? `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>` 
+            : `Motor: <span class="engine-badge engine-legacy">Hybrid Fallback (Eski Cihaz)</span>`;
+        // Bildirimi 10 saniye sonra temizlemek yerine sabit tutabilir veya geçici yapabilirsiniz
+        setTimeout(() => { statusEl.innerHTML = "Motor: Hazır"; }, 10000);
+    }
+};
+
+function secureShuffle(array) {
+    const len = array.length;
+    if (len <= 1) return array;
+
+    for (let i = len - 1; i > 0; i--) {
+        const j = CryptoEngine.nextUint32(i + 1);
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    
+    CryptoEngine.updateUI();
+    return array;
+}
+// ------------------------------------
+
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -115,57 +166,8 @@ const Validator = {
 
 const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
 
-// Basit in-memory fallback lock
-const fallbackLocks = new Map();
+async function withLock(name, callback) { if (window.navigator && navigator.locks) { return navigator.locks.request(name, callback); } return callback(); }
 
-async function withLock(name, callback) {
-    const LOCK_TIMEOUT = 4000;
-
-    // fallback mutex
-    async function runWithFallbackLock() {
-        while (fallbackLocks.get(name)) {
-            await new Promise(r => setTimeout(r, 10)); // spin-wait (hafif)
-        }
-        fallbackLocks.set(name, true);
-        try {
-            return await callback();
-        } finally {
-            fallbackLocks.delete(name);
-        }
-    }
-
-    try {
-        if (window.navigator && navigator.locks && typeof navigator.locks.request === "function") {
-            const lockPromise = navigator.locks.request(name, async () => {
-                return await callback(); // 🔥 retry YOK
-            });
-
-            // timeout koruması
-            return await Promise.race([
-                lockPromise,
-                new Promise((_, rej) =>
-                    setTimeout(() => rej(new Error("Lock timeout")), LOCK_TIMEOUT)
-                )
-            ]);
-        } else {
-            return await runWithFallbackLock();
-        }
-    } catch (err) {
-        ErrorHandler.report("Lock System Error", err);
-
-        // fallback'a düş
-        try {
-            return await runWithFallbackLock();
-        } catch (cbErr) {
-            ErrorHandler.report("Fallback Lock Error", cbErr);
-            throw cbErr;
-        }
-    }
-}
-
-/**
- * GÜÇLENDİRİLMİŞ DB AÇMA FONKSİYONU
- */
 function openDB() {
     return new Promise((res, rej) => {
         const timeout = setTimeout(() => rej(new Error("DB Zaman Aşımı: Veritabanı yanıt vermiyor.")), 5000);
@@ -187,9 +189,6 @@ function openDB() {
     });
 }
 
-/**
- * GÜNCELLEME: Global hata yönetimi ile sessiz veri kaybını önleyen okuma
- */
 async function getAllGroups() {
     let db;
     try {
@@ -209,9 +208,6 @@ async function getAllGroups() {
     }
 }
 
-/**
- * GÜÇLENDİRİLMİŞ ATOMİK KAYIT
- */
 async function atomicSave(item) {
     const val = Validator.validateGroup(item);
     if (!val) throw new Error("Geçersiz veri!");
@@ -269,37 +265,6 @@ async function getGroupById(id) {
             tx.oncomplete = () => db.close();
         });
     } catch(e) { if(db) db.close(); return null; }
-}
-
-function updateCryptoStatus(isSecure) {
-    const statusEl = document.getElementById("crypto-status");
-    if(!statusEl) return;
-    statusEl.innerHTML = isSecure ? `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>` : `Motor: <span class="engine-badge engine-legacy">Math.random (Eski)</span>`;
-    setTimeout(() => { statusEl.innerHTML = "Motor: Bekleniyor..."; }, 10000); 
-}
-
-function secureShuffle(array) {
-    const len = array.length;
-    if (len <= 1) return array;
-    const cryptoObj = window.crypto || window.msCrypto;
-    let finalIsSecure = false;
-    for (let i = len - 1; i > 0; i--) {
-        const range = i + 1;
-        let j;
-        if (cryptoObj && cryptoObj.getRandomValues) {
-            const buf = new Uint32Array(1);
-            const maxTick = Math.floor(0x100000000 / range) * range;
-            let randomVal;
-            do { cryptoObj.getRandomValues(buf); randomVal = buf[0]; } while (randomVal >= maxTick);
-            j = randomVal % range;
-            finalIsSecure = true;
-        } else {
-            j = Math.floor(Math.random() * range);
-        }
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    updateCryptoStatus(finalIsSecure);
-    return array;
 }
 
 window.onload = () => { if (!history.state) { history.replaceState({page:"generate", groupId:null}, ""); } const s = history.state; renderCurrentState(s.page, s.groupId); };
@@ -372,7 +337,7 @@ function generateSets() {
 async function saveGroup() {
     const rawName = document.getElementById("groupNameInput")?.value; if (!rawName?.trim()) { alert("İsim girin!"); return; }
     const group = { id: String(Date.now()), name: escapeHTML(rawName), sets: [...generatedSets], max: parseInt(document.getElementById("maxNumber").value), jokerMax: parseInt(document.getElementById("jokerMax").value), jokerPerSet: parseInt(document.getElementById("jokerCount").value), results: {main: [], joker: []}, version: Date.now() };
-    try { await atomicSave(group); sessionStorage.removeItem("tempGeneratedSets"); navTo('mySets', group.id); } catch(err) { /* atomicSave zaten report ediyor */ }
+    try { await atomicSave(group); sessionStorage.removeItem("tempGeneratedSets"); navTo('mySets', group.id); } catch(err) { }
 }
 
 async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { ErrorHandler.report("Delete Error", err); } } }
