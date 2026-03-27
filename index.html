@@ -24,12 +24,9 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 .copy-btn { background: #4caf50; margin-bottom: 10px; }
 #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index:10002; pointer-events:none; }
 .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
-
-/* Güvenlik Paneli Stili */
 #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
 .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
-.engine-legacy { background: #ff9800; } /* Fallback durumunda turuncu uyarı */
-
+.engine-legacy { background: #ff9800; }
 @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
 </style>
 </head>
@@ -58,10 +55,13 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
+// --- GÜVENLİ DOM ERİŞİM YARDIMCISI ---
+const getEl = (id) => document.getElementById(id);
+
 const ErrorHandler = {
     report: function(type, data) {
         console.error(`[${type}]`, data.message || data);
-        const monitor = document.getElementById("error-monitor");
+        const monitor = getEl("error-monitor");
         if(monitor) {
             const toast = document.createElement("div");
             toast.className = "error-toast";
@@ -77,62 +77,44 @@ const ErrorHandler = {
 window.onerror = (message, source, lineno, colno, error) => { ErrorHandler.report("Runtime Error", {message, source, lineno, colno, error}); return false; };
 window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", { message: event.reason?.message || "Asenkron işlem başarısız", error: event.reason }); return false; };
 
-const viewContainer = document.getElementById("view-container");
-const resultPanel = document.getElementById("resultPanel");
 let generatedSets = [];
 let lastRequestId = 0; 
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
 
-// --- GÜÇLENDİRİLMİŞ KRİPTO MOTORU ---
 const CryptoEngine = {
-    // window.crypto veya window.msCrypto (Eski IE/Edge) kontrolü
     isSecure: !!(window.crypto && window.crypto.getRandomValues) || !!(window.msCrypto && window.msCrypto.getRandomValues),
-    
     nextUint32: function(max) {
         const cryptoObj = window.crypto || window.msCrypto;
         if (this.isSecure) {
             const buf = new Uint32Array(1);
             const limit = Math.floor(0x100000000 / max) * max;
             let val;
-            do {
-                cryptoObj.getRandomValues(buf);
-                val = buf[0];
-            } while (val >= limit);
+            do { cryptoObj.getRandomValues(buf); val = buf[0]; } while (val >= limit);
             return val % max;
         } else {
-            // Fallback: Math.random + Zaman Entropisi (Eski WebView fix)
-            // performance.now() mikrosaniye hassasiyetindedir.
             const entropy = (performance.now() * 1000) % 1;
-            const seed = Math.random() + entropy;
-            return Math.floor((seed % 1) * max);
+            return Math.floor(((Math.random() + entropy) % 1) * max);
         }
     },
-
     updateUI: function() {
-        const statusEl = document.getElementById("crypto-status");
+        const statusEl = getEl("crypto-status");
         if(!statusEl) return;
         statusEl.innerHTML = this.isSecure 
             ? `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>` 
-            : `Motor: <span class="engine-badge engine-legacy">Hybrid Fallback (Eski Cihaz)</span>`;
-        // Bildirimi 10 saniye sonra temizlemek yerine sabit tutabilir veya geçici yapabilirsiniz
-        setTimeout(() => { statusEl.innerHTML = "Motor: Hazır"; }, 10000);
+            : `Motor: <span class="engine-badge engine-legacy">Hybrid Fallback</span>`;
+        setTimeout(() => { if(getEl("crypto-status")) getEl("crypto-status").innerHTML = "Motor: Hazır"; }, 10000);
     }
 };
 
 function secureShuffle(array) {
-    const len = array.length;
-    if (len <= 1) return array;
-
-    for (let i = len - 1; i > 0; i--) {
+    for (let i = array.length - 1; i > 0; i--) {
         const j = CryptoEngine.nextUint32(i + 1);
         [array[i], array[j]] = [array[j], array[i]];
     }
-    
     CryptoEngine.updateUI();
     return array;
 }
-// ------------------------------------
 
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
@@ -170,22 +152,13 @@ async function withLock(name, callback) { if (window.navigator && navigator.lock
 
 function openDB() {
     return new Promise((res, rej) => {
-        const timeout = setTimeout(() => rej(new Error("DB Zaman Aşımı: Veritabanı yanıt vermiyor.")), 5000);
-        try {
-            if (!window.indexedDB) throw new Error("IndexedDB desteklenmiyor.");
-            const req = indexedDB.open(dbName, 1);
-            req.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: "id" });
-            };
-            req.onsuccess = () => { clearTimeout(timeout); res(req.result); };
-            req.onerror = (e) => {
-                clearTimeout(timeout);
-                const msg = e.target.error?.name === "QuotaExceededError" ? "Depolama alanı dolu!" : "DB Erişimi Reddedildi (Gizli sekme?)";
-                rej(new Error(msg));
-            };
-            req.onblocked = () => { clearTimeout(timeout); rej(new Error("DB Bloklandı: Diğer sekmeleri kapatın.")); };
-        } catch (err) { clearTimeout(timeout); rej(err); }
+        const req = indexedDB.open(dbName, 1);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: "id" });
+        };
+        req.onsuccess = () => res(req.result);
+        req.onerror = () => rej(new Error("Veritabanı hatası"));
     });
 }
 
@@ -195,17 +168,12 @@ async function getAllGroups() {
         db = await openDB();
         return await new Promise((res, rej) => {
             const tx = db.transaction(storeName, "readonly");
-            const store = tx.objectStore(storeName);
-            const req = store.getAll();
+            const req = tx.objectStore(storeName).getAll();
             req.onsuccess = (e) => res((e.target.result || []).map(Validator.validateGroup).filter(Boolean));
             req.onerror = () => rej(new Error("Veriler yüklenemedi."));
             tx.oncomplete = () => db.close();
         });
-    } catch (e) {
-        if(db) db.close();
-        ErrorHandler.report("Load Error", e);
-        return [];
-    }
+    } catch (e) { if(db) db.close(); return []; }
 }
 
 async function atomicSave(item) {
@@ -218,24 +186,16 @@ async function atomicSave(item) {
             return await new Promise((res, rej) => {
                 const tx = db.transaction(storeName, "readwrite");
                 const store = tx.objectStore(storeName);
-                tx.onerror = (e) => {
-                    const error = e.target.error;
-                    rej(new Error(error.name === "QuotaExceededError" ? "Cihaz hafızası dolu!" : "Kayıt hatası: " + error.message));
-                };
                 const getReq = store.get(val.id);
                 getReq.onsuccess = () => {
                     const ext = getReq.result;
-                    if (ext && val.version !== ext.version) return rej(new Error("Çakışma: Veri güncel değil."));
+                    if (ext && val.version !== ext.version) return rej(new Error("Çakışma"));
                     val.version = Date.now();
                     store.put(val);
                 };
                 tx.oncomplete = () => { db.close(); res(); };
             });
-        } catch (err) {
-            if (db) db.close();
-            ErrorHandler.report("DB Save Error", err);
-            throw err;
-        }
+        } catch (err) { if (db) db.close(); throw err; }
     });
 }
 
@@ -246,9 +206,7 @@ async function deleteFromDB(id) {
             db = await openDB();
             const tx = db.transaction(storeName, "readwrite");
             tx.objectStore(storeName).delete(id);
-            return new Promise((res) => {
-                tx.oncomplete = () => { db.close(); res(); };
-            });
+            return new Promise((res) => { tx.oncomplete = () => { db.close(); res(); }; });
         } catch(e) { if(db) db.close(); throw e; }
     });
 }
@@ -257,11 +215,10 @@ async function getGroupById(id) {
     let db;
     try {
         db = await openDB();
-        return await new Promise((res, rej) => {
+        return await new Promise((res) => {
             const tx = db.transaction(storeName, "readonly");
             const req = tx.objectStore(storeName).get(id);
             req.onsuccess = (e) => res(Validator.validateGroup(e.target.result));
-            req.onerror = () => rej(new Error("Grup bulunamadı."));
             tx.oncomplete = () => db.close();
         });
     } catch(e) { if(db) db.close(); return null; }
@@ -269,23 +226,45 @@ async function getGroupById(id) {
 
 window.onload = () => { if (!history.state) { history.replaceState({page:"generate", groupId:null}, ""); } const s = history.state; renderCurrentState(s.page, s.groupId); };
 window.onpopstate = (event) => { const state = event.state || {page:"generate", groupId:null}; renderCurrentState(state.page, state.groupId); };
-function navTo(page, groupId = null) { const cleanId = groupId ? String(groupId) : null; if (history.state?.page === page && history.state?.groupId === cleanId) return; history.pushState({page, groupId: cleanId}, ""); renderCurrentState(page, cleanId); }
+function navTo(page, groupId = null) { history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); renderCurrentState(page, groupId); }
 
 async function renderCurrentState(page, groupId) {
     const currentRequestId = ++lastRequestId; 
-    viewContainer.innerHTML = "<div class='container'>Yükleniyor...</div>";
-    resultPanel.style.display = "none";
+    const container = getEl("view-container");
+    if(!container) return;
+    
+    container.innerHTML = "<div class='container'>Yükleniyor...</div>";
+    const panel = getEl("resultPanel");
+    if(panel) panel.style.display = "none";
+
     try {
-        if (page === "generate") { if (currentRequestId === lastRequestId) renderGeneratePage(); } 
-        else if (page === "mySets") { if (groupId) { const group = await getGroupById(groupId); if (currentRequestId === lastRequestId) { group ? renderViewGroup(group, currentRequestId) : renderMySetsList(currentRequestId); } } else { await renderMySetsList(currentRequestId); } } 
-        else if (page === "panel") { const group = await getGroupById(groupId); if (currentRequestId === lastRequestId) { if(group) { renderViewGroup(group, currentRequestId); openResultPanel(group.max, group.id, false); } else { navTo("mySets"); } } }
-    } catch (e) { if (currentRequestId === lastRequestId) ErrorHandler.report("Render Error", e); }
+        if (page === "generate") { renderGeneratePage(); } 
+        else if (page === "mySets") { 
+            if (groupId) {
+                const group = await getGroupById(groupId);
+                if (currentRequestId === lastRequestId) group ? renderViewGroup(group, currentRequestId) : renderMySetsList(currentRequestId);
+            } else { await renderMySetsList(currentRequestId); }
+        } 
+        else if (page === "panel") {
+            const group = await getGroupById(groupId);
+            if (currentRequestId === lastRequestId && group) { renderViewGroup(group, currentRequestId); openResultPanel(group.max, group.id, false); }
+        }
+    } catch (e) { ErrorHandler.report("Render Error", e); }
 }
 
 function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
-    try { const stored = sessionStorage.getItem("tempGeneratedSets"), inputs = sessionStorage.getItem("tempInputs"); const parsedSets = stored ? JSON.parse(stored) : []; generatedSets = Array.isArray(parsedSets) ? parsedSets.map(Validator.validateSet).filter(Boolean) : []; if(inputs) { const p = JSON.parse(inputs); if(Validator.isNumber(p.max)) storedInputs = p; } } catch(e) { generatedSets = []; }
-    viewContainer.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam</b></label><input type="number" id="maxNumber" value="${storedInputs.max}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${storedInputs.per}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${storedInputs.jMax}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${storedInputs.jPer}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${storedInputs.count}"><button onclick="generateSets()">Kolonları Üret</button></div><div id="results">${getGeneratedSetsHtml()}</div></div>`;
+    const container = getEl("view-container");
+    if(!container) return;
+
+    try { 
+        const stored = sessionStorage.getItem("tempGeneratedSets"), inputs = sessionStorage.getItem("tempInputs"); 
+        const parsedSets = stored ? JSON.parse(stored) : []; 
+        generatedSets = Array.isArray(parsedSets) ? parsedSets.map(Validator.validateSet).filter(Boolean) : [];
+        if(inputs) storedInputs = JSON.parse(inputs);
+    } catch(e) { generatedSets = []; }
+
+    container.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam</b></label><input type="number" id="maxNumber" value="${storedInputs.max}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${storedInputs.per}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${storedInputs.jMax}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${storedInputs.jPer}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${storedInputs.count}"><button onclick="generateSets()">Kolonları Üret</button></div><div id="results">${getGeneratedSetsHtml()}</div></div>`;
 }
 
 function getGeneratedSetsHtml() {
@@ -296,55 +275,100 @@ function getGeneratedSetsHtml() {
 }
 
 async function renderMySetsList(reqId) {
-    const groups = await getAllGroups(); if (reqId !== lastRequestId) return;
-    viewContainer.innerHTML = ""; const container = document.createElement("div"); container.className = "container"; container.innerHTML = `<h3>Kayıtlı Kolonlarım</h3>`;
+    const groups = await getAllGroups(); 
+    const view = getEl("view-container");
+    if (!view || reqId !== lastRequestId) return;
+
+    view.innerHTML = ""; 
+    const container = document.createElement("div"); 
+    container.className = "container"; 
+    container.innerHTML = `<h3>Kayıtlı Kolonlarım</h3>`;
+    
     if (groups.length === 0) container.innerHTML += "<p>Henüz kayıtlı set yok.</p>";
     groups.forEach(group => {
-        const card = document.createElement("div"); card.className = "card"; card.innerHTML = `<b>${group.name}</b><div style="margin-top:5px">Kolon: ${group.sets.length}</div>`;
+        const card = document.createElement("div"); card.className = "card";
+        card.innerHTML = `<b>${group.name}</b><div style="margin-top:5px">Kolon: ${group.sets.length}</div>`;
         const btnView = document.createElement("button"); btnView.textContent = "Görüntüle"; btnView.onclick = () => navTo("mySets", group.id);
         const btnDel = document.createElement("button"); btnDel.textContent = "Sil"; btnDel.style.background = "#d32f2f"; btnDel.style.marginTop = "5px"; btnDel.onclick = () => deleteGroup(group.id);
         card.append(btnView, btnDel); container.appendChild(card);
     });
-    viewContainer.appendChild(container);
+    view.appendChild(container);
 }
 
 function renderViewGroup(group, reqId) {
-    if (reqId !== lastRequestId) return;
-    viewContainer.innerHTML = ""; let resText = (group.results.main.length > 0 || group.results.joker.length > 0) ? `Ana: ${group.results.main.join(",")} | Joker: ${group.results.joker.join(",")}` : "Henüz girilmedi";
-    const container = document.createElement("div"); container.className = "container";
-    container.innerHTML = `<h3>${group.name}</h3><button class="copy-btn" onclick='copySpecificGroup("${group.id}")'>Panoya Kopyala</button><div class="card"><b>Sonuçlar:</b> <span id="resultText-${group.id}">${resText}</span><br><button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button></div>`;
+    const view = getEl("view-container");
+    if (!view || reqId !== lastRequestId) return;
+    
+    view.innerHTML = ""; 
+    let resText = (group.results.main.length > 0 || group.results.joker.length > 0) ? `Ana: ${group.results.main.join(",")} | Joker: ${group.results.joker.join(",")}` : "Henüz girilmedi";
+    const container = document.createElement("div"); 
+    container.className = "container";
+    container.innerHTML = `<h3>${group.name}</h3><button class="copy-btn" onclick='copySpecificGroup("${group.id}")'>Panoya Kopyala</button><div class="card"><b>Sonuçlar:</b> <span>${resText}</span><br><button onclick="openResultPanel(${group.max},'${group.id}')">Sonuç Gir (Kıyasla)</button></div>`;
     group.sets.forEach((set, i) => { container.innerHTML += `<div class='card'><b>${i+1}.</b>${createBallsWithMatch(set, group.results)}</div>`; });
     const backBtn = document.createElement("button"); backBtn.textContent = "Listeye Dön"; backBtn.style.background = "#666"; backBtn.onclick = () => navTo("mySets");
-    container.appendChild(backBtn); viewContainer.appendChild(container);
+    container.appendChild(backBtn); view.appendChild(container);
 }
 
-function createBalls(set) { let b = "<div class='ball-row'>"; set.numbers.forEach(n => b += `<div class="ball selected">${n}</div>`); set.jokers.forEach(j => b += `<div class="ball joker">${j}</div>`); return b + "</div>"; }
-function createBallsWithMatch(set, res) { let b = "<div class='ball-row'>"; set.numbers.forEach(n => { b += `<div class="ball selected ${res.main.includes(n) ? "result-selected" : ""}">${n}</div>`; }); set.jokers.forEach(j => { b += `<div class="ball joker ${res.joker.includes(j) ? "result-selected" : ""}">${j}</div>`; }); return b + "</div>"; }
+function createBalls(set) { 
+    let b = "<div class='ball-row'>"; 
+    set.numbers.forEach(n => b += `<div class="ball selected">${n}</div>`); 
+    set.jokers.forEach(j => b += `<div class="ball joker">${j}</div>`); 
+    return b + "</div>"; 
+}
+
+function createBallsWithMatch(set, res) { 
+    let b = "<div class='ball-row'>"; 
+    set.numbers.forEach(n => { b += `<div class="ball selected ${res.main.includes(n) ? "result-selected" : ""}">${n}</div>`; }); 
+    set.jokers.forEach(j => { b += `<div class="ball joker ${res.joker.includes(j) ? "result-selected" : ""}">${j}</div>`; }); 
+    return b + "</div>"; 
+}
 
 function generateSets() {
-    const max = parseInt(document.getElementById("maxNumber").value), per = parseInt(document.getElementById("perSet").value), jMax = parseInt(document.getElementById("jokerMax").value), jPer = parseInt(document.getElementById("jokerCount").value), count = parseInt(document.getElementById("setCount").value);
+    // SAF DOM ACCESS: Inputlar yoksa fonksiyondan çık
+    const elMax = getEl("maxNumber"), elPer = getEl("perSet"), elJMax = getEl("jokerMax"), elJPer = getEl("jokerCount"), elCount = getEl("setCount");
+    if(!elMax || !elPer || !elJMax || !elJPer || !elCount) return;
+
+    const max = parseInt(elMax.value), per = parseInt(elPer.value), jMax = parseInt(elJMax.value), jPer = parseInt(elJPer.value), count = parseInt(elCount.value);
     if ([max, per, jMax, jPer, count].some(isNaN) || per > max || jPer > jMax || max < 1) { alert("Geçersiz değerler!"); return; }
+    
     generatedSets = [];
     for (let i = 0; i < count; i++) {
         let n = secureShuffle(Array.from({length: max}, (_, k) => k + 1)).slice(0, per).sort((a,b)=>a-b);
         let j = (jMax > 0) ? secureShuffle(Array.from({length: jMax}, (_, k) => k + 1)).slice(0, jPer).sort((a,b)=>a-b) : [];
         generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
     }
-    sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets)); sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
-    document.getElementById("results").innerHTML = getGeneratedSetsHtml();
+    sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
+    sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
+    
+    const resultsDiv = getEl("results");
+    if(resultsDiv) resultsDiv.innerHTML = getGeneratedSetsHtml();
 }
 
 async function saveGroup() {
-    const rawName = document.getElementById("groupNameInput")?.value; if (!rawName?.trim()) { alert("İsim girin!"); return; }
-    const group = { id: String(Date.now()), name: escapeHTML(rawName), sets: [...generatedSets], max: parseInt(document.getElementById("maxNumber").value), jokerMax: parseInt(document.getElementById("jokerMax").value), jokerPerSet: parseInt(document.getElementById("jokerCount").value), results: {main: [], joker: []}, version: Date.now() };
+    const elName = getEl("groupNameInput");
+    if (!elName || !elName.value.trim()) { alert("İsim girin!"); return; }
+    
+    const elMax = getEl("maxNumber"), elJMax = getEl("jokerMax"), elJCount = getEl("jokerCount");
+    const group = { 
+        id: String(Date.now()), 
+        name: escapeHTML(elName.value), 
+        sets: [...generatedSets], 
+        max: elMax ? parseInt(elMax.value) : 49, 
+        jokerMax: elJMax ? parseInt(elJMax.value) : 0, 
+        jokerPerSet: elJCount ? parseInt(elJCount.value) : 0, 
+        results: {main: [], joker: []}, 
+        version: Date.now() 
+    };
     try { await atomicSave(group); sessionStorage.removeItem("tempGeneratedSets"); navTo('mySets', group.id); } catch(err) { }
 }
 
-async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { ErrorHandler.report("Delete Error", err); } } }
+async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { } } }
 
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); if(!group) return;
-    const resDiv = document.getElementById("resultNumbers");
+    const resDiv = getEl("resultNumbers");
+    if(!resDiv) return;
+
     let h = `<h4>Ana Sayı (1-${max})</h4><div class='ball-row'>`;
     for(let i=1; i<=max; i++) h += `<div class="ball ${group.results.main.includes(i) ? "result-selected" : ""}" onclick="toggleMainResult(this,'${groupId}',${i})">${i}</div>`;
     if (group.jokerPerSet > 0) {
@@ -352,41 +376,68 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
         for(let i=1; i<=group.jokerMax; i++) h += `<div class="ball joker ${group.results.joker.includes(i) ? "result-selected" : ""}" onclick="toggleJokerResult(this,'${groupId}',${i})">${i}</div>`;
     }
     resDiv.innerHTML = h + "</div>";
-    if (shouldPushState && history.state?.page !== "panel") { history.pushState({page: "panel", groupId: String(groupId)}, ""); }
-    resultPanel.style.display = "block";
+    
+    if (shouldPushState && history.state?.page !== "panel") history.pushState({page: "panel", groupId: String(groupId)}, "");
+    const panel = getEl("resultPanel");
+    if(panel) panel.style.display = "block";
 }
 
 async function toggleMainResult(el, id, val) {
     try {
         const g = await getGroupById(id); if(!g) return;
-        const i = g.results.main.indexOf(val); if (i > -1) g.results.main.splice(i, 1); else if (g.results.main.length < 10) g.results.main.push(val);
-        await atomicSave(g); el.classList.toggle("result-selected"); if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
-    } catch(err) { renderCurrentState(history.state.page, history.state.groupId); }
+        const i = g.results.main.indexOf(val); 
+        if (i > -1) g.results.main.splice(i, 1); else if (g.results.main.length < 10) g.results.main.push(val);
+        await atomicSave(g); 
+        el.classList.toggle("result-selected"); 
+        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
+    } catch(err) { }
 }
 
 async function toggleJokerResult(el, id, val) {
     try {
         const g = await getGroupById(id); if(!g) return;
-        const i = g.results.joker.indexOf(val); if (i > -1) g.results.joker.splice(i, 1); else if (g.results.joker.length < g.jokerPerSet) g.results.joker.push(val);
-        await atomicSave(g); el.classList.toggle("result-selected"); if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
-    } catch(err) { renderCurrentState(history.state.page, history.state.groupId); }
+        const i = g.results.joker.indexOf(val); 
+        if (i > -1) g.results.joker.splice(i, 1); else if (g.results.joker.length < g.jokerPerSet) g.results.joker.push(val);
+        await atomicSave(g); 
+        el.classList.toggle("result-selected"); 
+        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
+    } catch(err) { }
 }
 
-function closeResultPanel(back = false) { if (back && history.state?.page === "panel") { history.back(); } else { resultPanel.style.display = "none"; } }
-function confirmResult() { closeResultPanel(true); }
-async function cleanResult() { const id = history.state?.groupId; if (!id) return; try { const g = await getGroupById(id); if(g) { g.results = {main: [], joker: []}; await atomicSave(g); renderCurrentState("mySets", id); } } catch(e) {} }
+function closeResultPanel(back = false) { 
+    if (back && history.state?.page === "panel") { history.back(); } 
+    else { const p = getEl("resultPanel"); if(p) p.style.display = "none"; } 
+}
 
-async function copySpecificGroup(id) { const g = await getGroupById(id); copyToClipboard(formatGroupForCopy(g)); }
+function confirmResult() { closeResultPanel(true); }
+
+async function cleanResult() { 
+    const id = history.state?.groupId; if (!id) return; 
+    try { 
+        const g = await getGroupById(id); 
+        if(g) { g.results = {main: [], joker: []}; await atomicSave(g); renderCurrentState("mySets", id); } 
+    } catch(e) {} 
+}
+
+async function copySpecificGroup(id) { const g = await getGroupById(id); if(g) copyToClipboard(formatGroupForCopy(g)); }
 function copyCurrentGenerated() { copyToClipboard(formatGroupForCopy({name: "Geçici Liste", sets: generatedSets})); }
+
 function copyToClipboard(text) {
     if(navigator.clipboard) {
         navigator.clipboard.writeText(text).then(() => {
-            const t = document.createElement("div"); t.style = "position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#4caf50; color:white; padding:10px 20px; border-radius:20px; z-index:10001;";
-            t.textContent = "Kopyalandı!"; document.body.appendChild(t); setTimeout(() => t.remove(), 2000);
+            const t = document.createElement("div"); 
+            t.style = "position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#4caf50; color:white; padding:10px 20px; border-radius:20px; z-index:10001;";
+            t.textContent = "Kopyalandı!"; document.body.appendChild(t); 
+            setTimeout(() => t.remove(), 2000);
         });
     }
 }
-function formatGroupForCopy(g) { if (!g) return ""; let t = `${g.name}\n`; g.sets.forEach((s, i) => { t += `${i+1}. Kolon: ${s.numbers.join(", ")} ${s.jokers.length ? '+ J:'+s.jokers.join(',') : ''}\n`; }); return t; }
+function formatGroupForCopy(g) { 
+    if (!g) return ""; 
+    let t = `${g.name}\n`; 
+    g.sets.forEach((s, i) => { t += `${i+1}. Kolon: ${s.numbers.join(", ")} ${s.jokers.length ? '+ J:'+s.jokers.join(',') : ''}\n`; }); 
+    return t; 
+}
 </script>
 </body>
 </html>
