@@ -81,14 +81,10 @@ let lastRequestId = 0;
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
 
 const CryptoEngine = {
-    // KESİN KONTROL: Sadece gerçek kriptografik motorları kabul et
     isSecure: !!(window.crypto && window.crypto.getRandomValues) || !!(window.msCrypto && window.msCrypto.getRandomValues),
-    
     nextUint32: function(max) {
         const cryptoObj = window.crypto || window.msCrypto;
-        // Sıfır Risk: isSecure değilse bu fonksiyonun çağrılması imkansız olmalı ama yine de bir güvenlik bariyeri:
         if (!this.isSecure) throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
-
         const buf = new Uint32Array(1);
         const limit = Math.floor(0x100000000 / max) * max;
         let val;
@@ -112,7 +108,7 @@ function secureShuffle(array) {
     return array;
 }
 
-// --- VERİ TABANI VE VALIDATOR FONKSİYONLARI (DEĞİŞMEDİ) ---
+// --- VERİ TABANI VE VALIDATOR FONKSİYONLARI ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -144,7 +140,19 @@ const Validator = {
 };
 
 const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
+
+// YENİ: Depolama Kalıcılığı İsteği
+async function requestPersistence() {
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persist();
+        console.log(`Veri kalıcılığı durumu: ${isPersisted ? "Kalıcı" : "Geçici"}`);
+        return isPersisted;
+    }
+    return false;
+}
+
 async function withLock(name, callback) { if (window.navigator && navigator.locks) { return navigator.locks.request(name, callback); } return callback(); }
+
 function openDB() {
     return new Promise((res, rej) => {
         const req = indexedDB.open(dbName, 1);
@@ -174,6 +182,8 @@ async function getAllGroups() {
 async function atomicSave(item) {
     const val = Validator.validateGroup(item);
     if (!val) throw new Error("Geçersiz veri!");
+    // Kaydetmeden önce kalıcılık isteğini yenile (isteğe bağlı)
+    await requestPersistence(); 
     return withLock(lockName, async () => {
         let db;
         try {
@@ -221,23 +231,24 @@ async function getGroupById(id) {
 
 // --- UYGULAMA MANTIĞI VE RENDER ---
 
-window.onload = () => { 
-    // GÜVENLİK KİLİDİ: Uygulama yüklenirken motoru kontrol et
+window.onload = async () => { 
+    // GÜVENLİK KİLİDİ
     if (!CryptoEngine.isSecure) {
         document.body.innerHTML = `
             <div style="padding:40px; text-align:center; font-family:Arial; color:#d32f2f; background:#fff; height:100vh;">
                 <h2 style="font-size:30px;">⚠️ Güvenlik Engeli</h2>
                 <hr>
                 <p style="font-size:18px; color:#333;">Cihazınızın tarayıcısı <b>"Kriptografik Rastgele Sayı"</b> motorunu desteklemiyor.</p>
-                <p style="color:#666;">Sıfır risk prensibi gereği, düşük kaliteli üretim yapılmasına izin verilmemiştir.</p>
                 <div style="margin-top:30px; padding:15px; background:#f9f9f9; border-radius:10px; display:inline-block; border:1px solid #ddd;">
-                    <b>Çözüm:</b> Lütfen tarayıcınızı (Chrome, Safari, Edge) güncelleyin veya modern bir tarayıcı kullanın.
+                    <b>Çözüm:</b> Lütfen tarayıcınızı güncelleyin.
                 </div>
             </div>`;
         throw new Error("Güvenli olmayan motor kullanımı engellendi.");
     }
 
-    // Motor güvenliyse uygulamayı başlat
+    // Uygulama başlarken kalıcılık izni iste
+    await requestPersistence();
+
     if (!history.state) { history.replaceState({page:"generate", groupId:null}, ""); } 
     const s = history.state; 
     renderCurrentState(s.page, s.groupId); 
@@ -274,14 +285,12 @@ function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
     const container = getEl("view-container");
     if(!container) return;
-
     try { 
         const stored = sessionStorage.getItem("tempGeneratedSets"), inputs = sessionStorage.getItem("tempInputs"); 
         const parsedSets = stored ? JSON.parse(stored) : []; 
         generatedSets = Array.isArray(parsedSets) ? parsedSets.map(Validator.validateSet).filter(Boolean) : [];
         if(inputs) storedInputs = JSON.parse(inputs);
     } catch(e) { generatedSets = []; }
-
     container.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam</b></label><input type="number" id="maxNumber" value="${Number(storedInputs.max)}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${Number(storedInputs.per)}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${Number(storedInputs.jMax)}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${Number(storedInputs.jPer)}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${Number(storedInputs.count)}"><button onclick="generateSets()">Kolonları Üret</button></div><div id="results">${getGeneratedSetsHtml()}</div></div>`;
 }
 
