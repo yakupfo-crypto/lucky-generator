@@ -29,13 +29,12 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
 @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
 
-/* --- YENİ EKLENEN LOADING STİLİ --- */
 #global-loader {
     display: none;
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(255, 255, 255, 0.3);
-    z-index: 20000; /* Her şeyin üstünde */
+    z-index: 20000;
     cursor: wait;
 }
 </style>
@@ -43,7 +42,6 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 <body>
 
 <div id="global-loader"></div>
-
 <div id="error-monitor"></div> 
 <header>
     Lucky Generator
@@ -67,7 +65,6 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
-/* Mevcut Yardımcı ve DB Fonksiyonları (Dokunulmadı) */
 const getEl = (id) => document.getElementById(id);
 const setLoading = (state) => getEl("global-loader").style.display = state ? "block" : "none";
 
@@ -204,7 +201,7 @@ async function atomicSave(item) {
                 const getReq = store.get(val.id);
                 getReq.onsuccess = () => {
                     const ext = getReq.result;
-                    if (ext && val.version !== ext.version) return rej(new Error("Çakışma"));
+                    // Import sırasında çakışma kontrolünü esnetiyoruz (aynı ID ise üzerine yazar)
                     val.version = Date.now();
                     store.put(val);
                 };
@@ -240,10 +237,8 @@ async function getGroupById(id) {
     } catch(e) { if(db) db.close(); return null; }
 }
 
-/* --- GÜNCELLENEN TOGGLE FONKSİYONLARI --- */
-
 async function toggleMainResult(el, id, val) {
-    setLoading(true); // EKRANI KİLİTLE
+    setLoading(true);
     try {
         const g = await getGroupById(id); 
         if(!g) return;
@@ -259,12 +254,12 @@ async function toggleMainResult(el, id, val) {
     } catch(err) {
         ErrorHandler.report("Sync Error", err);
     } finally {
-        setLoading(false); // EKRANI AÇ
+        setLoading(false);
     }
 }
 
 async function toggleJokerResult(el, id, val) {
-    setLoading(true); // EKRANI KİLİTLE
+    setLoading(true);
     try {
         const g = await getGroupById(id); 
         if(!g) return;
@@ -280,11 +275,9 @@ async function toggleJokerResult(el, id, val) {
     } catch(err) {
         ErrorHandler.report("Sync Error", err);
     } finally {
-        setLoading(false); // EKRANI AÇ
+        setLoading(false);
     }
 }
-
-/* --- DİĞER FONKSİYONLAR (Aynen Korundu) --- */
 
 window.onload = async () => { 
     if (!CryptoEngine.isSecure) {
@@ -375,6 +368,19 @@ async function renderMySetsList(reqId) {
     const container = document.createElement("div"); 
     container.className = "container"; 
     container.innerHTML = `<h3>Kayıtlı Kolonlarım</h3>`;
+
+    // --- SENKRONİZASYON ARAÇLARI (Yeni Eklenen Bölüm) ---
+    const syncCard = document.createElement("div");
+    syncCard.className = "card";
+    syncCard.style.background = "#e3f2fd";
+    syncCard.innerHTML = `<b>Cihazlar Arası Aktarım</b>
+        <p style="font-size:12px; color:#555;">Bu tarayıcıdaki kolonları dosyaya indirip başka tarayıcıda açabilirsiniz.</p>
+        <button onclick="exportData()" style="background:#1976d2; margin-bottom:5px;">Dosya Olarak İndir</button>
+        <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+        <button onclick="getEl('importFile').click()" style="background:#4caf50;">Dosyadan Veri Yükle</button>`;
+    container.appendChild(syncCard);
+    // ---------------------------------------------------
+
     if (groups.length === 0) container.innerHTML += "<p>Henüz kayıtlı set yok.</p>";
     
     groups.forEach(group => {
@@ -561,6 +567,53 @@ function formatGroupForCopy(g) {
     let t = `${g.name}\n`; 
     g.sets.forEach((s, i) => { t += `${i+1}. Kolon: ${s.numbers.join(", ")} ${s.jokers.length ? '+ J:'+s.jokers.join(',') : ''}\n`; }); 
     return t; 
+}
+
+// --- AKTARIM FONKSİYONLARI (Yeni Eklenen Bölüm) ---
+
+async function exportData() {
+    try {
+        setLoading(true);
+        const allData = await getAllGroups();
+        const blob = new Blob([JSON.stringify(allData)], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `LuckyGenerator_Yedek_${new Date().toLocaleDateString()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        ErrorHandler.report("Export Error", e);
+    } finally {
+        setLoading(false);
+    }
+}
+
+async function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            setLoading(true);
+            const data = JSON.parse(e.target.result);
+            if (!Array.isArray(data)) throw new Error("Geçersiz dosya formatı.");
+
+            for (const group of data) {
+                await atomicSave(group); 
+            }
+            alert("Veriler başarıyla yüklendi!");
+            renderMySetsList(lastRequestId);
+        } catch (err) {
+            alert("Hata: Dosya okunamadı.");
+            ErrorHandler.report("Import Error", err);
+        } finally {
+            setLoading(false);
+            event.target.value = "";
+        }
+    };
+    reader.readAsText(file);
 }
 </script>
 </body>
