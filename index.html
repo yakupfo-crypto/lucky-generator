@@ -150,7 +150,7 @@ const Validator = {
 
 const DB_CONFIG = { 
     name: "LuckyDB", 
-    version: 3, // Sürüm yükseltildi: Draft tablosu eklendi
+    version: 3, 
     storeName: "savedGroups", 
     draftStore: "drafts",
     lockName: "db_write_lock" 
@@ -235,7 +235,6 @@ async function atomicSave(item) {
             const tx = db.transaction([DB_CONFIG.storeName, DB_CONFIG.draftStore], "readwrite");
             val.version = Date.now();
             tx.objectStore(DB_CONFIG.storeName).put(val);
-            // Kalıcı kayıt başarılıysa taslakları temizle
             tx.objectStore(DB_CONFIG.draftStore).delete("tempSets");
             tx.objectStore(DB_CONFIG.draftStore).delete("tempInputs");
             tx.oncomplete = () => { db.close(); res(); };
@@ -261,11 +260,25 @@ window.onload = () => {
         return;
     }
     const state = history.state || {page:"generate", groupId:null};
-    renderCurrentState(state.page, state.groupId); 
+    
+    // Sayfa yenilendiğinde panel açıksa state'i koru
+    if (state.page === "panel") {
+        renderCurrentState("mySets", state.groupId).then(() => {
+            openResultPanel(null, state.groupId, false);
+        });
+    } else {
+        renderCurrentState(state.page, state.groupId); 
+    }
 };
 
 window.onpopstate = (event) => { 
     const state = event.state || {page:"generate", groupId:null}; 
+    
+    // Geri tuşu ile panelden çıkılıyorsa kilidi aç
+    if (state.page !== "panel") {
+        closeResultPanel(false); 
+    }
+    
     renderCurrentState(state.page, state.groupId); 
 };
 
@@ -280,7 +293,12 @@ async function renderCurrentState(page, groupId) {
     if(!container) return;
     
     container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
-    closeResultPanel(false);
+    
+    // Navigasyon sırasında panelin açık kalmasını engelle (Geri tuşu onpopstate ile halledilir)
+    if (page !== "panel") {
+        getEl("resultPanel").style.display = "none";
+        toggleBodyScroll(false);
+    }
 
     try {
         if (page === "generate") {
@@ -301,7 +319,6 @@ async function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
     const container = getEl("view-container");
     
-    // Draft verilerini IndexedDB'den çek
     const dSets = await getDraft("tempSets");
     const dInputs = await getDraft("tempInputs");
     
@@ -428,10 +445,8 @@ async function generateSets() {
             }
             generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
         }
-        // TASLAK OLARAK KAYDET (Sekme kapansa da gitmez)
         await saveDraft("tempSets", generatedSets);
         await saveDraft("tempInputs", {max, per, jMax, jPer, count});
-        
         renderGeneratedSetsList();
     } catch (err) { ErrorHandler.report("Gen Error", err); }
     finally { setLoading(false); }
@@ -448,7 +463,6 @@ async function saveGroup() {
     try { 
         setLoading(true);
         await withLock(async () => { await atomicSave(group); });
-        // atomicSave içinde taslaklar temizlendiği için tekrar işlem yapmaya gerek yok
         navTo('mySets', group.id); 
     } catch(err) { ErrorHandler.report("Save Error", err); } 
     finally { setLoading(false); }
@@ -466,6 +480,8 @@ async function deleteGroup(id) {
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); 
     if(!group) return;
+    
+    const targetMax = max || group.max;
     const resDiv = getEl("resultNumbers");
     resDiv.innerHTML = "";
 
@@ -484,7 +500,7 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
         resDiv.append(h, row);
     };
 
-    createRow(`Ana Sayılar (1-${max})`, max, false);
+    createRow(`Ana Sayılar (1-${targetMax})`, targetMax, false);
     if (group.jokerPerSet > 0) createRow(`Joker Sayılar (1-${group.jokerMax})`, group.jokerMax, true);
 
     if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
@@ -525,10 +541,10 @@ async function toggleResult(el, id, val, isJoker) {
 
 function closeResultPanel(back = false) { 
     if (back && history.state?.page === "panel") {
-        history.back();
+        history.back(); // Geri tuşu onpopstate'i tetikler, orada kilidi açar.
     } else {
         getEl("resultPanel").style.display = "none"; 
-        toggleBodyScroll(false);
+        toggleBodyScroll(false); // Scroll'u kesin olarak serbest bırak
     }
 }
 
