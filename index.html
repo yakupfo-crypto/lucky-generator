@@ -133,10 +133,9 @@ const Validator = {
     }
 };
 
-// DİNAMİK VERİTABANI AYARLARI
 const DB_CONFIG = {
     name: "LuckyDB",
-    version: 2, // Sürüm 1'den 2'ye yükseltildi
+    version: 2,
     storeName: "savedGroups",
     lockName: "db_write_lock"
 };
@@ -144,21 +143,26 @@ const DB_CONFIG = {
 function openDB() {
     return new Promise((res, rej) => {
         const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
-        
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
                 db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
             }
         };
-
         req.onsuccess = () => res(req.result);
         req.onerror = () => rej(new Error("Veritabanı bağlantı hatası: " + req.error?.message));
-        
-        req.onblocked = () => {
-            alert("Lütfen diğer açık sekmeleri kapatarak uygulamayı güncelleyin.");
-        };
+        req.onblocked = () => alert("Lütfen diğer sekmeleri kapatın.");
     });
+}
+
+/* --- LOCKING & DB ATOMIC OPERATIONS --- */
+
+async function withLock(workFn) {
+    if (navigator.locks) {
+        return navigator.locks.request(DB_CONFIG.lockName, workFn);
+    } else {
+        return workFn(); // Fallback for browsers without Web Locks API
+    }
 }
 
 async function getAllGroups() {
@@ -193,21 +197,18 @@ async function atomicSave(item) {
     const val = Validator.validateGroup(item);
     if (!val) throw new Error("Veri doğrulanamadı.");
     
-    const run = async () => {
-        let db;
-        try {
-            db = await openDB();
-            return await new Promise((res, rej) => {
-                const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
-                const store = tx.objectStore(DB_CONFIG.storeName);
-                val.version = Date.now();
-                store.put(val);
-                tx.oncomplete = () => { db.close(); res(); };
-                tx.onerror = () => { db.close(); rej(new Error("Yazma hatası")); };
-            });
-        } catch (err) { if (db) db.close(); throw err; }
-    };
-    return (navigator.locks) ? navigator.locks.request(DB_CONFIG.lockName, run) : run();
+    let db;
+    try {
+        db = await openDB();
+        return await new Promise((res, rej) => {
+            const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
+            const store = tx.objectStore(DB_CONFIG.storeName);
+            val.version = Date.now();
+            store.put(val);
+            tx.oncomplete = () => { db.close(); res(); };
+            tx.onerror = () => { db.close(); rej(new Error("Yazma hatası")); };
+        });
+    } catch (err) { if (db) db.close(); throw err; }
 }
 
 async function deleteFromDB(id) {
@@ -431,7 +432,7 @@ function generateSets() {
     const count = parseInt(getEl("setCount").value) || 0;
 
     if (max < per || (jPer > 0 && jMax < jPer) || count < 1) {
-        alert("Geçersiz parametreler! Lütfen sayıları kontrol edin.");
+        alert("Geçersiz parametreler!");
         return;
     }
     
@@ -469,7 +470,9 @@ async function saveGroup() {
 
     try { 
         setLoading(true);
-        await atomicSave(group);
+        await withLock(async () => {
+            await atomicSave(group);
+        });
         sessionStorage.removeItem("tempGeneratedSets");
         navTo('mySets', group.id); 
     } catch(err) { ErrorHandler.report("Save Error", err); } 
@@ -523,29 +526,47 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
 async function toggleResult(el, id, val, isJoker) {
     if (isProcessing) return;
     isProcessing = true;
+    
     const wasSelected = el.classList.contains("result-selected");
     el.classList.toggle("result-selected");
 
-    try {
-        const g = await getGroupById(id);
-        const list = isJoker ? g.results.joker : g.results.main;
-        const idx = list.indexOf(val);
-        
-        if (idx > -1) list.splice(idx, 1);
-        else {
-            const limit = isJoker ? g.jokerPerSet : 10;
-            if (list.length < limit) list.push(val);
-            else { 
-                el.classList.remove("result-selected");
-                alert(isJoker ? "Joker limitine ulaşıldı." : "En fazla 10 ana sayı seçilebilir.");
+    await withLock(async () => {
+        try {
+            // 1. Güncel veriyi kilit altındayken çek
+            const g = await getGroupById(id);
+            if (!g) return;
+
+            const list = isJoker ? g.results.joker : g.results.main;
+            const idx = list.indexOf(val);
+            
+            // 2. Değişikliği uygula
+            if (idx > -1) {
+                list.splice(idx, 1);
+            } else {
+                const limit = isJoker ? g.jokerPerSet : 10;
+                if (list.length < limit) {
+                    list.push(val);
+                } else { 
+                    el.classList.remove("result-selected");
+                    alert(isJoker ? "Joker limitine ulaşıldı." : "En fazla 10 ana sayı seçilebilir.");
+                    return; 
+                }
             }
+
+            // 3. Güncel veriyi kilit altındayken kaydet
+            await atomicSave(g);
+
+            // 4. Görünümü güncelle
+            if(history.state?.groupId === id) {
+                renderViewGroup(g, lastRequestId);
+            }
+        } catch(err) { 
+            el.classList.toggle("result-selected", wasSelected);
+            ErrorHandler.report("Toggle Error", err);
         }
-        await atomicSave(g);
-        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
-    } catch(err) { 
-        el.classList.toggle("result-selected", wasSelected);
-        ErrorHandler.report("Toggle Error", err);
-    } finally { isProcessing = false; }
+    });
+
+    isProcessing = false;
 }
 
 function closeResultPanel(back = false) { 
@@ -560,9 +581,17 @@ async function cleanResult() {
     if (!id || !confirm("Tüm seçimler temizlenecek?")) return; 
     try { 
         setLoading(true);
-        const g = await getGroupById(id); 
-        if(g) { g.results = {main: [], joker: []}; await atomicSave(g); renderCurrentState("mySets", id); } 
-    } catch(e) {} finally { setLoading(false); }
+        await withLock(async () => {
+            const g = await getGroupById(id); 
+            if(g) { 
+                g.results = {main: [], joker: []}; 
+                await atomicSave(g); 
+                renderCurrentState("mySets", id); 
+            } 
+        });
+    } catch(e) {
+        ErrorHandler.report("Clean Error", e);
+    } finally { setLoading(false); }
 }
 
 /* --- CLIPBOARD --- */
