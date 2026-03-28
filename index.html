@@ -106,6 +106,7 @@ const CryptoEngine = {
 };
 
 function secureShuffle(array) {
+    if (!array || array.length <= 1) return array;
     for (let i = array.length - 1; i > 0; i--) {
         const j = CryptoEngine.nextUint32(i + 1);
         [array[i], array[j]] = [array[j], array[i]];
@@ -252,7 +253,6 @@ async function renderCurrentState(page, groupId) {
     const container = getEl("view-container");
     if(!container) return;
     
-    // UI'ı temizle (Ghosting Önleyici)
     container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
     const panel = getEl("resultPanel");
     if(panel) panel.style.display = "none";
@@ -437,23 +437,59 @@ function createBallsUI(set, results = null) {
     return row;
 }
 
-/* --- LOGIC ACTIONS --- */
+/* --- LOGIC ACTIONS (GÜÇLENDİRİLMİŞ) --- */
 
 function generateSets() {
     const elMax = getEl("maxNumber"), elPer = getEl("perSet"), elJMax = getEl("jokerMax"), elJPer = getEl("jokerCount"), elCount = getEl("setCount");
-    const max = parseInt(elMax.value), per = parseInt(elPer.value), jMax = parseInt(elJMax.value), jPer = parseInt(elJPer.value), count = parseInt(elCount.value);
     
-    if ([max, per, jMax, jPer, count].some(isNaN) || per > max || jPer > jMax || max < 1) { alert("Geçersiz değerler!"); return; }
+    // Güvenli Sayı Dönüşümü (ParseInt riskini yönet)
+    const max = parseInt(elMax.value) || 0;
+    const per = parseInt(elPer.value) || 0;
+    const jMax = parseInt(elJMax.value) || 0;
+    const jPer = parseInt(elJPer.value) || 0;
+    const count = parseInt(elCount.value) || 0;
+
+    // --- ÖN DOĞRULAMA (VALIDATION GAP FIX) ---
+    const errors = [];
+    if (max < 1) errors.push("Ana grup en az 1 olmalıdır.");
+    if (per < 1) errors.push("Seçilecek adet en az 1 olmalıdır.");
+    if (per > max) errors.push(`Hata: ${max} sayı içerisinden ${per} adet seçilemez!`);
+    if (jPer > 0 && jMax < jPer) errors.push(`Hata: ${jMax} joker içerisinden ${jPer} adet seçilemez!`);
+    if (count < 1 || count > 100) errors.push("Kolon sayısı 1-100 arasında olmalıdır.");
+
+    if (errors.length > 0) {
+        alert(errors.join("\n"));
+        return;
+    }
     
     generatedSets = [];
-    for (let i = 0; i < count; i++) {
-        let n = secureShuffle(Array.from({length: max}, (_, k) => k + 1)).slice(0, per).sort((a,b)=>a-b);
-        let j = (jMax > 0) ? secureShuffle(Array.from({length: jMax}, (_, k) => k + 1)).slice(0, jPer).sort((a,b)=>a-b) : [];
-        generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
+    try {
+        for (let i = 0; i < count; i++) {
+            // Array.from için Math.max(0, x) kullanarak negatif değer patlamasını engelle
+            const mainPool = Array.from({length: Math.max(0, max)}, (_, k) => k + 1);
+            const n = secureShuffle([...mainPool]).slice(0, per).sort((a,b)=>a-b);
+            
+            let j = [];
+            if (jMax > 0 && jPer > 0) {
+                const jokerPool = Array.from({length: Math.max(0, jMax)}, (_, k) => k + 1);
+                j = secureShuffle([...jokerPool]).slice(0, jPer).sort((a,b)=>a-b);
+            }
+
+            // Üretim Adet Kontrolü (Sıfır Hata Prensibi)
+            if (n.length !== per || (jPer > 0 && j.length !== jPer)) {
+                throw new Error(`Üretim hatası: Beklenen adet (${per}) ile üretilen adet (${n.length}) uyuşmuyor.`);
+            }
+
+            generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
+        }
+
+        sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
+        sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
+        renderGeneratedSetsList();
+    } catch (err) {
+        ErrorHandler.report("Generation Logic Error", err);
+        alert("Üretim sırasında bir mantık hatası oluştu. Lütfen değerleri kontrol edin.");
     }
-    sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
-    sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
-    renderGeneratedSetsList();
 }
 
 async function saveGroup() {
