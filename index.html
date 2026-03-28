@@ -157,11 +157,21 @@ function openDB() {
 
 /* --- LOCKING & DB ATOMIC OPERATIONS --- */
 
+// Kilit mekanizması olmayan cihazlar için işlem kuyruğu (Sequential Queue)
+let lockQueue = Promise.resolve();
+
 async function withLock(workFn) {
     if (navigator.locks) {
+        // Modern tarayıcılar için Web Locks API
         return navigator.locks.request(DB_CONFIG.lockName, workFn);
     } else {
-        return workFn(); // Fallback for browsers without Web Locks API
+        // Eski cihazlar/WebView için fallback: İşlemleri sıraya diz
+        const currentLock = lockQueue.then(() => workFn()).catch((err) => {
+            // Hata olsa bile kuyruğun kopmaması için hatayı raporla ama zinciri devam ettir
+            ErrorHandler.report("Queue Error", err);
+        });
+        lockQueue = currentLock;
+        return currentLock;
     }
 }
 
