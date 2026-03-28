@@ -60,7 +60,7 @@
 <script>
 /* --- CORE UTILITIES --- */
 const getEl = (id) => document.getElementById(id);
-const setLoading = (state) => getEl("global-loader").style.display = state ? "block" : "none";
+const setLoading = (state) => { const el = getEl("global-loader"); if(el) el.style.display = state ? "block" : "none"; };
 
 const ErrorHandler = {
     report: function(type, data) {
@@ -113,7 +113,7 @@ function secureShuffle(array) {
     return array;
 }
 
-/* --- VALIDATOR & DB --- */
+/* --- VALIDATOR & DATABASE CONFIG --- */
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     validateGroup: (data) => {
@@ -133,17 +133,31 @@ const Validator = {
     }
 };
 
-const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
+// DİNAMİK VERİTABANI AYARLARI
+const DB_CONFIG = {
+    name: "LuckyDB",
+    version: 2, // Sürüm 1'den 2'ye yükseltildi
+    storeName: "savedGroups",
+    lockName: "db_write_lock"
+};
 
 function openDB() {
     return new Promise((res, rej) => {
-        const req = indexedDB.open(dbName, 1);
+        const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
+        
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
-            if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: "id" });
+            if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
+                db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
+            }
         };
+
         req.onsuccess = () => res(req.result);
-        req.onerror = () => rej(new Error("Veritabanı bağlantı hatası"));
+        req.onerror = () => rej(new Error("Veritabanı bağlantı hatası: " + req.error?.message));
+        
+        req.onblocked = () => {
+            alert("Lütfen diğer açık sekmeleri kapatarak uygulamayı güncelleyin.");
+        };
     });
 }
 
@@ -151,8 +165,9 @@ async function getAllGroups() {
     let db;
     try {
         db = await openDB();
-        const tx = db.transaction(storeName, "readonly");
-        const req = tx.objectStore(storeName).getAll();
+        const tx = db.transaction(DB_CONFIG.storeName, "readonly");
+        const store = tx.objectStore(DB_CONFIG.storeName);
+        const req = store.getAll();
         return await new Promise((res) => {
             req.onsuccess = (e) => res((e.target.result || []).map(Validator.validateGroup).filter(Boolean));
             tx.oncomplete = () => db.close();
@@ -161,11 +176,12 @@ async function getAllGroups() {
 }
 
 async function getGroupById(id) {
+    if(!id) return null;
     let db;
     try {
         db = await openDB();
-        const tx = db.transaction(storeName, "readonly");
-        const req = tx.objectStore(storeName).get(String(id));
+        const tx = db.transaction(DB_CONFIG.storeName, "readonly");
+        const req = tx.objectStore(DB_CONFIG.storeName).get(String(id));
         return await new Promise((res) => {
             req.onsuccess = (e) => res(Validator.validateGroup(e.target.result));
             tx.oncomplete = () => db.close();
@@ -182,8 +198,8 @@ async function atomicSave(item) {
         try {
             db = await openDB();
             return await new Promise((res, rej) => {
-                const tx = db.transaction(storeName, "readwrite");
-                const store = tx.objectStore(storeName);
+                const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
+                const store = tx.objectStore(DB_CONFIG.storeName);
                 val.version = Date.now();
                 store.put(val);
                 tx.oncomplete = () => { db.close(); res(); };
@@ -191,15 +207,15 @@ async function atomicSave(item) {
             });
         } catch (err) { if (db) db.close(); throw err; }
     };
-    return (navigator.locks) ? navigator.locks.request(lockName, run) : run();
+    return (navigator.locks) ? navigator.locks.request(DB_CONFIG.lockName, run) : run();
 }
 
 async function deleteFromDB(id) {
     let db;
     try {
         db = await openDB();
-        const tx = db.transaction(storeName, "readwrite");
-        tx.objectStore(storeName).delete(String(id));
+        const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
+        tx.objectStore(DB_CONFIG.storeName).delete(String(id));
         await new Promise(res => tx.oncomplete = res);
     } finally { if(db) db.close(); }
 }
