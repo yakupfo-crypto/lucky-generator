@@ -7,19 +7,14 @@
 <title>Lucky Generator Pro - Stable State</title>
 <style>
     body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; transition: top 0.2s; }
-    /* Modal açıkken arka planı kilitleme sınıfı */
     body.modal-open { overflow: hidden; position: fixed; width: 100%; }
-    
     header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position: relative; }
     .container{ padding:20px; }
     .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
     input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
     button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
-    
-    /* Z-Index Hiyerarşisi Yeniden Düzenlendi */
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
-    
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
     .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select: none; }
     .ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
@@ -28,17 +23,12 @@
     .card b{ display:block; margin-bottom:10px; color:#1976d2; }
     .ball.result-selected{ background:#1976d2; color:#fff; }
     .copy-btn { background: #4caf50; margin-bottom: 10px; }
-    
-    /* Üst Katmanlar Standartlaştırıldı */
     #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index: 3000; pointer-events:none; }
     .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
-    
     #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
     .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
     @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
-    
     #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.6); z-index: 4000; cursor: wait; }
-    
     #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; }
 </style>
 </head>
@@ -74,7 +64,6 @@
 const getEl = (id) => document.getElementById(id);
 const setLoading = (state) => { const el = getEl("global-loader"); if(el) el.style.display = state ? "block" : "none"; };
 
-/* Scroll Kilidi Fonksiyonu */
 function toggleBodyScroll(lock) {
     if (lock) {
         const scrollY = window.scrollY;
@@ -139,7 +128,7 @@ function secureShuffle(array) {
     return array;
 }
 
-/* --- DATABASE CONFIG --- */
+/* --- DATABASE CONFIG & DRAFT LOGIC --- */
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     validateGroup: (data) => {
@@ -159,7 +148,13 @@ const Validator = {
     }
 };
 
-const DB_CONFIG = { name: "LuckyDB", version: 2, storeName: "savedGroups", lockName: "db_write_lock" };
+const DB_CONFIG = { 
+    name: "LuckyDB", 
+    version: 3, // Sürüm yükseltildi: Draft tablosu eklendi
+    storeName: "savedGroups", 
+    draftStore: "drafts",
+    lockName: "db_write_lock" 
+};
 
 function openDB() {
     return new Promise((res, rej) => {
@@ -167,6 +162,7 @@ function openDB() {
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
+            if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
         };
         req.onsuccess = () => res(req.result);
         req.onerror = () => rej(new Error("DB Hatası"));
@@ -180,6 +176,26 @@ async function withLock(workFn) {
     const currentLock = lockQueue.then(() => workFn()).catch((err) => ErrorHandler.report("Queue Error", err));
     lockQueue = currentLock;
     return currentLock;
+}
+
+async function getDraft(id) {
+    let db;
+    try {
+        db = await openDB();
+        const tx = db.transaction(DB_CONFIG.draftStore, "readonly");
+        const req = tx.objectStore(DB_CONFIG.draftStore).get(id);
+        return await new Promise(res => { req.onsuccess = () => res(req.result); });
+    } catch(e) { return null; } finally { if(db) db.close(); }
+}
+
+async function saveDraft(id, data) {
+    let db;
+    try {
+        db = await openDB();
+        const tx = db.transaction(DB_CONFIG.draftStore, "readwrite");
+        tx.objectStore(DB_CONFIG.draftStore).put({id, data, ts: Date.now()});
+        await new Promise(res => tx.oncomplete = res);
+    } finally { if(db) db.close(); }
 }
 
 async function getAllGroups() {
@@ -216,9 +232,12 @@ async function atomicSave(item) {
     try {
         db = await openDB();
         return await new Promise((res, rej) => {
-            const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
+            const tx = db.transaction([DB_CONFIG.storeName, DB_CONFIG.draftStore], "readwrite");
             val.version = Date.now();
             tx.objectStore(DB_CONFIG.storeName).put(val);
+            // Kalıcı kayıt başarılıysa taslakları temizle
+            tx.objectStore(DB_CONFIG.draftStore).delete("tempSets");
+            tx.objectStore(DB_CONFIG.draftStore).delete("tempInputs");
             tx.oncomplete = () => { db.close(); res(); };
             tx.onerror = () => { db.close(); rej(new Error("Yazma hatası")); };
         });
@@ -261,11 +280,11 @@ async function renderCurrentState(page, groupId) {
     if(!container) return;
     
     container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
-    closeResultPanel(false); // Sayfa değişirken paneli ve kilidi kapat
+    closeResultPanel(false);
 
     try {
         if (page === "generate") {
-            if (currentRequestId === lastRequestId) renderGeneratePage();
+            if (currentRequestId === lastRequestId) await renderGeneratePage();
         } else if (page === "mySets") { 
             if (groupId) {
                 const group = await getGroupById(groupId);
@@ -273,25 +292,21 @@ async function renderCurrentState(page, groupId) {
             } else {
                 await renderMySetsList(currentRequestId);
             }
-        } else if (page === "panel") {
-            const group = await getGroupById(groupId);
-            if (currentRequestId === lastRequestId && group) {
-                renderViewGroup(group, currentRequestId);
-                openResultPanel(group.max, group.id, false);
-            }
         }
     } catch (e) { ErrorHandler.report("Render Error", e); }
 }
 
 /* --- PAGE UI --- */
-function renderGeneratePage() {
+async function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
     const container = getEl("view-container");
-    try { 
-        const stored = sessionStorage.getItem("tempGeneratedSets"), inputs = sessionStorage.getItem("tempInputs"); 
-        generatedSets = stored ? JSON.parse(stored) : [];
-        if(inputs) storedInputs = JSON.parse(inputs);
-    } catch(e) { generatedSets = []; }
+    
+    // Draft verilerini IndexedDB'den çek
+    const dSets = await getDraft("tempSets");
+    const dInputs = await getDraft("tempInputs");
+    
+    generatedSets = dSets ? dSets.data : [];
+    if(dInputs) storedInputs = dInputs.data;
 
     container.innerHTML = `
         <div class="container">
@@ -392,15 +407,17 @@ function createBallsUI(set, results = null) {
 }
 
 /* --- LOGIC ACTIONS --- */
-function generateSets() {
+async function generateSets() {
     const max = parseInt(getEl("maxNumber").value) || 0;
     const per = parseInt(getEl("perSet").value) || 0;
     const jMax = parseInt(getEl("jokerMax").value) || 0;
     const jPer = parseInt(getEl("jokerCount").value) || 0;
     const count = parseInt(getEl("setCount").value) || 0;
     if (max < per || (jPer > 0 && jMax < jPer) || count < 1) { alert("Geçersiz parametre!"); return; }
+    
     generatedSets = [];
     try {
+        setLoading(true);
         for (let i = 0; i < count; i++) {
             const mainPool = Array.from({length: max}, (_, k) => k + 1);
             const n = secureShuffle([...mainPool]).slice(0, per).sort((a,b)=>a-b);
@@ -411,10 +428,13 @@ function generateSets() {
             }
             generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
         }
-        sessionStorage.setItem("tempGeneratedSets", JSON.stringify(generatedSets));
-        sessionStorage.setItem("tempInputs", JSON.stringify({max, per, jMax, jPer, count}));
+        // TASLAK OLARAK KAYDET (Sekme kapansa da gitmez)
+        await saveDraft("tempSets", generatedSets);
+        await saveDraft("tempInputs", {max, per, jMax, jPer, count});
+        
         renderGeneratedSetsList();
     } catch (err) { ErrorHandler.report("Gen Error", err); }
+    finally { setLoading(false); }
 }
 
 async function saveGroup() {
@@ -428,7 +448,7 @@ async function saveGroup() {
     try { 
         setLoading(true);
         await withLock(async () => { await atomicSave(group); });
-        sessionStorage.removeItem("tempGeneratedSets");
+        // atomicSave içinde taslaklar temizlendiği için tekrar işlem yapmaya gerek yok
         navTo('mySets', group.id); 
     } catch(err) { ErrorHandler.report("Save Error", err); } 
     finally { setLoading(false); }
@@ -468,9 +488,8 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
     if (group.jokerPerSet > 0) createRow(`Joker Sayılar (1-${group.jokerMax})`, group.jokerMax, true);
 
     if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
-    
     getEl("resultPanel").style.display = "block";
-    toggleBodyScroll(true); // Panel açılınca kaydırmayı engelle
+    toggleBodyScroll(true);
 }
 
 async function toggleResult(el, id, val, isJoker) {
@@ -509,7 +528,7 @@ function closeResultPanel(back = false) {
         history.back();
     } else {
         getEl("resultPanel").style.display = "none"; 
-        toggleBodyScroll(false); // Kaydırmayı aç
+        toggleBodyScroll(false);
     }
 }
 
@@ -528,7 +547,6 @@ async function cleanResult() {
     finally { setLoading(false); }
 }
 
-/* --- CLIPBOARD --- */
 function copyCurrentGenerated() { 
     const text = `${generatedSets.length} Kolon\n` + generatedSets.map((s, i) => `${i+1}. Kolon: ${s.numbers.join("-")}${s.jokers.length ? ' [J:'+s.jokers.join(',')+']' : ''}`).join("\n");
     navigator.clipboard.writeText(text).then(() => {
