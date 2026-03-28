@@ -27,15 +27,7 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
 .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
 @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
-
-#global-loader {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(255, 255, 255, 0.3);
-    z-index: 20000;
-    cursor: wait;
-}
+#global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.3); z-index: 20000; cursor: wait; }
 </style>
 </head>
 <body>
@@ -64,7 +56,7 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
-/* --- YARDIMCI VE DB FONKSİYONLARI --- */
+/* --- CORE UTILITIES --- */
 const getEl = (id) => document.getElementById(id);
 const setLoading = (state) => getEl("global-loader").style.display = state ? "block" : "none";
 
@@ -89,10 +81,11 @@ window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", 
 
 let generatedSets = [];
 let lastRequestId = 0; 
-let isProcessing = false; // RACE CONDITION KİLİDİ
+let isProcessing = false;
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
 
+/* --- CRYPTO ENGINE --- */
 const CryptoEngine = {
     isSecure: !!(window.crypto && window.crypto.getRandomValues) || !!(window.msCrypto && window.msCrypto.getRandomValues),
     nextUint32: function(max) {
@@ -121,6 +114,7 @@ function secureShuffle(array) {
     return array;
 }
 
+/* --- VALIDATOR & DB --- */
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -153,15 +147,6 @@ const Validator = {
 
 const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
 
-async function requestPersistence() {
-    if (navigator.storage && navigator.storage.persist) {
-        return await navigator.storage.persist();
-    }
-    return false;
-}
-
-async function withLock(name, callback) { if (window.navigator && navigator.locks) { return navigator.locks.request(name, callback); } return callback(); }
-
 function openDB() {
     return new Promise((res, rej) => {
         const req = indexedDB.open(dbName, 1);
@@ -188,11 +173,25 @@ async function getAllGroups() {
     } catch (e) { if(db) db.close(); return []; }
 }
 
+async function getGroupById(id) {
+    let db;
+    try {
+        db = await openDB();
+        return await new Promise((res) => {
+            const tx = db.transaction(storeName, "readonly");
+            const req = tx.objectStore(storeName).get(id);
+            req.onsuccess = (e) => res(Validator.validateGroup(e.target.result));
+            tx.oncomplete = () => db.close();
+        });
+    } catch(e) { if(db) db.close(); return null; }
+}
+
 async function atomicSave(item) {
     const val = Validator.validateGroup(item);
     if (!val) throw new Error("Geçersiz veri!");
-    await requestPersistence(); 
-    return withLock(lockName, async () => {
+    if (navigator.storage && navigator.storage.persist) await navigator.storage.persist();
+    
+    const run = async () => {
         let db;
         try {
             db = await openDB();
@@ -210,11 +209,12 @@ async function atomicSave(item) {
                 tx.onerror = () => { db.close(); rej(new Error("Kaydetme hatası")); };
             });
         } catch (err) { if (db) db.close(); throw err; }
-    });
+    };
+    return (window.navigator && navigator.locks) ? navigator.locks.request(lockName, run) : run();
 }
 
 async function deleteFromDB(id) {
-    return withLock(lockName, async () => {
+    const run = async () => {
         let db;
         try {
             db = await openDB();
@@ -222,148 +222,97 @@ async function deleteFromDB(id) {
             tx.objectStore(storeName).delete(id);
             return new Promise((res) => { tx.oncomplete = () => { db.close(); res(); }; });
         } catch(e) { if(db) db.close(); throw e; }
-    });
+    };
+    return (window.navigator && navigator.locks) ? navigator.locks.request(lockName, run) : run();
 }
 
-async function getGroupById(id) {
-    let db;
-    try {
-        db = await openDB();
-        return await new Promise((res) => {
-            const tx = db.transaction(storeName, "readonly");
-            const req = tx.objectStore(storeName).get(id);
-            req.onsuccess = (e) => res(Validator.validateGroup(e.target.result));
-            tx.oncomplete = () => db.close();
-        });
-    } catch(e) { if(db) db.close(); return null; }
-}
-
-/* --- GÜNCELLENEN VE KORUMALI TOGGLE FONKSİYONLARI --- */
-
-async function toggleMainResult(el, id, val) {
-    if (isProcessing) return; // Kilit varsa işlemi durdur
-    
-    isProcessing = true;
-    setLoading(true); 
-
-    const wasSelected = el.classList.contains("result-selected");
-    el.classList.toggle("result-selected"); // İyimser Güncelleme
-
-    try {
-        const g = await getGroupById(id); 
-        if(!g) throw new Error("Veri bulunamadı");
-        
-        const index = g.results.main.indexOf(val); 
-        if (index > -1) {
-            g.results.main.splice(index, 1);
-        } else if (g.results.main.length < 10) {
-            g.results.main.push(val);
-        } else {
-            // Sınır aşımı durumunda görseli geri çek
-            el.classList.remove("result-selected");
-            throw new Error("Maksimum 10 sayı seçebilirsiniz");
-        }
-        
-        await atomicSave(g); 
-        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
-    } catch(err) {
-        // Hata durumunda rollback (geri al)
-        el.classList.toggle("result-selected", wasSelected);
-        ErrorHandler.report("Sync Error", err);
-    } finally {
-        isProcessing = false;
-        setLoading(false); 
-    }
-}
-
-async function toggleJokerResult(el, id, val) {
-    if (isProcessing) return;
-    
-    isProcessing = true;
-    setLoading(true);
-
-    const wasSelected = el.classList.contains("result-selected");
-    el.classList.toggle("result-selected");
-
-    try {
-        const g = await getGroupById(id); 
-        if(!g) throw new Error("Veri bulunamadı");
-
-        const index = g.results.joker.indexOf(val); 
-        if (index > -1) {
-            g.results.joker.splice(index, 1);
-        } else if (g.results.joker.length < g.jokerPerSet) {
-            g.results.joker.push(val);
-        } else {
-            el.classList.remove("result-selected");
-            throw new Error("Joker sınırına ulaşıldı");
-        }
-
-        await atomicSave(g); 
-        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
-    } catch(err) {
-        el.classList.toggle("result-selected", wasSelected);
-        ErrorHandler.report("Sync Error", err);
-    } finally {
-        isProcessing = false;
-        setLoading(false);
-    }
-}
-
-/* --- DİĞER FONKSİYONLAR --- */
+/* --- NAVIGATION & STABLE RENDERING --- */
 
 window.onload = async () => { 
     if (!CryptoEngine.isSecure) {
         document.body.innerHTML = `<div style="padding:40px; text-align:center; font-family:Arial; color:#d32f2f; background:#fff; height:100vh;"><h2>⚠️ Güvenlik Engeli</h2><hr><p>Cihazınız "Web Crypto" motorunu desteklemiyor.</p></div>`;
         return;
     }
-    await requestPersistence();
-    if (!history.state) { history.replaceState({page:"generate", groupId:null}, ""); } 
-    const s = history.state; 
-    renderCurrentState(s.page, s.groupId); 
+    if (!history.state) history.replaceState({page:"generate", groupId:null}, "");
+    renderCurrentState(history.state.page, history.state.groupId); 
 };
 
-window.onpopstate = (event) => { const state = event.state || {page:"generate", groupId:null}; renderCurrentState(state.page, state.groupId); };
-function navTo(page, groupId = null) { history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); renderCurrentState(page, groupId); }
+window.onpopstate = (event) => { 
+    const state = event.state || {page:"generate", groupId:null}; 
+    renderCurrentState(state.page, state.groupId); 
+};
+
+function navTo(page, groupId = null) { 
+    history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); 
+    renderCurrentState(page, groupId); 
+}
 
 async function renderCurrentState(page, groupId) {
     const currentRequestId = ++lastRequestId; 
     const container = getEl("view-container");
     if(!container) return;
     
-    container.textContent = "Yükleniyor...";
+    // UI'ı temizle (Ghosting Önleyici)
+    container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
     const panel = getEl("resultPanel");
     if(panel) panel.style.display = "none";
 
     try {
-        if (page === "generate") { renderGeneratePage(); } 
+        if (page === "generate") {
+            if (currentRequestId === lastRequestId) renderGeneratePage();
+        } 
         else if (page === "mySets") { 
             if (groupId) {
                 const group = await getGroupById(groupId);
-                if (currentRequestId === lastRequestId) group ? renderViewGroup(group, currentRequestId) : renderMySetsList(currentRequestId);
-            } else { await renderMySetsList(currentRequestId); }
+                if (currentRequestId === lastRequestId) {
+                    group ? renderViewGroup(group, currentRequestId) : renderMySetsList(currentRequestId);
+                }
+            } else {
+                await renderMySetsList(currentRequestId);
+            }
         } 
         else if (page === "panel") {
             const group = await getGroupById(groupId);
-            if (currentRequestId === lastRequestId && group) { renderViewGroup(group, currentRequestId); openResultPanel(group.max, group.id, false); }
+            if (currentRequestId === lastRequestId && group) {
+                renderViewGroup(group, currentRequestId);
+                openResultPanel(group.max, group.id, false);
+            }
         }
-    } catch (e) { ErrorHandler.report("Render Error", e); }
+    } catch (e) {
+        if (currentRequestId === lastRequestId) ErrorHandler.report("Render Error", e);
+    }
 }
+
+/* --- PAGE UI FUNCTIONS --- */
 
 function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
     const container = getEl("view-container");
-    if(!container) return;
     try { 
         const stored = sessionStorage.getItem("tempGeneratedSets"), inputs = sessionStorage.getItem("tempInputs"); 
-        const parsedSets = stored ? JSON.parse(stored) : []; 
-        generatedSets = Array.isArray(parsedSets) ? parsedSets.map(Validator.validateSet).filter(Boolean) : [];
+        generatedSets = stored ? JSON.parse(stored) : [];
         if(inputs) storedInputs = JSON.parse(inputs);
     } catch(e) { generatedSets = []; }
 
-    container.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam</b></label><input type="number" id="maxNumber" value="${Number(storedInputs.max)}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${Number(storedInputs.per)}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${Number(storedInputs.jMax)}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${Number(storedInputs.jPer)}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${Number(storedInputs.count)}"><button id="genBtn">Kolonları Üret</button></div><div id="results"></div></div>`;
-    
-    getEl("genBtn").onclick = generateSets;
+    container.innerHTML = `
+        <div class="container">
+            <div class="card">
+                <label><b>Ana Grup Toplam</b></label>
+                <input type="number" id="maxNumber" value="${Number(storedInputs.max)}">
+                <label>Seçilecek Adet</label>
+                <input type="number" id="perSet" value="${Number(storedInputs.per)}">
+                <hr>
+                <label><b>Joker Toplam</b></label>
+                <input type="number" id="jokerMax" value="${Number(storedInputs.jMax)}">
+                <label>Joker Adet</label>
+                <input type="number" id="jokerCount" value="${Number(storedInputs.jPer)}">
+                <hr>
+                <label>Kolon Sayısı</label>
+                <input type="number" id="setCount" value="${Number(storedInputs.count)}">
+                <button onclick="generateSets()">Kolonları Üret</button>
+            </div>
+            <div id="results"></div>
+        </div>`;
     renderGeneratedSetsList();
 }
 
@@ -383,11 +332,11 @@ function renderGeneratedSetsList() {
     if (generatedSets.length > 0) { 
         const actionCard = document.createElement("div");
         actionCard.className = "card";
-        actionCard.innerHTML = `<button class="copy-btn" onclick='copyCurrentGenerated()'>Panoya Kopyala</button><label><b>Grup Adı</b></label><input type="text" id="groupNameInput" placeholder="Örn: Pazartesi">`;
-        const saveBtn = document.createElement("button");
-        saveBtn.textContent = "Grubu Kaydet";
-        saveBtn.onclick = saveGroup;
-        actionCard.appendChild(saveBtn);
+        actionCard.innerHTML = `
+            <button class="copy-btn" onclick='copyCurrentGenerated()'>Panoya Kopyala</button>
+            <label><b>Grup Adı</b></label>
+            <input type="text" id="groupNameInput" placeholder="Örn: Pazartesi">
+            <button onclick="saveGroup()">Grubu Kaydet</button>`;
         resultsDiv.appendChild(actionCard);
     }
 }
@@ -396,28 +345,39 @@ async function renderMySetsList(reqId) {
     const groups = await getAllGroups(); 
     const view = getEl("view-container");
     if (!view || reqId !== lastRequestId) return;
+    
     view.textContent = ""; 
-
     const container = document.createElement("div"); 
     container.className = "container"; 
     container.innerHTML = `<h3>Kayıtlı Kolonlarım</h3>`;
-    if (groups.length === 0) container.innerHTML += "<p>Henüz kayıtlı set yok.</p>";
     
-    groups.forEach(group => {
-        const card = document.createElement("div"); card.className = "card";
-        card.innerHTML = `<b>${escapeHTML(group.name)}</b><div style="margin-top:5px">Kolon: ${group.sets.length}</div>`;
-        const btnView = document.createElement("button"); btnView.textContent = "Görüntüle"; btnView.onclick = () => navTo("mySets", group.id);
-        const btnDel = document.createElement("button"); btnDel.textContent = "Sil"; btnDel.style.background = "#d32f2f"; btnDel.style.marginTop = "5px"; btnDel.onclick = () => deleteGroup(group.id);
-        card.append(btnView, btnDel); container.appendChild(card);
-    });
+    if (groups.length === 0) {
+        container.innerHTML += "<p>Henüz kayıtlı set yok.</p>";
+    } else {
+        groups.forEach(group => {
+            const card = document.createElement("div"); 
+            card.className = "card";
+            card.innerHTML = `<b>${escapeHTML(group.name)}</b><div style="margin-top:5px">Kolon: ${group.sets.length}</div>`;
+            const btnView = document.createElement("button"); 
+            btnView.textContent = "Görüntüle"; 
+            btnView.onclick = () => navTo("mySets", group.id);
+            const btnDel = document.createElement("button"); 
+            btnDel.textContent = "Sil"; 
+            btnDel.style.background = "#d32f2f"; 
+            btnDel.style.marginTop = "5px"; 
+            btnDel.onclick = () => deleteGroup(group.id);
+            card.append(btnView, btnDel); 
+            container.appendChild(card);
+        });
+    }
     view.appendChild(container);
 }
 
 function renderViewGroup(group, reqId) {
     const view = getEl("view-container");
     if (!view || reqId !== lastRequestId) return;
-    view.textContent = ""; 
     
+    view.textContent = ""; 
     const container = document.createElement("div"); 
     container.className = "container";
     container.innerHTML = `<h3>${escapeHTML(group.name)}</h3>`;
@@ -453,7 +413,6 @@ function renderViewGroup(group, reqId) {
     backBtn.textContent = "Listeye Dön";
     backBtn.style.background = "#666";
     backBtn.onclick = () => navTo("mySets");
-    
     container.appendChild(backBtn); 
     view.appendChild(container);
 }
@@ -461,7 +420,6 @@ function renderViewGroup(group, reqId) {
 function createBallsUI(set, results = null) {
     const row = document.createElement("div");
     row.className = "ball-row";
-
     set.numbers.forEach(n => {
         const ball = document.createElement("div");
         ball.className = "ball selected";
@@ -469,7 +427,6 @@ function createBallsUI(set, results = null) {
         ball.textContent = n;
         row.appendChild(ball);
     });
-
     set.jokers.forEach(j => {
         const ball = document.createElement("div");
         ball.className = "ball joker";
@@ -477,9 +434,10 @@ function createBallsUI(set, results = null) {
         ball.textContent = j;
         row.appendChild(ball);
     });
-
     return row;
 }
+
+/* --- LOGIC ACTIONS --- */
 
 function generateSets() {
     const elMax = getEl("maxNumber"), elPer = getEl("perSet"), elJMax = getEl("jokerMax"), elJPer = getEl("jokerCount"), elCount = getEl("setCount");
@@ -517,10 +475,20 @@ async function saveGroup() {
         await atomicSave(group); 
         sessionStorage.removeItem("tempGeneratedSets"); 
         navTo('mySets', group.id); 
-    } catch(err) { } finally { setLoading(false); }
+    } catch(err) { ErrorHandler.report("Save Error", err); } finally { setLoading(false); }
 }
 
-async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { setLoading(true); await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { } finally { setLoading(false); } } }
+async function deleteGroup(id) { 
+    if (confirm("Emin misiniz?")) { 
+        try { 
+            setLoading(true); 
+            await deleteFromDB(id); 
+            renderMySetsList(lastRequestId); 
+        } catch(err) { ErrorHandler.report("Delete Error", err); } finally { setLoading(false); } 
+    } 
+}
+
+/* --- RESULT PANEL STABILITY --- */
 
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); if(!group) return;
@@ -553,8 +521,46 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
     getEl("resultPanel").style.display = "block";
 }
 
+async function toggleMainResult(el, id, val) {
+    if (isProcessing) return;
+    isProcessing = true;
+    setLoading(true); 
+    const wasSelected = el.classList.contains("result-selected");
+    el.classList.toggle("result-selected");
+    try {
+        const g = await getGroupById(id); 
+        if(!g) throw new Error("Veri bulunamadı");
+        const idx = g.results.main.indexOf(val); 
+        if (idx > -1) g.results.main.splice(idx, 1);
+        else if (g.results.main.length < 10) g.results.main.push(val);
+        else { el.classList.remove("result-selected"); throw new Error("Limit: 10"); }
+        await atomicSave(g); 
+        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
+    } catch(err) { el.classList.toggle("result-selected", wasSelected); ErrorHandler.report("Sync", err); }
+    finally { isProcessing = false; setLoading(false); }
+}
+
+async function toggleJokerResult(el, id, val) {
+    if (isProcessing) return;
+    isProcessing = true;
+    setLoading(true);
+    const wasSelected = el.classList.contains("result-selected");
+    el.classList.toggle("result-selected");
+    try {
+        const g = await getGroupById(id); 
+        if(!g) throw new Error("Veri bulunamadı");
+        const idx = g.results.joker.indexOf(val); 
+        if (idx > -1) g.results.joker.splice(idx, 1);
+        else if (g.results.joker.length < g.jokerPerSet) g.results.joker.push(val);
+        else { el.classList.remove("result-selected"); throw new Error("Limit Joker"); }
+        await atomicSave(g); 
+        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
+    } catch(err) { el.classList.toggle("result-selected", wasSelected); ErrorHandler.report("Sync", err); }
+    finally { isProcessing = false; setLoading(false); }
+}
+
 function closeResultPanel(back = false) { 
-    if (back && history.state?.page === "panel") { history.back(); } 
+    if (back && history.state?.page === "panel") history.back();
     else { const p = getEl("resultPanel"); if(p) p.style.display = "none"; } 
 }
 
@@ -569,6 +575,7 @@ async function cleanResult() {
     } catch(e) {} finally { setLoading(false); }
 }
 
+/* --- CLIPBOARD --- */
 async function copySpecificGroup(id) { const g = await getGroupById(id); if(g) copyToClipboard(formatGroupForCopy(g)); }
 function copyCurrentGenerated() { copyToClipboard(formatGroupForCopy({name: "Geçici Liste", sets: generatedSets})); }
 
