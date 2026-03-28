@@ -6,6 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
 <title>Lucky Generator Pro - Stable State</title>
 <style>
+/* Mevcut stiller korunuyor */
 body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
 header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position: relative; }
 .container{ padding:20px; }
@@ -27,9 +28,21 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
 .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
 @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
+
+/* --- YENİ EKLENEN LOADING STİLİ --- */
+#global-loader {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.3);
+    z-index: 20000; /* Her şeyin üstünde */
+    cursor: wait;
+}
 </style>
 </head>
 <body>
+
+<div id="global-loader"></div>
 
 <div id="error-monitor"></div> 
 <header>
@@ -54,7 +67,9 @@ button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; 
 </div>
 
 <script>
+/* Mevcut Yardımcı ve DB Fonksiyonları (Dokunulmadı) */
 const getEl = (id) => document.getElementById(id);
+const setLoading = (state) => getEl("global-loader").style.display = state ? "block" : "none";
 
 const ErrorHandler = {
     report: function(type, data) {
@@ -108,7 +123,6 @@ function secureShuffle(array) {
     return array;
 }
 
-// --- VERİ TABANI VE VALIDATOR FONKSİYONLARI ---
 const Validator = {
     isNumber: (v) => typeof v === 'number' && !isNaN(v),
     isArray: (v) => Array.isArray(v),
@@ -143,8 +157,7 @@ const dbName = "LuckyDB", storeName = "savedGroups", lockName = "db_write_lock";
 
 async function requestPersistence() {
     if (navigator.storage && navigator.storage.persist) {
-        const isPersisted = await navigator.storage.persist();
-        return isPersisted;
+        return await navigator.storage.persist();
     }
     return false;
 }
@@ -196,6 +209,7 @@ async function atomicSave(item) {
                     store.put(val);
                 };
                 tx.oncomplete = () => { db.close(); res(); };
+                tx.onerror = () => { db.close(); rej(new Error("Kaydetme hatası")); };
             });
         } catch (err) { if (db) db.close(); throw err; }
     });
@@ -226,7 +240,51 @@ async function getGroupById(id) {
     } catch(e) { if(db) db.close(); return null; }
 }
 
-// --- UYGULAMA MANTIĞI VE RENDER ---
+/* --- GÜNCELLENEN TOGGLE FONKSİYONLARI --- */
+
+async function toggleMainResult(el, id, val) {
+    setLoading(true); // EKRANI KİLİTLE
+    try {
+        const g = await getGroupById(id); 
+        if(!g) return;
+        const index = g.results.main.indexOf(val); 
+        if (index > -1) {
+            g.results.main.splice(index, 1);
+        } else if (g.results.main.length < 10) {
+            g.results.main.push(val);
+        }
+        await atomicSave(g); 
+        el.classList.toggle("result-selected"); 
+        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
+    } catch(err) {
+        ErrorHandler.report("Sync Error", err);
+    } finally {
+        setLoading(false); // EKRANI AÇ
+    }
+}
+
+async function toggleJokerResult(el, id, val) {
+    setLoading(true); // EKRANI KİLİTLE
+    try {
+        const g = await getGroupById(id); 
+        if(!g) return;
+        const index = g.results.joker.indexOf(val); 
+        if (index > -1) {
+            g.results.joker.splice(index, 1);
+        } else if (g.results.joker.length < g.jokerPerSet) {
+            g.results.joker.push(val);
+        }
+        await atomicSave(g); 
+        el.classList.toggle("result-selected"); 
+        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
+    } catch(err) {
+        ErrorHandler.report("Sync Error", err);
+    } finally {
+        setLoading(false); // EKRANI AÇ
+    }
+}
+
+/* --- DİĞER FONKSİYONLAR (Aynen Korundu) --- */
 
 window.onload = async () => { 
     if (!CryptoEngine.isSecure) {
@@ -247,7 +305,6 @@ async function renderCurrentState(page, groupId) {
     const container = getEl("view-container");
     if(!container) return;
     
-    // innerHTML yerine textContent ile temizleme (Daha güvenli)
     container.textContent = "Yükleniyor...";
     const panel = getEl("resultPanel");
     if(panel) panel.style.display = "none";
@@ -267,8 +324,6 @@ async function renderCurrentState(page, groupId) {
     } catch (e) { ErrorHandler.report("Render Error", e); }
 }
 
-// --- ÖNEMLİ: BELLEK SIZINTISI ÇÖZÜMLERİ ---
-
 function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
     const container = getEl("view-container");
@@ -280,7 +335,6 @@ function renderGeneratePage() {
         if(inputs) storedInputs = JSON.parse(inputs);
     } catch(e) { generatedSets = []; }
 
-    // Statik formu oluştururken bir kere innerHTML kullanmakta sakınca yok
     container.innerHTML = `<div class="container"><div class="card"><label><b>Ana Grup Toplam</b></label><input type="number" id="maxNumber" value="${Number(storedInputs.max)}"><label>Seçilecek Adet</label><input type="number" id="perSet" value="${Number(storedInputs.per)}"><hr><label><b>Joker Toplam</b></label><input type="number" id="jokerMax" value="${Number(storedInputs.jMax)}"><label>Joker Adet</label><input type="number" id="jokerCount" value="${Number(storedInputs.jPer)}"><hr><label>Kolon Sayısı</label><input type="number" id="setCount" value="${Number(storedInputs.count)}"><button id="genBtn">Kolonları Üret</button></div><div id="results"></div></div>`;
     
     getEl("genBtn").onclick = generateSets;
@@ -290,7 +344,7 @@ function renderGeneratePage() {
 function renderGeneratedSetsList() {
     const resultsDiv = getEl("results");
     if(!resultsDiv) return;
-    resultsDiv.textContent = ""; // Temizle
+    resultsDiv.textContent = ""; 
 
     generatedSets.forEach((set, i) => { 
         const card = document.createElement("div");
@@ -378,8 +432,6 @@ function renderViewGroup(group, reqId) {
     view.appendChild(container);
 }
 
-// --- TOPLARI OLUŞTURAN ATOMİK FONKSİYON ---
-
 function createBallsUI(set, results = null) {
     const row = document.createElement("div");
     row.className = "ball-row";
@@ -402,8 +454,6 @@ function createBallsUI(set, results = null) {
 
     return row;
 }
-
-// --- DİĞER FONKSİYONLAR ---
 
 function generateSets() {
     const elMax = getEl("maxNumber"), elPer = getEl("perSet"), elJMax = getEl("jokerMax"), elJPer = getEl("jokerCount"), elCount = getEl("setCount");
@@ -436,10 +486,15 @@ async function saveGroup() {
         results: {main: [], joker: []}, 
         version: Date.now() 
     };
-    try { await atomicSave(group); sessionStorage.removeItem("tempGeneratedSets"); navTo('mySets', group.id); } catch(err) { }
+    try { 
+        setLoading(true);
+        await atomicSave(group); 
+        sessionStorage.removeItem("tempGeneratedSets"); 
+        navTo('mySets', group.id); 
+    } catch(err) { } finally { setLoading(false); }
 }
 
-async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { } } }
+async function deleteGroup(id) { if (confirm("Emin misiniz?")) { try { setLoading(true); await deleteFromDB(id); renderMySetsList(lastRequestId); } catch(err) { } finally { setLoading(false); } } }
 
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); if(!group) return;
@@ -472,28 +527,6 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
     getEl("resultPanel").style.display = "block";
 }
 
-async function toggleMainResult(el, id, val) {
-    try {
-        const g = await getGroupById(id); if(!g) return;
-        const i = g.results.main.indexOf(val); 
-        if (i > -1) g.results.main.splice(i, 1); else if (g.results.main.length < 10) g.results.main.push(val);
-        await atomicSave(g); 
-        el.classList.toggle("result-selected"); 
-        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
-    } catch(err) { }
-}
-
-async function toggleJokerResult(el, id, val) {
-    try {
-        const g = await getGroupById(id); if(!g) return;
-        const i = g.results.joker.indexOf(val); 
-        if (i > -1) g.results.joker.splice(i, 1); else if (g.results.joker.length < g.jokerPerSet) g.results.joker.push(val);
-        await atomicSave(g); 
-        el.classList.toggle("result-selected"); 
-        if(history.state?.groupId === id) renderViewGroup(g, lastRequestId);
-    } catch(err) { }
-}
-
 function closeResultPanel(back = false) { 
     if (back && history.state?.page === "panel") { history.back(); } 
     else { const p = getEl("resultPanel"); if(p) p.style.display = "none"; } 
@@ -504,9 +537,10 @@ function confirmResult() { closeResultPanel(true); }
 async function cleanResult() { 
     const id = history.state?.groupId; if (!id) return; 
     try { 
+        setLoading(true);
         const g = await getGroupById(id); 
         if(g) { g.results = {main: [], joker: []}; await atomicSave(g); renderCurrentState("mySets", id); } 
-    } catch(e) {} 
+    } catch(e) {} finally { setLoading(false); }
 }
 
 async function copySpecificGroup(id) { const g = await getGroupById(id); if(g) copyToClipboard(formatGroupForCopy(g)); }
