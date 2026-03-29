@@ -10,7 +10,7 @@
     body.modal-open { overflow: hidden; position: fixed; width: 100%; }
     header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position: relative; }
     .container{ padding:20px; }
-    .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); position: relative; }
+    .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
     input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
     button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
@@ -23,7 +23,7 @@
     .card b{ display:block; margin-bottom:10px; color:#1976d2; }
     .ball.result-selected{ background:#1976d2; color:#fff; }
     .copy-btn { background: #4caf50; margin-bottom: 10px; }
-    .del-col-btn { position: absolute; top: 10px; right: 10px; background: #ff5252; color: white; border: none; width: 24px; height: 24px; border-radius: 50%; font-size: 14px; line-height: 1; cursor: pointer; padding: 0; }
+    .delete-all-btn { background: #d32f2f; margin-bottom: 10px; }
     #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index: 3000; pointer-events:none; }
     .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
     #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
@@ -199,6 +199,16 @@ async function saveDraft(id, data) {
     } finally { if(db) db.close(); }
 }
 
+async function deleteDraft(id) {
+    let db;
+    try {
+        db = await openDB();
+        const tx = db.transaction(DB_CONFIG.draftStore, "readwrite");
+        tx.objectStore(DB_CONFIG.draftStore).delete(id);
+        await new Promise(res => tx.oncomplete = res);
+    } finally { if(db) db.close(); }
+}
+
 async function getAllGroups() {
     let db;
     try {
@@ -350,22 +360,27 @@ function renderGeneratedSetsList() {
     generatedSets.forEach((set, i) => { 
         const card = document.createElement("div");
         card.className = "card";
-        card.innerHTML = `<b>${i+1}. Kolon</b><button class="del-col-btn" onclick="deleteGeneratedColumn(${i})">×</button>`;
+        card.innerHTML = `<b>${i+1}. Kolon</b>`;
         card.appendChild(createBallsUI(set));
         resultsDiv.appendChild(card);
     }); 
     if (generatedSets.length > 0) { 
         const actionCard = document.createElement("div");
         actionCard.className = "card";
-        actionCard.innerHTML = `<button class="copy-btn" onclick='copyCurrentGenerated()'>Panoya Kopyala</button><label><b>Liste Adı</b></label><input type="text" id="groupNameInput" placeholder="İsim verin..."><button onclick="saveGroup()">Kalıcı Olarak Kaydet</button>`;
+        actionCard.innerHTML = `
+            <button class="copy-btn" onclick='copyCurrentGenerated()'>Panoya Kopyala</button>
+            <button class="delete-all-btn" onclick='clearGeneratedSets()'>Üretilenleri Sil</button>
+            <label><b>Liste Adı</b></label>
+            <input type="text" id="groupNameInput" placeholder="İsim verin...">
+            <button onclick="saveGroup()">Kalıcı Olarak Kaydet</button>`;
         resultsDiv.appendChild(actionCard);
     }
 }
 
-async function deleteGeneratedColumn(index) {
-    if (confirm("Bu kolonu silmek istediğinize emin misiniz?")) {
-        generatedSets.splice(index, 1);
-        await saveDraft("tempSets", generatedSets);
+async function clearGeneratedSets() {
+    if (confirm("Üretilen tüm kolonlar temizlensin mi?")) {
+        generatedSets = [];
+        await deleteDraft("tempSets");
         renderGeneratedSetsList();
     }
 }
@@ -449,9 +464,9 @@ async function generateSets() {
     const count = parseInt(getEl("setCount").value) || 0;
     if (max < per || (jPer > 0 && jMax < jPer) || count < 1) { alert("Geçersiz parametre!"); return; }
     
+    generatedSets = [];
     try {
         setLoading(true);
-        const newSets = [];
         for (let i = 0; i < count; i++) {
             const mainPool = Array.from({length: max}, (_, k) => k + 1);
             const n = secureShuffle([...mainPool]).slice(0, per).sort((a,b)=>a-b);
@@ -460,9 +475,8 @@ async function generateSets() {
                 const jokerPool = Array.from({length: jMax}, (_, k) => k + 1);
                 j = secureShuffle([...jokerPool]).slice(0, jPer).sort((a,b)=>a-b);
             }
-            newSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
+            generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
         }
-        generatedSets = [...generatedSets, ...newSets];
         await saveDraft("tempSets", generatedSets);
         await saveDraft("tempInputs", {max, per, jMax, jPer, count});
         renderGeneratedSetsList();
