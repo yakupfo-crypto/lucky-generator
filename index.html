@@ -10,7 +10,7 @@
     body.modal-open { overflow: hidden; position: fixed; width: 100%; }
     header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position: relative; }
     .container{ padding:20px; }
-    .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+    .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); position: relative; }
     input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
     button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
@@ -23,6 +23,7 @@
     .card b{ display:block; margin-bottom:10px; color:#1976d2; }
     .ball.result-selected{ background:#1976d2; color:#fff; }
     .copy-btn { background: #4caf50; margin-bottom: 10px; }
+    .del-col-btn { position: absolute; top: 10px; right: 10px; background: #ff5252; color: white; border: none; width: 24px; height: 24px; border-radius: 50%; font-size: 14px; line-height: 1; cursor: pointer; padding: 0; }
     #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index: 3000; pointer-events:none; }
     .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
     #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
@@ -261,7 +262,6 @@ window.onload = () => {
     }
     const state = history.state || {page:"generate", groupId:null};
     
-    // Sayfa yenilendiğinde panel açıksa state'i koru
     if (state.page === "panel") {
         renderCurrentState("mySets", state.groupId).then(() => {
             openResultPanel(null, state.groupId, false);
@@ -273,12 +273,9 @@ window.onload = () => {
 
 window.onpopstate = (event) => { 
     const state = event.state || {page:"generate", groupId:null}; 
-    
-    // Geri tuşu ile panelden çıkılıyorsa kilidi aç
     if (state.page !== "panel") {
         closeResultPanel(false); 
     }
-    
     renderCurrentState(state.page, state.groupId); 
 };
 
@@ -294,7 +291,6 @@ async function renderCurrentState(page, groupId) {
     
     container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
     
-    // Navigasyon sırasında panelin açık kalmasını engelle
     if (page !== "panel") {
         getEl("resultPanel").style.display = "none";
         toggleBodyScroll(false);
@@ -354,7 +350,7 @@ function renderGeneratedSetsList() {
     generatedSets.forEach((set, i) => { 
         const card = document.createElement("div");
         card.className = "card";
-        card.innerHTML = `<b>${i+1}. Kolon</b>`;
+        card.innerHTML = `<b>${i+1}. Kolon</b><button class="del-col-btn" onclick="deleteGeneratedColumn(${i})">×</button>`;
         card.appendChild(createBallsUI(set));
         resultsDiv.appendChild(card);
     }); 
@@ -363,6 +359,14 @@ function renderGeneratedSetsList() {
         actionCard.className = "card";
         actionCard.innerHTML = `<button class="copy-btn" onclick='copyCurrentGenerated()'>Panoya Kopyala</button><label><b>Liste Adı</b></label><input type="text" id="groupNameInput" placeholder="İsim verin..."><button onclick="saveGroup()">Kalıcı Olarak Kaydet</button>`;
         resultsDiv.appendChild(actionCard);
+    }
+}
+
+async function deleteGeneratedColumn(index) {
+    if (confirm("Bu kolonu silmek istediğinize emin misiniz?")) {
+        generatedSets.splice(index, 1);
+        await saveDraft("tempSets", generatedSets);
+        renderGeneratedSetsList();
     }
 }
 
@@ -397,7 +401,6 @@ async function renderViewGroup(group, reqId) {
     const resCard = document.createElement("div"); resCard.className = "card";
     const hasRes = group.results.main.length > 0 || group.results.joker.length > 0;
     
-    // Sonuçları sıralı göster (Spread ile orijinal veriyi koruyarak)
     const sortedMain = [...group.results.main].sort((a,b)=>a-b);
     const sortedJoker = [...group.results.joker].sort((a,b)=>a-b);
 
@@ -446,9 +449,9 @@ async function generateSets() {
     const count = parseInt(getEl("setCount").value) || 0;
     if (max < per || (jPer > 0 && jMax < jPer) || count < 1) { alert("Geçersiz parametre!"); return; }
     
-    generatedSets = [];
     try {
         setLoading(true);
+        const newSets = [];
         for (let i = 0; i < count; i++) {
             const mainPool = Array.from({length: max}, (_, k) => k + 1);
             const n = secureShuffle([...mainPool]).slice(0, per).sort((a,b)=>a-b);
@@ -457,8 +460,9 @@ async function generateSets() {
                 const jokerPool = Array.from({length: jMax}, (_, k) => k + 1);
                 j = secureShuffle([...jokerPool]).slice(0, jPer).sort((a,b)=>a-b);
             }
-            generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
+            newSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
         }
+        generatedSets = [...generatedSets, ...newSets];
         await saveDraft("tempSets", generatedSets);
         await saveDraft("tempInputs", {max, per, jMax, jPer, count});
         renderGeneratedSetsList();
@@ -523,10 +527,10 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
 }
 
 async function toggleResult(el, id, val, isJoker) {
-    if (isProcessing) return; // Race condition engelleme
+    if (isProcessing) return; 
     
     isProcessing = true;
-    el.style.opacity = "0.5"; // İşlem başladığına dair görsel kilit
+    el.style.opacity = "0.5"; 
     
     const wasSelected = el.classList.contains("result-selected");
     
@@ -552,21 +556,18 @@ async function toggleResult(el, id, val, isJoker) {
                 }
             }
             
-            // Veritabanı yazma işleminin bitmesini bekle
             await atomicSave(g);
             
-            // Eğer hala bu gruptaysak arka planı güncelle
             if(history.state?.groupId === id) {
                 await renderViewGroup(g, lastRequestId);
             }
         });
     } catch(err) { 
-        // Hata durumunda UI'ı eski haline çevir
         el.classList.toggle("result-selected", wasSelected);
         ErrorHandler.report("Toggle Error", err);
     } finally {
         el.style.opacity = "1";
-        isProcessing = false; // Kilidi aç
+        isProcessing = false; 
     }
 }
 
@@ -592,8 +593,6 @@ async function cleanResult() {
                 g.results = {main: [], joker: []}; 
                 await atomicSave(g); 
                 await renderCurrentState("mySets", id); 
-                // Paneli de güncellemek için kapatıp açmak yerine içeriği temizleyebiliriz
-                // Ancak stabilite için navigation tetiklemek daha iyidir.
             } 
         });
     } catch(e) { ErrorHandler.report("Clean Error", e); } 
