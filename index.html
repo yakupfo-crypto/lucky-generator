@@ -103,6 +103,21 @@ let cryptoTimeout = null;
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
 
+/* --- STORAGE PERSISTENCE LOGIC --- */
+async function requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persisted();
+        if (!isPersisted) {
+            const granted = await navigator.storage.persist();
+            if (granted) {
+                console.log("Depolama kalıcı hale getirildi.");
+            } else {
+                console.warn("Kalıcı depolama izni verilmedi. Veriler temizlenebilir.");
+            }
+        }
+    }
+}
+
 /* --- CRYPTO ENGINE --- */
 const CryptoEngine = {
     isSecure: !!(window.crypto && window.crypto.getRandomValues),
@@ -117,13 +132,8 @@ const CryptoEngine = {
     updateUI: function() {
         const statusEl = getEl("crypto-status");
         if(statusEl) {
-            // Eski zamanlayıcıyı temizle (üst üste basılırsa süre sıfırlansın)
             if(cryptoTimeout) clearTimeout(cryptoTimeout);
-            
-            // "Güvenli" yazısını göster
             statusEl.innerHTML = `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>`;
-            
-            // 10 saniye sonra "Bekleniyor..." yazısına geri dön
             cryptoTimeout = setTimeout(() => {
                 statusEl.innerHTML = `Motor: Bekleniyor...`;
             }, 10000);
@@ -275,12 +285,16 @@ async function deleteFromDB(id) {
     } finally { if(db) db.close(); }
 }
 
-/* --- NAVIGATION --- */
-window.onload = () => { 
+/* --- NAVIGATION & INITIALIZATION --- */
+window.onload = async () => { 
     if (!CryptoEngine.isSecure) {
         document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠️ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
         return;
     }
+
+    // Kritik Veri Koruma: Kalıcı depolama izni iste
+    await requestPersistentStorage();
+
     const state = history.state || {page:"generate", groupId:null};
     
     if (state.page === "panel") {
