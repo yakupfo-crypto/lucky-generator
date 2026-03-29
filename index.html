@@ -22,7 +22,6 @@
     .ball.joker.result-selected{ background:#f44336!important; color:white!important; border:none; }
     .card b{ display:block; margin-bottom:10px; color:#1976d2; }
     .ball.result-selected{ background:#1976d2; color:#fff; }
-    .copy-btn { background: #4caf50; margin-bottom: 10px; }
     .delete-all-btn { background: #d32f2f; margin-bottom: 10px; }
     #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index: 3000; pointer-events:none; }
     .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
@@ -368,7 +367,6 @@ function renderGeneratedSetsList() {
         const actionCard = document.createElement("div");
         actionCard.className = "card";
         actionCard.innerHTML = `
-            <button class="copy-btn" onclick='copyCurrentGenerated()'>Panoya Kopyala</button>
             <button class="delete-all-btn" onclick='clearGeneratedSets()'>Üretilenleri Sil</button>
             <label><b>Liste Adı</b></label>
             <input type="text" id="groupNameInput" placeholder="İsim verin...">
@@ -611,15 +609,6 @@ async function cleanResult() {
         });
     } catch(e) { ErrorHandler.report("Clean Error", e); } 
     finally { setLoading(false); }
-}
-
-function copyCurrentGenerated() { 
-    const text = `${generatedSets.length} Kolon\n` + generatedSets.map((s, i) => `${i+1}. Kolon: ${s.numbers.join("-")}${s.jokers.length ? ' [J:'+s.jokers.join(',')+']' : ''}`).join("\n");
-    navigator.clipboard.writeText(text).then(() => {
-        const t = document.createElement("div"); 
-        t.style = "position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#4caf50; color:white; padding:10px 20px; border-radius:20px; z-index:5000;";
-        t.textContent = "Kopyalandı!"; document.body.appendChild(t); setTimeout(() => t.remove(), 2000);
-    });
 }
 </script>
 </body>
