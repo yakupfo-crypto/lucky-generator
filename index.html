@@ -99,6 +99,7 @@ window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", 
 let generatedSets = [];
 let lastRequestId = 0; 
 let isProcessing = false;
+let cryptoTimeout = null;
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
 
@@ -115,7 +116,18 @@ const CryptoEngine = {
     },
     updateUI: function() {
         const statusEl = getEl("crypto-status");
-        if(statusEl) statusEl.innerHTML = `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>`;
+        if(statusEl) {
+            // Eski zamanlayıcıyı temizle (üst üste basılırsa süre sıfırlansın)
+            if(cryptoTimeout) clearTimeout(cryptoTimeout);
+            
+            // "Güvenli" yazısını göster
+            statusEl.innerHTML = `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>`;
+            
+            // 10 saniye sonra "Bekleniyor..." yazısına geri dön
+            cryptoTimeout = setTimeout(() => {
+                statusEl.innerHTML = `Motor: Bekleniyor...`;
+            }, 10000);
+        }
     }
 };
 
