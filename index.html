@@ -281,18 +281,19 @@ async function deleteFromDB(id) {
     } finally { if(db) db.close(); }
 }
 
-/* --- NAVIGATION & INITIALIZATION --- */
+/* --- NAVIGATION & INITIALIZATION (DÜZENLENDİ) --- */
 window.onload = async () => { 
     if (!CryptoEngine.isSecure) {
         document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠️ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
         return;
     }
     await requestPersistentStorage();
+    
     const state = history.state || {page:"generate", groupId:null};
-    if (state.page === "panel") {
-        renderCurrentState("mySets", state.groupId).then(() => {
-            openResultPanel(null, state.groupId, false);
-        });
+    
+    if (state.page === "panel" && state.groupId) {
+        await renderCurrentState("mySets", state.groupId);
+        openResultPanel(null, state.groupId, false);
     } else {
         renderCurrentState(state.page, state.groupId); 
     }
@@ -300,7 +301,13 @@ window.onload = async () => {
 
 window.onpopstate = (event) => { 
     const state = event.state || {page:"generate", groupId:null}; 
-    if (state.page !== "panel") closeResultPanel(false); 
+    
+    if (state.page !== "panel") {
+        closeResultPanel(false); 
+    } else if (state.page === "panel") {
+        openResultPanel(null, state.groupId, false);
+    }
+    
     renderCurrentState(state.page, state.groupId); 
 };
 
@@ -313,11 +320,14 @@ async function renderCurrentState(page, groupId) {
     const currentRequestId = ++lastRequestId; 
     const container = getEl("view-container");
     if(!container) return;
-    container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
+    
+    // Panel/Modal sayfası renderView'da UI sıfırlamaya sebep olmasın (Zaten openResultPanel hallediyor)
     if (page !== "panel") {
+        container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
         getEl("resultPanel").style.display = "none";
         toggleBodyScroll(false);
     }
+    
     try {
         if (page === "generate") {
             if (currentRequestId === lastRequestId) await renderGeneratePage();
@@ -508,13 +518,15 @@ async function deleteGroup(id) {
     } 
 }
 
-/* --- RESULT PANEL & RACE CONDITION FIX --- */
+/* --- RESULT PANEL & MODAL FIX (DÜZENLENDİ) --- */
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); 
     if(!group) return;
+    
     const targetMax = max || group.max;
     const resDiv = getEl("resultNumbers");
     resDiv.innerHTML = "";
+    
     const createRow = (title, limit, isJoker) => {
         const h = document.createElement("h4"); h.textContent = title; h.style.margin = "15px 0 5px 0";
         const row = document.createElement("div"); row.className = "ball-row";
@@ -529,9 +541,14 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
         }
         resDiv.append(h, row);
     };
+    
     createRow(`Ana Sayılar (1-${targetMax})`, targetMax, false);
     if (group.jokerPerSet > 0) createRow(`Joker Sayılar (1-${group.jokerMax})`, group.jokerMax, true);
-    if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
+    
+    if (shouldPushState) {
+        history.pushState({page: "panel", groupId: String(groupId)}, "");
+    }
+    
     getEl("resultPanel").style.display = "block";
     toggleBodyScroll(true);
 }
@@ -539,11 +556,10 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
 async function toggleResult(el, id, val, isJoker) {
     if (isProcessing) return; 
     isProcessing = true;
-    el.style.opacity = "0.4"; // İşlem görsel geri bildirimi
+    el.style.opacity = "0.4";
     
     try {
         await withLock(async () => {
-            // DB'den taze veriyi çek (Mekanik gereklilik)
             const g = await getGroupById(id);
             if (!g) return;
 
@@ -551,7 +567,6 @@ async function toggleResult(el, id, val, isJoker) {
             const idx = list.indexOf(val);
             const isCurrentlySelected = idx > -1;
 
-            // Mantıksal karar DB durumuna göre verilir
             if (isCurrentlySelected) {
                 list.splice(idx, 1);
             } else {
@@ -563,17 +578,14 @@ async function toggleResult(el, id, val, isJoker) {
                 list.push(val);
             }
 
-            // Önce DB'ye yaz (Atomic)
             await atomicSave(g);
 
-            // Yazma başarılı olduktan sonra UI'ı tam senkronize et (Toggle yerine Net Set)
             if (isCurrentlySelected) {
                 el.classList.remove("result-selected");
             } else {
                 el.classList.add("result-selected");
             }
 
-            // Arka plandaki görünümü (istatistikler vb.) güncelle
             if(history.state?.groupId === id) {
                 await renderViewGroup(g, lastRequestId);
             }
@@ -586,8 +598,8 @@ async function toggleResult(el, id, val, isJoker) {
     }
 }
 
-function closeResultPanel(back = false) { 
-    if (back && history.state?.page === "panel") {
+function closeResultPanel(forceBack = true) { 
+    if (forceBack && history.state?.page === "panel") {
         history.back(); 
     } else {
         getEl("resultPanel").style.display = "none"; 
@@ -607,7 +619,10 @@ async function cleanResult() {
             if(g) { 
                 g.results = {main: [], joker: []}; 
                 await atomicSave(g); 
-                await renderCurrentState("mySets", id); 
+                await renderViewGroup(g, lastRequestId);
+                // Modal içindeki topları da temizle (UI sync)
+                const balls = document.querySelectorAll("#resultNumbers .ball");
+                balls.forEach(b => b.classList.remove("result-selected"));
             } 
         });
     } catch(e) { ErrorHandler.report("Clean Error", e); } 
