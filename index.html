@@ -248,6 +248,7 @@ async function getGroupById(id) {
     } catch(e) { if(db) db.close(); return null; }
 }
 
+// DÜZELTİLEN FONKSİYON: Taslak silme mantığı buradan kaldırıldı.
 async function atomicSave(item) {
     const val = Validator.validateGroup(item);
     if (!val) throw new Error("Doğrulama hatası.");
@@ -255,11 +256,9 @@ async function atomicSave(item) {
     try {
         db = await openDB();
         return await new Promise((res, rej) => {
-            const tx = db.transaction([DB_CONFIG.storeName, DB_CONFIG.draftStore], "readwrite");
+            const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
             val.version = Date.now();
             tx.objectStore(DB_CONFIG.storeName).put(val);
-            tx.objectStore(DB_CONFIG.draftStore).delete("tempSets");
-            tx.objectStore(DB_CONFIG.draftStore).delete("tempInputs");
             tx.oncomplete = () => { db.close(); res(); };
             tx.onerror = () => { db.close(); rej(new Error("Yazma hatası")); };
         });
@@ -307,13 +306,8 @@ window.onpopstate = async (event) => {
     await renderCurrentState(state.page, state.groupId); 
 };
 
-// GÜNCELLENEN NAVIGASYON FONKSİYONU
-async function navTo(page, groupId = null) { 
+function navTo(page, groupId = null) { 
     if (isProcessing) return; 
-    // Üret sayfasındayken ayrılıyorsak mevcut durumu kaydet
-    if (generatedSets.length > 0) {
-        await saveDraft("tempSets", generatedSets);
-    }
     history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); 
     renderCurrentState(page, groupId); 
 }
@@ -346,8 +340,6 @@ async function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
     const dSets = await getDraft("tempSets");
     const dInputs = await getDraft("tempInputs");
-    
-    // Belleği IndexedDB ile güncelle
     generatedSets = dSets ? dSets.data : [];
     if(dInputs) storedInputs = dInputs.data;
     
@@ -424,6 +416,7 @@ async function generateSets() {
     } finally { setLoading(false); isProcessing = false; }
 }
 
+// DÜZELTİLEN FONKSİYON: Taslak temizleme buraya alındı.
 async function saveGroup() {
     if (isProcessing) return;
     const name = getEl("groupNameInput").value.trim();
@@ -436,10 +429,13 @@ async function saveGroup() {
     try { 
         setLoading(true);
         isProcessing = true;
-        await withLock(async () => { await atomicSave(group); });
+        await withLock(async () => { 
+            await atomicSave(group);
+            // Üretilenleri sadece kalıcı kayıttan sonra sil
+            await deleteDraft("tempSets");
+            await deleteDraft("tempInputs");
+        });
         isProcessing = false;
-        // Kaydedildikten sonra üretilenleri temizleyip navigasyon yap
-        generatedSets = [];
         navTo('mySets', group.id); 
     } catch(err) { ErrorHandler.report("Save Error", err); isProcessing = false; } finally { setLoading(false); }
 }
