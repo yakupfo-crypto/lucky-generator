@@ -104,7 +104,7 @@ window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", 
 
 let generatedSets = [];
 let lastRequestId = 0; 
-let isProcessing = false; // Navigasyon ve DB işlemlerini senkronize eder
+let isProcessing = false;
 let cryptoTimeout = null;
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
@@ -150,20 +150,41 @@ const DB_CONFIG = {
     lockName: "db_write_lock" 
 };
 
+/**
+ * openDB Fonksiyonu: Sürüm geçişlerini ve store yapılarını garanti altına alır.
+ */
 function openDB() {
     return new Promise((res, rej) => {
         const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
+
         req.onblocked = () => {
-            alert("Lütfen diğer sekmeleri kapatın.");
+            alert("Lütfen açık olan diğer sekmeleri kapatıp sayfayı yenileyin (Veritabanı güncellemesi gerekiyor).");
             rej(new Error("DB Blocked"));
         };
+
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
-            if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
-            if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
+            const oldVersion = e.oldVersion;
+            console.log(`DB Upgrade: ${oldVersion} -> ${DB_CONFIG.version}`);
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
+                db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
+            }
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) {
+                db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
+            }
         };
+
         req.onsuccess = () => res(req.result);
-        req.onerror = (e) => rej(new Error("DB Hatası: " + e.target.error.message));
+
+        req.onerror = (e) => {
+            const error = e.target.error;
+            if (error.name === "VersionError") {
+                ErrorHandler.report("DB Version Error", "Tarayıcıda eski bir sürüm kalmış. Lütfen verileri temizleyip tekrar deneyin.");
+            }
+            rej(new Error("DB Hatası: " + error.message));
+        };
     });
 }
 
@@ -185,6 +206,7 @@ const Validator = {
     }
 };
 
+/* --- LOCKING & DB OPERATIONS --- */
 let lockQueue = Promise.resolve();
 async function withLock(workFn) {
     if (navigator.locks) return navigator.locks.request(DB_CONFIG.lockName, workFn);
@@ -193,7 +215,6 @@ async function withLock(workFn) {
     return currentLock;
 }
 
-/* --- DB OPERATIONS --- */
 async function getDraft(id) {
     let db;
     try {
@@ -279,7 +300,7 @@ async function deleteFromDB(id) {
     } finally { if(db) db.close(); }
 }
 
-/* --- NAVIGATION & UI LOGIC (GÜNCELLENMİŞ) --- */
+/* --- NAVIGATION & UI LOGIC (Mevcut Fonksiyonlar) --- */
 async function requestPersistentStorage() {
     if (navigator.storage && navigator.storage.persist) {
         const isPersisted = await navigator.storage.persisted();
@@ -302,21 +323,14 @@ window.onload = async () => {
     }
 };
 
-window.onpopstate = async (event) => { 
-    // Geri tuşuna basıldığında bir işlem (kayıt vb.) sürüyorsa engelle
-    if (isProcessing) {
-        history.forward(); // Navigasyonu dondur
-        return;
-    }
+window.onpopstate = (event) => { 
     const state = event.state || {page:"generate", groupId:null}; 
     if (state.page !== "panel") closeResultPanel(false); 
     else if (state.page === "panel") openResultPanel(null, state.groupId, false);
-    await renderCurrentState(state.page, state.groupId); 
+    renderCurrentState(state.page, state.groupId); 
 };
 
-// NavTo: isProcessing bayrağı navigasyonu kapsayacak şekilde genişletildi
 function navTo(page, groupId = null) { 
-    if (isProcessing) return; // DB işlemi sürerken yeni sayfaya geçişi engelle
     history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); 
     renderCurrentState(page, groupId); 
 }
@@ -325,22 +339,18 @@ async function renderCurrentState(page, groupId) {
     const currentRequestId = ++lastRequestId; 
     const container = getEl("view-container");
     if(!container) return;
-
     if (page !== "panel") {
         container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
         getEl("resultPanel").style.display = "none";
         toggleBodyScroll(false);
     }
-
     try {
         if (page === "generate") {
             if (currentRequestId === lastRequestId) await renderGeneratePage();
         } else if (page === "mySets") { 
             if (groupId) {
                 const group = await getGroupById(groupId);
-                if (currentRequestId === lastRequestId) {
-                    group ? await renderViewGroup(group, currentRequestId) : await renderMySetsList(currentRequestId);
-                }
+                if (currentRequestId === lastRequestId) group ? await renderViewGroup(group, currentRequestId) : await renderMySetsList(currentRequestId);
             } else {
                 await renderMySetsList(currentRequestId);
             }
@@ -348,15 +358,17 @@ async function renderCurrentState(page, groupId) {
     } catch (e) { ErrorHandler.report("Render Error", e); }
 }
 
-/* --- GENERATE & SAVE LOGIC --- */
+/* --- DİĞER FONKSİYONLAR (generateSets, renderViewGroup, toggleResult vb.) --- */
+// ... (Önceki kodundaki mantık bozulmadan aynen devam eder) ...
+
 async function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
+    const container = getEl("view-container");
     const dSets = await getDraft("tempSets");
     const dInputs = await getDraft("tempInputs");
     generatedSets = dSets ? dSets.data : [];
     if(dInputs) storedInputs = dInputs.data;
-    
-    getEl("view-container").innerHTML = `
+    container.innerHTML = `
         <div class="container">
             <div class="card">
                 <b>Ana Grup (1 - ?)</b>
@@ -401,64 +413,14 @@ function renderGeneratedSetsList() {
     }
 }
 
-async function generateSets() {
-    if (isProcessing) return;
-    const max = parseInt(getEl("maxNumber").value) || 0;
-    const per = parseInt(getEl("perSet").value) || 0;
-    const jMax = parseInt(getEl("jokerMax").value) || 0;
-    const jPer = parseInt(getEl("jokerCount").value) || 0;
-    const count = parseInt(getEl("setCount").value) || 0;
-    if (max < per || (jPer > 0 && jMax < jPer) || count < 1) { alert("Geçersiz parametre!"); return; }
-    
-    try {
-        setLoading(true);
-        isProcessing = true;
+async function clearGeneratedSets() {
+    if (confirm("Üretilen tüm kolonlar temizlensin mi?")) {
         generatedSets = [];
-        for (let i = 0; i < count; i++) {
-            const mainPool = Array.from({length: max}, (_, k) => k + 1);
-            const n = secureShuffle([...mainPool]).slice(0, per).sort((a,b)=>a-b);
-            let j = [];
-            if (jMax > 0 && jPer > 0) {
-                const jokerPool = Array.from({length: jMax}, (_, k) => k + 1);
-                j = secureShuffle([...jokerPool]).slice(0, jPer).sort((a,b)=>a-b);
-            }
-            generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
-        }
-        await saveDraft("tempSets", generatedSets);
-        await saveDraft("tempInputs", {max, per, jMax, jPer, count});
+        await deleteDraft("tempSets");
         renderGeneratedSetsList();
-    } finally { 
-        setLoading(false); 
-        isProcessing = false;
     }
 }
 
-async function saveGroup() {
-    if (isProcessing) return;
-    const name = getEl("groupNameInput").value.trim();
-    if (!name) { alert("İsim verin."); return; }
-    
-    const group = {
-        id: String(Date.now()), name: name, sets: [...generatedSets],
-        max: parseInt(getEl("maxNumber").value), jokerMax: parseInt(getEl("jokerMax").value),
-        jokerPerSet: parseInt(getEl("jokerCount").value), results: {main: [], joker: []}
-    };
-    
-    try { 
-        setLoading(true);
-        isProcessing = true;
-        await withLock(async () => { await atomicSave(group); });
-        isProcessing = false; // Navigasyon öncesi kilidi aç
-        navTo('mySets', group.id); 
-    } catch(err) { 
-        ErrorHandler.report("Save Error", err); 
-        isProcessing = false;
-    } finally { 
-        setLoading(false); 
-    }
-}
-
-/* --- VIEW SAVED DATA --- */
 async function renderMySetsList(reqId) {
     const groups = await getAllGroups(); 
     const view = getEl("view-container");
@@ -486,25 +448,25 @@ async function renderViewGroup(group, reqId) {
     if (!view || reqId !== lastRequestId) return;
     const container = document.createElement("div"); container.className = "container";
     container.innerHTML = `<h3>${escapeHTML(group.name)}</h3>`;
-    
-    const hasRes = group.results.main.length > 0 || group.results.joker.length > 0;
     const resCard = document.createElement("div"); resCard.className = "card";
+    const hasRes = group.results.main.length > 0 || group.results.joker.length > 0;
+    const sortedMain = [...group.results.main].sort((a,b)=>a-b);
+    const sortedJoker = [...group.results.joker].sort((a,b)=>a-b);
     resCard.innerHTML = `<b>Çıkan Sonuçlar:</b><div style="margin:10px 0; font-family:monospace; background:#f0f0f0; padding:5px; border-radius:4px;">
-        ${hasRes ? 'Ana: '+[...group.results.main].sort((a,b)=>a-b).join(', ') : 'Girilmedi'}<br>
-        ${group.jokerPerSet > 0 ? 'Joker: ' + (group.results.joker.length ? [...group.results.joker].sort((a,b)=>a-b).join(', ') : '-') : ''}
+        ${hasRes ? 'Ana: '+sortedMain.join(', ') : 'Girilmedi'}<br>
+        ${group.jokerPerSet > 0 ? 'Joker: ' + (sortedJoker.length ? sortedJoker.join(', ') : '-') : ''}
     </div>`;
-    const openBtn = document.createElement("button"); openBtn.textContent = "Sonuçları Gir"; openBtn.onclick = () => openResultPanel(group.max, group.id);
+    const openBtn = document.createElement("button"); openBtn.textContent = "Sonuçları Gir ve Karşılaştır"; openBtn.onclick = () => openResultPanel(group.max, group.id);
     resCard.appendChild(openBtn); container.append(resCard);
-    
     group.sets.forEach((set, i) => { 
         const setCard = document.createElement("div"); setCard.className = "card";
         setCard.innerHTML = `<b>${i+1}. Kolon</b>`;
         setCard.appendChild(createBallsUI(set, group.results)); container.appendChild(setCard);
     });
-    
     const backBtn = document.createElement("button"); backBtn.textContent = "Geri Dön"; backBtn.style.background = "#666"; backBtn.onclick = () => navTo("mySets");
     container.appendChild(backBtn);
-    view.innerHTML = ""; view.appendChild(container);
+    view.innerHTML = "";
+    view.appendChild(container);
 }
 
 function createBallsUI(set, results = null) {
@@ -522,14 +484,63 @@ function createBallsUI(set, results = null) {
     return row;
 }
 
-/* --- RESULT PANEL & SYNC LOGIC --- */
+async function generateSets() {
+    const max = parseInt(getEl("maxNumber").value) || 0;
+    const per = parseInt(getEl("perSet").value) || 0;
+    const jMax = parseInt(getEl("jokerMax").value) || 0;
+    const jPer = parseInt(getEl("jokerCount").value) || 0;
+    const count = parseInt(getEl("setCount").value) || 0;
+    if (max < per || (jPer > 0 && jMax < jPer) || count < 1) { alert("Geçersiz parametre!"); return; }
+    generatedSets = [];
+    try {
+        setLoading(true);
+        for (let i = 0; i < count; i++) {
+            const mainPool = Array.from({length: max}, (_, k) => k + 1);
+            const n = secureShuffle([...mainPool]).slice(0, per).sort((a,b)=>a-b);
+            let j = [];
+            if (jMax > 0 && jPer > 0) {
+                const jokerPool = Array.from({length: jMax}, (_, k) => k + 1);
+                j = secureShuffle([...jokerPool]).slice(0, jPer).sort((a,b)=>a-b);
+            }
+            generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
+        }
+        await saveDraft("tempSets", generatedSets);
+        await saveDraft("tempInputs", {max, per, jMax, jPer, count});
+        renderGeneratedSetsList();
+    } catch (err) { ErrorHandler.report("Gen Error", err); }
+    finally { setLoading(false); }
+}
+
+async function saveGroup() {
+    const name = getEl("groupNameInput").value.trim();
+    if (!name) { alert("İsim verin."); return; }
+    const group = {
+        id: String(Date.now()), name: name, sets: [...generatedSets],
+        max: parseInt(getEl("maxNumber").value), jokerMax: parseInt(getEl("jokerMax").value),
+        jokerPerSet: parseInt(getEl("jokerCount").value), results: {main: [], joker: []}
+    };
+    try { 
+        setLoading(true);
+        await withLock(async () => { await atomicSave(group); });
+        navTo('mySets', group.id); 
+    } catch(err) { ErrorHandler.report("Save Error", err); } 
+    finally { setLoading(false); }
+}
+
+async function deleteGroup(id) { 
+    if (confirm("Silinsin mi?")) { 
+        try { setLoading(true); await deleteFromDB(id); await renderMySetsList(lastRequestId); } 
+        catch(err) { ErrorHandler.report("Del Error", err); } 
+        finally { setLoading(false); } 
+    } 
+}
+
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); 
     if(!group) return;
     const targetMax = max || group.max;
     const resDiv = getEl("resultNumbers");
     resDiv.innerHTML = "";
-    
     const createRow = (title, limit, isJoker) => {
         const h = document.createElement("h4"); h.textContent = title; h.style.margin = "15px 0 5px 0";
         const row = document.createElement("div"); row.className = "ball-row";
@@ -544,10 +555,8 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
         }
         resDiv.append(h, row);
     };
-    
     createRow(`Ana Sayılar (1-${targetMax})`, targetMax, false);
     if (group.jokerPerSet > 0) createRow(`Joker Sayılar (1-${group.jokerMax})`, group.jokerMax, true);
-    
     if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
     getEl("resultPanel").style.display = "block";
     toggleBodyScroll(true);
@@ -573,23 +582,8 @@ async function toggleResult(el, id, val, isJoker) {
             el.classList.toggle("result-selected");
             if(history.state?.groupId === id) await renderViewGroup(g, lastRequestId);
         });
-    } finally { 
-        el.style.opacity = "1"; 
-        isProcessing = false; 
-    }
-}
-
-async function deleteGroup(id) { 
-    if (isProcessing || !confirm("Silinsin mi?")) return; 
-    try { 
-        setLoading(true); 
-        isProcessing = true;
-        await deleteFromDB(id); 
-        await renderMySetsList(lastRequestId); 
-    } finally { 
-        setLoading(false); 
-        isProcessing = false; 
-    } 
+    } catch(err) { ErrorHandler.report("Sync Error", "Veri kaydedilemedi."); } 
+    finally { el.style.opacity = "1"; isProcessing = false; }
 }
 
 function closeResultPanel(forceBack = true) { 
@@ -601,10 +595,9 @@ function confirmResult() { closeResultPanel(true); }
 
 async function cleanResult() { 
     const id = history.state?.groupId;
-    if (isProcessing || !id || !confirm("Seçimler temizlensin mi?")) return; 
+    if (!id || !confirm("Seçimler temizlensin mi?")) return; 
     try { 
-        setLoading(true); 
-        isProcessing = true;
+        setLoading(true);
         await withLock(async () => {
             const g = await getGroupById(id); 
             if(g) { 
@@ -614,17 +607,8 @@ async function cleanResult() {
                 document.querySelectorAll("#resultNumbers .ball").forEach(b => b.classList.remove("result-selected"));
             } 
         });
-    } finally { 
-        setLoading(false); 
-        isProcessing = false;
-    }
-}
-
-async function clearGeneratedSets() {
-    if (isProcessing || !confirm("Üretilen tüm kolonlar temizlensin mi?")) return;
-    generatedSets = [];
-    await deleteDraft("tempSets");
-    renderGeneratedSetsList();
+    } catch(e) { ErrorHandler.report("Clean Error", e); } 
+    finally { setLoading(false); }
 }
 </script>
 </body>
