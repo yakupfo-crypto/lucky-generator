@@ -164,18 +164,40 @@ function openDB() {
     });
 }
 
+/* --- VALIDATION & INTEGRITY --- */
+const cleanNumberArray = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return arr
+        .map(n => parseInt(n, 10))
+        .filter(n => !isNaN(n) && typeof n === 'number');
+};
+
 const Validator = {
     validateGroup: (data) => {
         try {
             if (!data || typeof data !== 'object') return null;
+
+            // Sets dizisinin içindeki her bir kolonun sayılarını temizle ve doğrula
+            const validatedSets = Array.isArray(data.sets) 
+                ? data.sets.map(set => ({
+                    numbers: cleanNumberArray(set.numbers),
+                    jokers: cleanNumberArray(set.jokers),
+                    max: Number(set.max) || 49,
+                    jokerMax: Number(set.jokerMax) || 0
+                })).filter(set => set.numbers.length > 0)
+                : [];
+
             return {
                 id: data.id ? String(data.id) : String(Date.now()),
                 name: data.name ? escapeHTML(String(data.name)) : "İsimsiz Liste",
-                sets: Array.isArray(data.sets) ? data.sets : [],
+                sets: validatedSets,
                 max: Number(data.max) || 49,
                 jokerMax: Number(data.jokerMax) || 0,
                 jokerPerSet: Number(data.jokerPerSet) || 0,
-                results: data.results || { main: [], joker: [] },
+                results: {
+                    main: cleanNumberArray(data.results?.main),
+                    joker: cleanNumberArray(data.results?.joker)
+                },
                 version: Number(data.version) || Date.now()
             };
         } catch (e) { return null; }
@@ -300,7 +322,6 @@ window.onload = async () => {
 window.onpopstate = async (event) => { 
     if (isProcessing) { history.forward(); return; }
     const state = event.state || {page:"generate", groupId:null}; 
-    // Geri tuşuna basıldığında panel state'inden çıkılıyorsa paneli kapat ve scroll'u aç
     if (state.page !== "panel") closeResultPanel(false); 
     else if (state.page === "panel") openResultPanel(null, state.groupId, false);
     await renderCurrentState(state.page, state.groupId); 
@@ -317,7 +338,6 @@ async function renderCurrentState(page, groupId) {
     const container = getEl("view-container");
     if(!container) return;
     
-    // Panel dışındaki her renderda scroll kilidini kesin olarak kaldır
     if (page !== "panel") {
         container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
         getEl("resultPanel").style.display = "none";
@@ -562,8 +582,6 @@ async function deleteGroup(id) {
 function closeResultPanel(forceBack = true) { 
     const currentState = history.state;
     const isPanelState = currentState && currentState.page === "panel";
-
-    // Kilit her durumda (hem donanımsal geri hem çarpı tuşu) temizlenmeli
     getEl("resultPanel").style.display = "none"; 
     toggleBodyScroll(false);
 
