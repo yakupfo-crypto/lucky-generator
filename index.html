@@ -248,7 +248,6 @@ async function getGroupById(id) {
     } catch(e) { if(db) db.close(); return null; }
 }
 
-// DÜZELTİLEN FONKSİYON: Taslak silme mantığı buradan kaldırıldı.
 async function atomicSave(item) {
     const val = Validator.validateGroup(item);
     if (!val) throw new Error("Doğrulama hatası.");
@@ -301,6 +300,7 @@ window.onload = async () => {
 window.onpopstate = async (event) => { 
     if (isProcessing) { history.forward(); return; }
     const state = event.state || {page:"generate", groupId:null}; 
+    // Geri tuşuna basıldığında panel state'inden çıkılıyorsa paneli kapat ve scroll'u aç
     if (state.page !== "panel") closeResultPanel(false); 
     else if (state.page === "panel") openResultPanel(null, state.groupId, false);
     await renderCurrentState(state.page, state.groupId); 
@@ -316,11 +316,14 @@ async function renderCurrentState(page, groupId) {
     const currentRequestId = ++lastRequestId; 
     const container = getEl("view-container");
     if(!container) return;
+    
+    // Panel dışındaki her renderda scroll kilidini kesin olarak kaldır
     if (page !== "panel") {
         container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
         getEl("resultPanel").style.display = "none";
-        toggleBodyScroll(false);
+        toggleBodyScroll(false); 
     }
+    
     try {
         if (page === "generate") {
             if (currentRequestId === lastRequestId) await renderGeneratePage();
@@ -416,7 +419,6 @@ async function generateSets() {
     } finally { setLoading(false); isProcessing = false; }
 }
 
-// DÜZELTİLEN FONKSİYON: Taslak temizleme buraya alındı.
 async function saveGroup() {
     if (isProcessing) return;
     const name = getEl("groupNameInput").value.trim();
@@ -431,7 +433,6 @@ async function saveGroup() {
         isProcessing = true;
         await withLock(async () => { 
             await atomicSave(group);
-            // Üretilenleri sadece kalıcı kayıttan sonra sil
             await deleteDraft("tempSets");
             await deleteDraft("tempInputs");
         });
@@ -562,17 +563,16 @@ function closeResultPanel(forceBack = true) {
     const currentState = history.state;
     const isPanelState = currentState && currentState.page === "panel";
 
+    // Kilit her durumda (hem donanımsal geri hem çarpı tuşu) temizlenmeli
+    getEl("resultPanel").style.display = "none"; 
+    toggleBodyScroll(false);
+
     if (forceBack && isPanelState) {
         if (window.history.length > 1) {
             history.back();
         } else {
-            getEl("resultPanel").style.display = "none";
-            toggleBodyScroll(false);
             navTo('mySets', currentState.groupId);
         }
-    } else { 
-        getEl("resultPanel").style.display = "none"; 
-        toggleBodyScroll(false); 
     }
 }
 
