@@ -84,22 +84,14 @@ const ErrorHandler = {
         if(monitor) {
             const toast = document.createElement("div");
             toast.className = "error-toast";
-            
-            // Başlık (Type) için güvenli düğüm
             const strong = document.createElement("strong");
             strong.textContent = `[${type}]`;
-            
             const br = document.createElement("br");
-            
-            // Mesaj içeriği için güvenli düğüm (textContent Injection'ı önler)
             const small = document.createElement("small");
             small.textContent = (data.message || String(data)).substring(0, 100);
-            
-            // Elemanları hiyerarşik olarak ekliyoruz (innerHTML kullanılmıyor)
             toast.appendChild(strong);
             toast.appendChild(br);
             toast.appendChild(small);
-            
             toast.onclick = () => toast.remove();
             monitor.appendChild(toast);
             setTimeout(() => { if(toast.parentNode) toast.remove(); }, 6000);
@@ -116,17 +108,6 @@ let isProcessing = false;
 let cryptoTimeout = null;
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
-
-/* --- STORAGE PERSISTENCE LOGIC --- */
-async function requestPersistentStorage() {
-    if (navigator.storage && navigator.storage.persist) {
-        const isPersisted = await navigator.storage.persisted();
-        if (!isPersisted) {
-            const granted = await navigator.storage.persist();
-            if (granted) console.log("Depolama kalıcı hale getirildi.");
-        }
-    }
-}
 
 /* --- CRYPTO ENGINE --- */
 const CryptoEngine = {
@@ -160,9 +141,54 @@ function secureShuffle(array) {
     return array;
 }
 
-/* --- DATABASE CONFIG & DRAFT LOGIC --- */
+/* --- DATABASE CONFIG & MIGRATION LOGIC --- */
+const DB_CONFIG = { 
+    name: "LuckyDB", 
+    version: 4, 
+    storeName: "savedGroups", 
+    draftStore: "drafts",
+    lockName: "db_write_lock" 
+};
+
+/**
+ * openDB Fonksiyonu: Sürüm geçişlerini ve store yapılarını garanti altına alır.
+ */
+function openDB() {
+    return new Promise((res, rej) => {
+        const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
+
+        req.onblocked = () => {
+            alert("Lütfen açık olan diğer sekmeleri kapatıp sayfayı yenileyin (Veritabanı güncellemesi gerekiyor).");
+            rej(new Error("DB Blocked"));
+        };
+
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            const oldVersion = e.oldVersion;
+            console.log(`DB Upgrade: ${oldVersion} -> ${DB_CONFIG.version}`);
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
+                db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
+            }
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) {
+                db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
+            }
+        };
+
+        req.onsuccess = () => res(req.result);
+
+        req.onerror = (e) => {
+            const error = e.target.error;
+            if (error.name === "VersionError") {
+                ErrorHandler.report("DB Version Error", "Tarayıcıda eski bir sürüm kalmış. Lütfen verileri temizleyip tekrar deneyin.");
+            }
+            rej(new Error("DB Hatası: " + error.message));
+        };
+    });
+}
+
 const Validator = {
-    isNumber: (v) => typeof v === 'number' && !isNaN(v),
     validateGroup: (data) => {
         try {
             if (!data || typeof data !== 'object') return null;
@@ -179,27 +205,6 @@ const Validator = {
         } catch (e) { return null; }
     }
 };
-
-const DB_CONFIG = { 
-    name: "LuckyDB", 
-    version: 3, 
-    storeName: "savedGroups", 
-    draftStore: "drafts",
-    lockName: "db_write_lock" 
-};
-
-function openDB() {
-    return new Promise((res, rej) => {
-        const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
-        req.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
-            if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
-        };
-        req.onsuccess = () => res(req.result);
-        req.onerror = () => rej(new Error("DB Hatası"));
-    });
-}
 
 /* --- LOCKING & DB OPERATIONS --- */
 let lockQueue = Promise.resolve();
@@ -295,16 +300,21 @@ async function deleteFromDB(id) {
     } finally { if(db) db.close(); }
 }
 
-/* --- NAVIGATION & INITIALIZATION --- */
+/* --- NAVIGATION & UI LOGIC (Mevcut Fonksiyonlar) --- */
+async function requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persisted();
+        if (!isPersisted) await navigator.storage.persist();
+    }
+}
+
 window.onload = async () => { 
     if (!CryptoEngine.isSecure) {
         document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠️ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
         return;
     }
     await requestPersistentStorage();
-    
     const state = history.state || {page:"generate", groupId:null};
-    
     if (state.page === "panel" && state.groupId) {
         await renderCurrentState("mySets", state.groupId);
         openResultPanel(null, state.groupId, false);
@@ -315,13 +325,8 @@ window.onload = async () => {
 
 window.onpopstate = (event) => { 
     const state = event.state || {page:"generate", groupId:null}; 
-    
-    if (state.page !== "panel") {
-        closeResultPanel(false); 
-    } else if (state.page === "panel") {
-        openResultPanel(null, state.groupId, false);
-    }
-    
+    if (state.page !== "panel") closeResultPanel(false); 
+    else if (state.page === "panel") openResultPanel(null, state.groupId, false);
     renderCurrentState(state.page, state.groupId); 
 };
 
@@ -334,13 +339,11 @@ async function renderCurrentState(page, groupId) {
     const currentRequestId = ++lastRequestId; 
     const container = getEl("view-container");
     if(!container) return;
-    
     if (page !== "panel") {
         container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
         getEl("resultPanel").style.display = "none";
         toggleBodyScroll(false);
     }
-    
     try {
         if (page === "generate") {
             if (currentRequestId === lastRequestId) await renderGeneratePage();
@@ -355,7 +358,9 @@ async function renderCurrentState(page, groupId) {
     } catch (e) { ErrorHandler.report("Render Error", e); }
 }
 
-/* --- PAGE UI --- */
+/* --- DİĞER FONKSİYONLAR (generateSets, renderViewGroup, toggleResult vb.) --- */
+// ... (Önceki kodundaki mantık bozulmadan aynen devam eder) ...
+
 async function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
     const container = getEl("view-container");
@@ -479,7 +484,6 @@ function createBallsUI(set, results = null) {
     return row;
 }
 
-/* --- LOGIC ACTIONS --- */
 async function generateSets() {
     const max = parseInt(getEl("maxNumber").value) || 0;
     const per = parseInt(getEl("perSet").value) || 0;
@@ -510,11 +514,11 @@ async function generateSets() {
 async function saveGroup() {
     const name = getEl("groupNameInput").value.trim();
     if (!name) { alert("İsim verin."); return; }
-    const group = Validator.validateGroup({
+    const group = {
         id: String(Date.now()), name: name, sets: [...generatedSets],
         max: parseInt(getEl("maxNumber").value), jokerMax: parseInt(getEl("jokerMax").value),
         jokerPerSet: parseInt(getEl("jokerCount").value), results: {main: [], joker: []}
-    });
+    };
     try { 
         setLoading(true);
         await withLock(async () => { await atomicSave(group); });
@@ -531,15 +535,12 @@ async function deleteGroup(id) {
     } 
 }
 
-/* --- RESULT PANEL & MODAL FIX --- */
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); 
     if(!group) return;
-    
     const targetMax = max || group.max;
     const resDiv = getEl("resultNumbers");
     resDiv.innerHTML = "";
-    
     const createRow = (title, limit, isJoker) => {
         const h = document.createElement("h4"); h.textContent = title; h.style.margin = "15px 0 5px 0";
         const row = document.createElement("div"); row.className = "ball-row";
@@ -554,14 +555,9 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
         }
         resDiv.append(h, row);
     };
-    
     createRow(`Ana Sayılar (1-${targetMax})`, targetMax, false);
     if (group.jokerPerSet > 0) createRow(`Joker Sayılar (1-${group.jokerMax})`, group.jokerMax, true);
-    
-    if (shouldPushState) {
-        history.pushState({page: "panel", groupId: String(groupId)}, "");
-    }
-    
+    if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
     getEl("resultPanel").style.display = "block";
     toggleBodyScroll(true);
 }
@@ -570,54 +566,29 @@ async function toggleResult(el, id, val, isJoker) {
     if (isProcessing) return; 
     isProcessing = true;
     el.style.opacity = "0.4";
-    
     try {
         await withLock(async () => {
             const g = await getGroupById(id);
             if (!g) return;
-
             const list = isJoker ? g.results.joker : g.results.main;
             const idx = list.indexOf(val);
-            const isCurrentlySelected = idx > -1;
-
-            if (isCurrentlySelected) {
-                list.splice(idx, 1);
-            } else {
+            if (idx > -1) list.splice(idx, 1);
+            else {
                 const limit = isJoker ? g.jokerPerSet : 10;
-                if (list.length >= limit) {
-                    alert(isJoker ? "Joker limiti!" : "Maks 10 sayı!");
-                    return; 
-                }
+                if (list.length >= limit) { alert(isJoker ? "Joker limiti!" : "Maks 10 sayı!"); return; }
                 list.push(val);
             }
-
             await atomicSave(g);
-
-            if (isCurrentlySelected) {
-                el.classList.remove("result-selected");
-            } else {
-                el.classList.add("result-selected");
-            }
-
-            if(history.state?.groupId === id) {
-                await renderViewGroup(g, lastRequestId);
-            }
+            el.classList.toggle("result-selected");
+            if(history.state?.groupId === id) await renderViewGroup(g, lastRequestId);
         });
-    } catch(err) { 
-        ErrorHandler.report("Sync Error", "Veri kaydedilemedi.");
-    } finally {
-        el.style.opacity = "1";
-        isProcessing = false; 
-    }
+    } catch(err) { ErrorHandler.report("Sync Error", "Veri kaydedilemedi."); } 
+    finally { el.style.opacity = "1"; isProcessing = false; }
 }
 
 function closeResultPanel(forceBack = true) { 
-    if (forceBack && history.state?.page === "panel") {
-        history.back(); 
-    } else {
-        getEl("resultPanel").style.display = "none"; 
-        toggleBodyScroll(false); 
-    }
+    if (forceBack && history.state?.page === "panel") history.back(); 
+    else { getEl("resultPanel").style.display = "none"; toggleBodyScroll(false); }
 }
 
 function confirmResult() { closeResultPanel(true); }
@@ -633,8 +604,7 @@ async function cleanResult() {
                 g.results = {main: [], joker: []}; 
                 await atomicSave(g); 
                 await renderViewGroup(g, lastRequestId);
-                const balls = document.querySelectorAll("#resultNumbers .ball");
-                balls.forEach(b => b.classList.remove("result-selected"));
+                document.querySelectorAll("#resultNumbers .ball").forEach(b => b.classList.remove("result-selected"));
             } 
         });
     } catch(e) { ErrorHandler.report("Clean Error", e); } 
