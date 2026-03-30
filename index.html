@@ -150,20 +150,41 @@ const DB_CONFIG = {
     lockName: "db_write_lock" 
 };
 
+/**
+ * openDB Fonksiyonu: Sürüm geçişlerini ve store yapılarını garanti altına alır.
+ */
 function openDB() {
     return new Promise((res, rej) => {
         const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
+
         req.onblocked = () => {
-            alert("Lütfen açık olan diğer sekmeleri kapatıp sayfayı yenileyin.");
+            alert("Lütfen açık olan diğer sekmeleri kapatıp sayfayı yenileyin (Veritabanı güncellemesi gerekiyor).");
             rej(new Error("DB Blocked"));
         };
+
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
-            if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
-            if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
+            const oldVersion = e.oldVersion;
+            console.log(`DB Upgrade: ${oldVersion} -> ${DB_CONFIG.version}`);
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
+                db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
+            }
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) {
+                db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
+            }
         };
+
         req.onsuccess = () => res(req.result);
-        req.onerror = (e) => rej(new Error("DB Hatası: " + e.target.error.message));
+
+        req.onerror = (e) => {
+            const error = e.target.error;
+            if (error.name === "VersionError") {
+                ErrorHandler.report("DB Version Error", "Tarayıcıda eski bir sürüm kalmış. Lütfen verileri temizleyip tekrar deneyin.");
+            }
+            rej(new Error("DB Hatası: " + error.message));
+        };
     });
 }
 
@@ -279,42 +300,57 @@ async function deleteFromDB(id) {
     } finally { if(db) db.close(); }
 }
 
-/* --- NAVIGATION & UI LOGIC (Geliştirilmiş Race Condition Koruması) --- */
-
-async function navTo(page, groupId = null) { 
-    if (isProcessing) return; 
-    history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); 
-    await renderCurrentState(page, groupId); 
+/* --- NAVIGATION & UI LOGIC (Mevcut Fonksiyonlar) --- */
+async function requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persisted();
+        if (!isPersisted) await navigator.storage.persist();
+    }
 }
 
-window.onpopstate = async (event) => { 
+window.onload = async () => { 
+    if (!CryptoEngine.isSecure) {
+        document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠️ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
+        return;
+    }
+    await requestPersistentStorage();
+    const state = history.state || {page:"generate", groupId:null};
+    if (state.page === "panel" && state.groupId) {
+        await renderCurrentState("mySets", state.groupId);
+        openResultPanel(null, state.groupId, false);
+    } else {
+        renderCurrentState(state.page, state.groupId); 
+    }
+};
+
+window.onpopstate = (event) => { 
     const state = event.state || {page:"generate", groupId:null}; 
     if (state.page !== "panel") closeResultPanel(false); 
     else if (state.page === "panel") openResultPanel(null, state.groupId, false);
-    await renderCurrentState(state.page, state.groupId); 
+    renderCurrentState(state.page, state.groupId); 
 };
+
+function navTo(page, groupId = null) { 
+    history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); 
+    renderCurrentState(page, groupId); 
+}
 
 async function renderCurrentState(page, groupId) {
     const currentRequestId = ++lastRequestId; 
     const container = getEl("view-container");
     if(!container) return;
-
     if (page !== "panel") {
         container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
         getEl("resultPanel").style.display = "none";
         toggleBodyScroll(false);
     }
-
     try {
         if (page === "generate") {
             if (currentRequestId === lastRequestId) await renderGeneratePage();
         } else if (page === "mySets") { 
             if (groupId) {
-                // withLock kullanarak yazma bitmeden okumayı bekletiyoruz
-                const group = await withLock(async () => await getGroupById(groupId));
-                if (currentRequestId === lastRequestId) {
-                    group ? await renderViewGroup(group, currentRequestId) : await renderMySetsList(currentRequestId);
-                }
+                const group = await getGroupById(groupId);
+                if (currentRequestId === lastRequestId) group ? await renderViewGroup(group, currentRequestId) : await renderMySetsList(currentRequestId);
             } else {
                 await renderMySetsList(currentRequestId);
             }
@@ -322,7 +358,8 @@ async function renderCurrentState(page, groupId) {
     } catch (e) { ErrorHandler.report("Render Error", e); }
 }
 
-/* --- PAGE RENDERS --- */
+/* --- DİĞER FONKSİYONLAR (generateSets, renderViewGroup, toggleResult vb.) --- */
+// ... (Önceki kodundaki mantık bozulmadan aynen devam eder) ...
 
 async function renderGeneratePage() {
     let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
@@ -373,6 +410,14 @@ function renderGeneratedSetsList() {
             <input type="text" id="groupNameInput" placeholder="İsim verin...">
             <button onclick="saveGroup()">Kalıcı Olarak Kaydet</button>`;
         resultsDiv.appendChild(actionCard);
+    }
+}
+
+async function clearGeneratedSets() {
+    if (confirm("Üretilen tüm kolonlar temizlensin mi?")) {
+        generatedSets = [];
+        await deleteDraft("tempSets");
+        renderGeneratedSetsList();
     }
 }
 
@@ -439,21 +484,16 @@ function createBallsUI(set, results = null) {
     return row;
 }
 
-/* --- LOGIC ACTIONS --- */
-
 async function generateSets() {
-    if (isProcessing) return;
     const max = parseInt(getEl("maxNumber").value) || 0;
     const per = parseInt(getEl("perSet").value) || 0;
     const jMax = parseInt(getEl("jokerMax").value) || 0;
     const jPer = parseInt(getEl("jokerCount").value) || 0;
     const count = parseInt(getEl("setCount").value) || 0;
     if (max < per || (jPer > 0 && jMax < jPer) || count < 1) { alert("Geçersiz parametre!"); return; }
-    
+    generatedSets = [];
     try {
-        isProcessing = true;
         setLoading(true);
-        generatedSets = [];
         for (let i = 0; i < count; i++) {
             const mainPool = Array.from({length: max}, (_, k) => k + 1);
             const n = secureShuffle([...mainPool]).slice(0, per).sort((a,b)=>a-b);
@@ -468,38 +508,31 @@ async function generateSets() {
         await saveDraft("tempInputs", {max, per, jMax, jPer, count});
         renderGeneratedSetsList();
     } catch (err) { ErrorHandler.report("Gen Error", err); }
-    finally { setLoading(false); isProcessing = false; }
+    finally { setLoading(false); }
 }
 
 async function saveGroup() {
     const name = getEl("groupNameInput").value.trim();
-    if (!name || isProcessing) { if(!name) alert("İsim verin."); return; }
-    
+    if (!name) { alert("İsim verin."); return; }
     const group = {
         id: String(Date.now()), name: name, sets: [...generatedSets],
         max: parseInt(getEl("maxNumber").value), jokerMax: parseInt(getEl("jokerMax").value),
         jokerPerSet: parseInt(getEl("jokerCount").value), results: {main: [], joker: []}
     };
-
     try { 
-        isProcessing = true;
         setLoading(true);
         await withLock(async () => { await atomicSave(group); });
         navTo('mySets', group.id); 
     } catch(err) { ErrorHandler.report("Save Error", err); } 
-    finally { setLoading(false); isProcessing = false; }
+    finally { setLoading(false); }
 }
 
 async function deleteGroup(id) { 
-    if (isProcessing || !confirm("Silinsin mi?")) return; 
-    
-    try { 
-        isProcessing = true;
-        setLoading(true); 
-        await withLock(async () => { await deleteFromDB(id); });
-        await renderMySetsList(lastRequestId); 
-    } catch(err) { ErrorHandler.report("Del Error", err); } 
-    finally { setLoading(false); isProcessing = false; } 
+    if (confirm("Silinsin mi?")) { 
+        try { setLoading(true); await deleteFromDB(id); await renderMySetsList(lastRequestId); } 
+        catch(err) { ErrorHandler.report("Del Error", err); } 
+        finally { setLoading(false); } 
+    } 
 }
 
 async function openResultPanel(max, groupId, shouldPushState = true) {
@@ -553,12 +586,17 @@ async function toggleResult(el, id, val, isJoker) {
     finally { el.style.opacity = "1"; isProcessing = false; }
 }
 
+function closeResultPanel(forceBack = true) { 
+    if (forceBack && history.state?.page === "panel") history.back(); 
+    else { getEl("resultPanel").style.display = "none"; toggleBodyScroll(false); }
+}
+
+function confirmResult() { closeResultPanel(true); }
+
 async function cleanResult() { 
     const id = history.state?.groupId;
-    if (!id || isProcessing || !confirm("Seçimler temizlensin mi?")) return; 
-    
+    if (!id || !confirm("Seçimler temizlensin mi?")) return; 
     try { 
-        isProcessing = true;
         setLoading(true);
         await withLock(async () => {
             const g = await getGroupById(id); 
@@ -570,30 +608,8 @@ async function cleanResult() {
             } 
         });
     } catch(e) { ErrorHandler.report("Clean Error", e); } 
-    finally { setLoading(false); isProcessing = false; }
+    finally { setLoading(false); }
 }
-
-function closeResultPanel(forceBack = true) { 
-    if (forceBack && history.state?.page === "panel") history.back(); 
-    else { getEl("resultPanel").style.display = "none"; toggleBodyScroll(false); }
-}
-
-function confirmResult() { closeResultPanel(true); }
-
-window.onload = async () => { 
-    if (!CryptoEngine.isSecure) {
-        document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠️ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
-        return;
-    }
-    const state = history.state || {page:"generate", groupId:null};
-    if (state.page === "panel" && state.groupId) {
-        await renderCurrentState("mySets", state.groupId);
-        openResultPanel(null, state.groupId, false);
-    } else {
-        await renderCurrentState(state.page, state.groupId); 
-    }
-};
-
 </script>
 </body>
 </html>
