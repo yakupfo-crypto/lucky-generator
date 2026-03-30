@@ -104,7 +104,7 @@ window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", 
 
 let generatedSets = [];
 let lastRequestId = 0; 
-let isProcessing = false; // Navigasyon ve DB işlemlerini senkronize eder
+let isProcessing = false; 
 let cryptoTimeout = null;
 
 function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
@@ -141,7 +141,7 @@ function secureShuffle(array) {
     return array;
 }
 
-/* --- DATABASE CONFIG & MIGRATION LOGIC --- */
+/* --- DATABASE CONFIG --- */
 const DB_CONFIG = { 
     name: "LuckyDB", 
     version: 4, 
@@ -153,10 +153,7 @@ const DB_CONFIG = {
 function openDB() {
     return new Promise((res, rej) => {
         const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
-        req.onblocked = () => {
-            alert("Lütfen diğer sekmeleri kapatın.");
-            rej(new Error("DB Blocked"));
-        };
+        req.onblocked = () => { alert("Lütfen diğer sekmeleri kapatın."); rej(new Error("DB Blocked")); };
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
@@ -279,7 +276,7 @@ async function deleteFromDB(id) {
     } finally { if(db) db.close(); }
 }
 
-/* --- NAVIGATION & UI LOGIC (GÜNCELLENMİŞ) --- */
+/* --- NAVIGATION & UI LOGIC --- */
 async function requestPersistentStorage() {
     if (navigator.storage && navigator.storage.persist) {
         const isPersisted = await navigator.storage.persisted();
@@ -303,20 +300,15 @@ window.onload = async () => {
 };
 
 window.onpopstate = async (event) => { 
-    // Geri tuşuna basıldığında bir işlem (kayıt vb.) sürüyorsa engelle
-    if (isProcessing) {
-        history.forward(); // Navigasyonu dondur
-        return;
-    }
+    if (isProcessing) { history.forward(); return; }
     const state = event.state || {page:"generate", groupId:null}; 
     if (state.page !== "panel") closeResultPanel(false); 
     else if (state.page === "panel") openResultPanel(null, state.groupId, false);
     await renderCurrentState(state.page, state.groupId); 
 };
 
-// NavTo: isProcessing bayrağı navigasyonu kapsayacak şekilde genişletildi
 function navTo(page, groupId = null) { 
-    if (isProcessing) return; // DB işlemi sürerken yeni sayfaya geçişi engelle
+    if (isProcessing) return; 
     history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); 
     renderCurrentState(page, groupId); 
 }
@@ -325,13 +317,11 @@ async function renderCurrentState(page, groupId) {
     const currentRequestId = ++lastRequestId; 
     const container = getEl("view-container");
     if(!container) return;
-
     if (page !== "panel") {
         container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
         getEl("resultPanel").style.display = "none";
         toggleBodyScroll(false);
     }
-
     try {
         if (page === "generate") {
             if (currentRequestId === lastRequestId) await renderGeneratePage();
@@ -341,9 +331,7 @@ async function renderCurrentState(page, groupId) {
                 if (currentRequestId === lastRequestId) {
                     group ? await renderViewGroup(group, currentRequestId) : await renderMySetsList(currentRequestId);
                 }
-            } else {
-                await renderMySetsList(currentRequestId);
-            }
+            } else { await renderMySetsList(currentRequestId); }
         }
     } catch (e) { ErrorHandler.report("Render Error", e); }
 }
@@ -409,7 +397,6 @@ async function generateSets() {
     const jPer = parseInt(getEl("jokerCount").value) || 0;
     const count = parseInt(getEl("setCount").value) || 0;
     if (max < per || (jPer > 0 && jMax < jPer) || count < 1) { alert("Geçersiz parametre!"); return; }
-    
     try {
         setLoading(true);
         isProcessing = true;
@@ -427,35 +414,25 @@ async function generateSets() {
         await saveDraft("tempSets", generatedSets);
         await saveDraft("tempInputs", {max, per, jMax, jPer, count});
         renderGeneratedSetsList();
-    } finally { 
-        setLoading(false); 
-        isProcessing = false;
-    }
+    } finally { setLoading(false); isProcessing = false; }
 }
 
 async function saveGroup() {
     if (isProcessing) return;
     const name = getEl("groupNameInput").value.trim();
     if (!name) { alert("İsim verin."); return; }
-    
     const group = {
         id: String(Date.now()), name: name, sets: [...generatedSets],
         max: parseInt(getEl("maxNumber").value), jokerMax: parseInt(getEl("jokerMax").value),
         jokerPerSet: parseInt(getEl("jokerCount").value), results: {main: [], joker: []}
     };
-    
     try { 
         setLoading(true);
         isProcessing = true;
         await withLock(async () => { await atomicSave(group); });
-        isProcessing = false; // Navigasyon öncesi kilidi aç
-        navTo('mySets', group.id); 
-    } catch(err) { 
-        ErrorHandler.report("Save Error", err); 
         isProcessing = false;
-    } finally { 
-        setLoading(false); 
-    }
+        navTo('mySets', group.id); 
+    } catch(err) { ErrorHandler.report("Save Error", err); isProcessing = false; } finally { setLoading(false); }
 }
 
 /* --- VIEW SAVED DATA --- */
@@ -486,7 +463,6 @@ async function renderViewGroup(group, reqId) {
     if (!view || reqId !== lastRequestId) return;
     const container = document.createElement("div"); container.className = "container";
     container.innerHTML = `<h3>${escapeHTML(group.name)}</h3>`;
-    
     const hasRes = group.results.main.length > 0 || group.results.joker.length > 0;
     const resCard = document.createElement("div"); resCard.className = "card";
     resCard.innerHTML = `<b>Çıkan Sonuçlar:</b><div style="margin:10px 0; font-family:monospace; background:#f0f0f0; padding:5px; border-radius:4px;">
@@ -495,13 +471,11 @@ async function renderViewGroup(group, reqId) {
     </div>`;
     const openBtn = document.createElement("button"); openBtn.textContent = "Sonuçları Gir"; openBtn.onclick = () => openResultPanel(group.max, group.id);
     resCard.appendChild(openBtn); container.append(resCard);
-    
     group.sets.forEach((set, i) => { 
         const setCard = document.createElement("div"); setCard.className = "card";
         setCard.innerHTML = `<b>${i+1}. Kolon</b>`;
         setCard.appendChild(createBallsUI(set, group.results)); container.appendChild(setCard);
     });
-    
     const backBtn = document.createElement("button"); backBtn.textContent = "Geri Dön"; backBtn.style.background = "#666"; backBtn.onclick = () => navTo("mySets");
     container.appendChild(backBtn);
     view.innerHTML = ""; view.appendChild(container);
@@ -522,14 +496,13 @@ function createBallsUI(set, results = null) {
     return row;
 }
 
-/* --- RESULT PANEL & SYNC LOGIC --- */
+/* --- RESULT PANEL & SYNC LOGIC (GÜNCEL & GÜVENLİ) --- */
 async function openResultPanel(max, groupId, shouldPushState = true) {
     const group = await getGroupById(groupId); 
     if(!group) return;
     const targetMax = max || group.max;
     const resDiv = getEl("resultNumbers");
     resDiv.innerHTML = "";
-    
     const createRow = (title, limit, isJoker) => {
         const h = document.createElement("h4"); h.textContent = title; h.style.margin = "15px 0 5px 0";
         const row = document.createElement("div"); row.className = "ball-row";
@@ -544,10 +517,8 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
         }
         resDiv.append(h, row);
     };
-    
     createRow(`Ana Sayılar (1-${targetMax})`, targetMax, false);
     if (group.jokerPerSet > 0) createRow(`Joker Sayılar (1-${group.jokerMax})`, group.jokerMax, true);
-    
     if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
     getEl("resultPanel").style.display = "block";
     toggleBodyScroll(true);
@@ -573,28 +544,35 @@ async function toggleResult(el, id, val, isJoker) {
             el.classList.toggle("result-selected");
             if(history.state?.groupId === id) await renderViewGroup(g, lastRequestId);
         });
-    } finally { 
-        el.style.opacity = "1"; 
-        isProcessing = false; 
-    }
+    } finally { el.style.opacity = "1"; isProcessing = false; }
 }
 
 async function deleteGroup(id) { 
     if (isProcessing || !confirm("Silinsin mi?")) return; 
-    try { 
-        setLoading(true); 
-        isProcessing = true;
-        await deleteFromDB(id); 
-        await renderMySetsList(lastRequestId); 
-    } finally { 
-        setLoading(false); 
-        isProcessing = false; 
-    } 
+    try { setLoading(true); isProcessing = true; await deleteFromDB(id); await renderMySetsList(lastRequestId); } 
+    finally { setLoading(false); isProcessing = false; } 
 }
 
+/**
+ * GÜVENLİ KAPATMA MANTIĞI
+ */
 function closeResultPanel(forceBack = true) { 
-    if (forceBack && history.state?.page === "panel") history.back(); 
-    else { getEl("resultPanel").style.display = "none"; toggleBodyScroll(false); }
+    const currentState = history.state;
+    const isPanelState = currentState && currentState.page === "panel";
+
+    if (forceBack && isPanelState) {
+        // Eğer history.length 1'den büyükse geri git, değilse (direkt URL/Refresh) güvenli sayfaya dön.
+        if (window.history.length > 1) {
+            history.back();
+        } else {
+            getEl("resultPanel").style.display = "none";
+            toggleBodyScroll(false);
+            navTo('mySets', currentState.groupId);
+        }
+    } else { 
+        getEl("resultPanel").style.display = "none"; 
+        toggleBodyScroll(false); 
+    }
 }
 
 function confirmResult() { closeResultPanel(true); }
@@ -603,8 +581,7 @@ async function cleanResult() {
     const id = history.state?.groupId;
     if (isProcessing || !id || !confirm("Seçimler temizlensin mi?")) return; 
     try { 
-        setLoading(true); 
-        isProcessing = true;
+        setLoading(true); isProcessing = true;
         await withLock(async () => {
             const g = await getGroupById(id); 
             if(g) { 
@@ -614,10 +591,7 @@ async function cleanResult() {
                 document.querySelectorAll("#resultNumbers .ball").forEach(b => b.classList.remove("result-selected"));
             } 
         });
-    } finally { 
-        setLoading(false); 
-        isProcessing = false;
-    }
+    } finally { setLoading(false); isProcessing = false; }
 }
 
 async function clearGeneratedSets() {
