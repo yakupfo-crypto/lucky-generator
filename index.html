@@ -66,14 +66,15 @@ const setLoading = (state) => { const el = getEl("global-loader"); if(el) el.sty
 
 function toggleBodyScroll(lock) {
     if (lock) {
-        const scrollY = window.scrollY;
+        const scrollY = window.scrollY || window.pageYOffset || 0;
         document.body.style.top = `-${scrollY}px`;
         document.body.classList.add("modal-open");
     } else {
-        const scrollY = document.body.style.top;
+        const scrollStr = document.body.style.top || "0px";
+        const scrollY = Math.abs(parseInt(scrollStr, 10)) || 0;
         document.body.classList.remove("modal-open");
         document.body.style.top = '';
-        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+        window.scrollTo(0, scrollY);
     }
 }
 
@@ -165,7 +166,7 @@ function openDB() {
             db.onversionchange = () => { db.close(); };
             res(db);
         };
-        req.onerror = (e) => rej(new Error("DB Hatası: " + e.target.error.message));
+        req.onerror = (e) => rej(new Error("DB Hatası: " + (e.target.error ? e.target.error.message : "Bilinmeyen Hata")));
     });
 }
 
@@ -324,7 +325,6 @@ window.onload = async () => {
 };
 
 window.onpopstate = async (event) => { 
-    if (isProcessing) { history.forward(); return; }
     const state = event.state || {page:"generate", groupId:null}; 
     if (state.page !== "panel") closeResultPanel(false); 
     else if (state.page === "panel") openResultPanel(null, state.groupId, false);
@@ -417,11 +417,20 @@ function renderGeneratedSetsList() {
 
 async function generateSets() {
     if (isProcessing) return;
-    const max = parseInt(getEl("maxNumber").value) || 0;
-    const per = parseInt(getEl("perSet").value) || 0;
-    const jMax = parseInt(getEl("jokerMax").value) || 0;
-    const jPer = parseInt(getEl("jokerCount").value) || 0;
-    const count = parseInt(getEl("setCount").value) || 0;
+    const maxEl = getEl("maxNumber");
+    const perEl = getEl("perSet");
+    const jMaxEl = getEl("jokerMax");
+    const jPerEl = getEl("jokerCount");
+    const countEl = getEl("setCount");
+
+    if (!maxEl || !perEl || !jMaxEl || !jPerEl || !countEl) return;
+
+    const max = parseInt(maxEl.value, 10) || 0;
+    const per = parseInt(perEl.value, 10) || 0;
+    const jMax = parseInt(jMaxEl.value, 10) || 0;
+    const jPer = parseInt(jPerEl.value, 10) || 0;
+    const count = parseInt(countEl.value, 10) || 0;
+
     if (max <= 0 || per <= 0 || max < per || (jPer > 0 && jMax < jPer) || count < 1) { 
         alert("Geçersiz parametre!"); 
         return; 
@@ -443,17 +452,29 @@ async function generateSets() {
         await saveDraft("tempSets", generatedSets);
         await saveDraft("tempInputs", {max, per, jMax, jPer, count});
         renderGeneratedSetsList();
-    } finally { setLoading(false); isProcessing = false; }
+    } catch(e) {
+        ErrorHandler.report("Generate Error", e);
+    } finally { 
+        setLoading(false); 
+        isProcessing = false; 
+    }
 }
 
 async function saveGroup() {
     if (isProcessing) return;
-    const name = getEl("groupNameInput").value.trim();
+    const nameEl = getEl("groupNameInput");
+    if (!nameEl) return;
+    const name = nameEl.value.trim();
     if (!name) { alert("İsim verin."); return; }
+
+    const maxVal = generatedSets.length > 0 ? generatedSets[0].max : (parseInt(getEl("maxNumber")?.value, 10) || 49);
+    const jMaxVal = generatedSets.length > 0 ? generatedSets[0].jokerMax : (parseInt(getEl("jokerMax")?.value, 10) || 0);
+    const jPerVal = parseInt(getEl("jokerCount")?.value, 10) || 0;
+
     const group = {
         id: String(Date.now()), name: name, sets: [...generatedSets],
-        max: parseInt(getEl("maxNumber").value), jokerMax: parseInt(getEl("jokerMax").value),
-        jokerPerSet: parseInt(getEl("jokerCount").value), results: {main: [], joker: []}
+        max: maxVal, jokerMax: jMaxVal,
+        jokerPerSet: jPerVal, results: {main: [], joker: []}
     };
     try { 
         setLoading(true);
@@ -465,7 +486,12 @@ async function saveGroup() {
         });
         isProcessing = false;
         navTo('mySets', group.id); 
-    } catch(err) { ErrorHandler.report("Save Error", err); isProcessing = false; } finally { setLoading(false); }
+    } catch(err) { 
+        ErrorHandler.report("Save Error", err); 
+    } finally { 
+        isProcessing = false;
+        setLoading(false); 
+    }
 }
 
 /* --- VIEW SAVED DATA --- */
@@ -577,12 +603,18 @@ async function toggleResult(el, id, val, isJoker) {
             el.classList.toggle("result-selected");
             if(history.state?.groupId === id) await renderViewGroup(g, lastRequestId);
         });
-    } finally { el.style.opacity = "1"; isProcessing = false; }
+    } catch(e) {
+        ErrorHandler.report("Result Toggle Error", e);
+    } finally { 
+        el.style.opacity = "1"; 
+        isProcessing = false; 
+    }
 }
 
 async function deleteGroup(id) { 
     if (isProcessing || !confirm("Silinsin mi?")) return; 
     try { setLoading(true); isProcessing = true; await deleteFromDB(id); await renderMySetsList(lastRequestId); } 
+    catch(e) { ErrorHandler.report("Delete Error", e); }
     finally { setLoading(false); isProcessing = false; } 
 }
 
@@ -617,15 +649,23 @@ async function cleanResult() {
                 document.querySelectorAll("#resultNumbers .ball").forEach(b => b.classList.remove("result-selected"));
             } 
         });
-    } finally { setLoading(false); isProcessing = false; }
+    } catch(e) { ErrorHandler.report("Clean Result Error", e); }
+    finally { setLoading(false); isProcessing = false; }
 }
 
 async function clearGeneratedSets() {
     if (isProcessing || !confirm("Üretilen tüm kolonlar temizlensin mi?")) return;
-    generatedSets = [];
-    await deleteDraft("tempSets");
-    await deleteDraft("tempInputs");
-    renderGeneratedSetsList();
+    try {
+        isProcessing = true;
+        generatedSets = [];
+        await deleteDraft("tempSets");
+        await deleteDraft("tempInputs");
+        renderGeneratedSetsList();
+    } catch(e) {
+        ErrorHandler.report("Clear Drafts Error", e);
+    } finally {
+        isProcessing = false;
+    }
 }
 </script>
 </body>
