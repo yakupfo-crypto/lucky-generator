@@ -175,13 +175,11 @@ function getDB() {
 }
 
 /* --- VALIDATION & INTEGRITY --- */
-// DÜZELTME 5: Array içerisindeki sayıları temizlerken mükerrer (duplicate) kayıtları engellemek için Array.from(new Set(...)) kullanıldı.
 const cleanNumberArray = (arr) => {
     if (!Array.isArray(arr)) return [];
-    const cleaned = arr
+    return arr
         .map(n => parseInt(n, 10))
         .filter(n => !isNaN(n) && typeof n === 'number' && n > 0);
-    return Array.from(new Set(cleaned));
 };
 
 const Validator = {
@@ -274,20 +272,20 @@ async function getGroupById(id) {
     } catch(e) { return null; }
 }
 
-// DÜZELTME 2: Transaksiyon zaman aşımını önlemek için DB bağlantısı ve doğrulama kilit öncesinde alınıyor, kilit içinde anında yazma gerçekleşiyor.
 async function atomicSave(item) {
-    const val = Validator.validateGroup(item);
-    if (!val) throw new Error("Doğrulama hatası.");
-    const db = await getDB();
-
     return withLock(async () => {
-        return await new Promise((res, rej) => {
-            const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
-            val.version = Date.now();
-            tx.objectStore(DB_CONFIG.storeName).put(val);
-            tx.oncomplete = () => res();
-            tx.onerror = () => rej(new Error("Yazma hatası"));
-        });
+        const val = Validator.validateGroup(item);
+        if (!val) throw new Error("Doğrulama hatası.");
+        try {
+            const db = await getDB();
+            return await new Promise((res, rej) => {
+                const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
+                val.version = Date.now();
+                tx.objectStore(DB_CONFIG.storeName).put(val);
+                tx.oncomplete = () => res();
+                tx.onerror = () => rej(new Error("Yazma hatası"));
+            });
+        } catch (err) { throw err; }
     });
 }
 
@@ -414,7 +412,14 @@ async function renderCurrentState(page, groupId) {
                 }
             } else { await renderMySetsList(currentRequestId); }
         }
-    } catch (e) { ErrorHandler.report("Render Error", e); }
+    } catch (e) { 
+        ErrorHandler.report("Render Error", e); 
+    } finally {
+        // [DÜZELTME 3]: Hızlı navigasyonda veya istek iptallerinde ekranda "Yükleniyor..." kalmasını engeller
+        if (currentRequestId !== lastRequestId && container.innerHTML.includes("Yükleniyor...")) {
+            container.innerHTML = "";
+        }
+    }
 }
 
 /* --- GENERATE & SAVE LOGIC --- */
@@ -664,12 +669,9 @@ async function toggleResult(el, id, val, isJoker) {
             if (idx > -1) {
                 list.splice(idx, 1);
             } else {
-                // DÜZELTME 3: Joker girerken gruptaki kolon joker sayısı sınırına takılmamak için maksimum üst limit 10 sayıya esnetildi.
-                const limit = 10;
+                const limit = isJoker ? (g.jokerPerSet > 0 ? g.jokerPerSet : 10) : 10;
                 if (list.length >= limit) { 
-                    alert(isJoker ? "Maks 10 joker sayısı!" : "Maks 10 sayı!"); 
-                    isProcessing = false;
-                    el.style.opacity = "1";
+                    alert(isJoker ? "Joker limiti!" : "Maks 10 sayı!"); 
                     return; 
                 }
                 list.push(val);
@@ -678,14 +680,15 @@ async function toggleResult(el, id, val, isJoker) {
             el.classList.toggle("result-selected");
             updatedGroup = g;
         }
-        if (updatedGroup && history.state?.groupId === id) {
-            await renderViewGroup(updatedGroup, lastRequestId);
-        }
     } catch(e) {
         ErrorHandler.report("Result Toggle Error", e);
     } finally { 
         el.style.opacity = "1"; 
         isProcessing = false; 
+        // [DÜZELTME 1]: isProcessing açıldıktan SONRA arka planı yenileyerek Deadlock kilitlenmesini engeller
+        if (updatedGroup && history.state?.groupId === id) {
+            await renderViewGroup(updatedGroup, lastRequestId);
+        }
     }
 }
 
@@ -696,7 +699,6 @@ async function deleteGroup(id) {
     finally { setLoading(false); isProcessing = false; } 
 }
 
-// DÜZELTME 4: history.length kontrolü yerine aktif state takibi yapılarak farklı sitelere yönlenme riski kapatıldı.
 function closeResultPanel(forceBack = true) { 
     const currentState = history.state;
     const isPanelState = currentState && currentState.page === "panel";
@@ -704,7 +706,11 @@ function closeResultPanel(forceBack = true) {
     toggleBodyScroll(false);
 
     if (forceBack && isPanelState) {
-        history.back();
+        if (window.history.length > 1) {
+            history.back();
+        } else {
+            navTo('mySets', currentState.groupId);
+        }
     }
 }
 
@@ -723,11 +729,14 @@ async function cleanResult() {
             updatedGroup = g;
             document.querySelectorAll("#resultNumbers .ball").forEach(b => b.classList.remove("result-selected"));
         } 
+    } catch(e) { ErrorHandler.report("Clean Result Error", e); }
+    finally { 
+        setLoading(false); isProcessing = false; 
+        // [DÜZELTME 1]: Kilitlenme riskini önlemek için yenileme finally sonuna alındı
         if (updatedGroup) {
             await renderViewGroup(updatedGroup, lastRequestId);
         }
-    } catch(e) { ErrorHandler.report("Clean Result Error", e); }
-    finally { setLoading(false); isProcessing = false; }
+    }
 }
 
 async function clearGeneratedSets() {
