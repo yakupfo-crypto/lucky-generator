@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -36,7 +37,7 @@
 <body>
 
 <div id="global-loader"></div>
-<div id="error-monitor"></div> 
+<div id="error-monitor"></div>
 <header>
     Lucky Generator
     <div id="crypto-status">Motor: Bekleniyor...</div>
@@ -65,7 +66,10 @@
 <script>
 /* --- CORE UTILITIES --- */
 const getEl = (id) => document.getElementById(id);
-const setLoading = (state) => { const el = getEl("global-loader"); if(el) el.style.display = state ? "block" : "none"; };
+const setLoading = (state) => {
+    const el = getEl("global-loader");
+    if(el) el.style.display = state ? "block" : "none";
+};
 
 function toggleBodyScroll(lock) {
     if (lock) {
@@ -82,49 +86,97 @@ const ErrorHandler = {
         if(monitor) {
             const toast = document.createElement("div");
             toast.className = "error-toast";
+
             const strong = document.createElement("strong");
             strong.textContent = `[${type}]`;
+
             const br = document.createElement("br");
+
             const small = document.createElement("small");
             small.textContent = (data.message || String(data)).substring(0, 100);
+
             toast.appendChild(strong);
             toast.appendChild(br);
             toast.appendChild(small);
+
             toast.onclick = () => toast.remove();
+
             monitor.appendChild(toast);
-            setTimeout(() => { if(toast.parentNode) toast.remove(); }, 6000);
+
+            setTimeout(() => {
+                if(toast.parentNode) toast.remove();
+            }, 6000);
         }
     }
 };
 
-window.onerror = (message, source, lineno, colno, error) => { ErrorHandler.report("Runtime Error", {message, source, lineno, colno, error}); return false; };
-window.onunhandledrejection = (event) => { ErrorHandler.report("Promise Error", { message: event.reason?.message || "Asenkron işlem başarısız" }); return false; };
+window.onerror = (message, source, lineno, colno, error) => {
+    ErrorHandler.report("Runtime Error", {
+        message,
+        source,
+        lineno,
+        colno,
+        error
+    });
+    return false;
+};
+
+window.onunhandledrejection = (event) => {
+    ErrorHandler.report("Promise Error", {
+        message: event.reason?.message || "Asenkron işlem başarısız"
+    });
+    return false;
+};
 
 let generatedSets = [];
-let lastRequestId = 0; 
-let isProcessing = false; 
+let lastRequestId = 0;
+let isProcessing = false;
 let cryptoTimeout = null;
 
-function escapeHTML(str) { if (!str) return ""; const p = document.createElement("p"); p.textContent = str; return p.innerHTML; }
+function escapeHTML(str) {
+    if (!str) return "";
+    const p = document.createElement("p");
+    p.textContent = str;
+    return p.innerHTML;
+}
 
 /* --- CRYPTO ENGINE --- */
 const CryptoEngine = {
     isSecure: !!(window.crypto && window.crypto.getRandomValues),
+
     nextUint32: function(max) {
-        if (!this.isSecure) throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
-        if (typeof max !== 'number' || isNaN(max) || max <= 0) throw new Error("GEÇERSİZ MAKSİMUM DEĞER!");
+        if (!this.isSecure) {
+            throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
+        }
+
+        if (typeof max !== 'number' || isNaN(max) || max <= 0) {
+            throw new Error("GEÇERSİZ MAKSİMUM DEĞER!");
+        }
+
         if (max <= 1) return 0;
+
         const buf = new Uint32Array(1);
         const limit = Math.floor(0x100000000 / max) * max;
+
         let val;
-        do { window.crypto.getRandomValues(buf); val = buf[0]; } while (val >= limit);
+
+        do {
+            window.crypto.getRandomValues(buf);
+            val = buf[0];
+        } while (val >= limit);
+
         return val % max;
     },
+
     updateUI: function() {
         const statusEl = getEl("crypto-status");
+
         if(statusEl) {
             if(cryptoTimeout) clearTimeout(cryptoTimeout);
-            statusEl.innerHTML = `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>`;
+
+            statusEl.innerHTML =
+                `Motor: <span class="engine-badge">Web Crypto (Güvenli)</span>`;
+
             cryptoTimeout = setTimeout(() => {
                 statusEl.innerHTML = `Motor: Bekleniyor...`;
             }, 10000);
@@ -137,17 +189,18 @@ function secureShuffle(array) {
         const j = CryptoEngine.nextUint32(i + 1);
         [array[i], array[j]] = [array[j], array[i]];
     }
+
     CryptoEngine.updateUI();
     return array;
 }
 
 /* --- DATABASE CONFIG & SINGLETON CONNECTION --- */
-const DB_CONFIG = { 
-    name: "LuckyDB", 
-    version: 4, 
-    storeName: "savedGroups", 
+const DB_CONFIG = {
+    name: "LuckyDB",
+    version: 4,
+    storeName: "savedGroups",
     draftStore: "drafts",
-    lockName: "db_write_lock" 
+    lockName: "db_write_lock"
 };
 
 let dbInstance = null;
@@ -155,28 +208,52 @@ let dbInstance = null;
 function getDB() {
     return new Promise((res, rej) => {
         if (dbInstance) return res(dbInstance);
+
         const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
-        req.onblocked = () => { alert("Lütfen diğer sekmeleri kapatın."); rej(new Error("DB Blocked")); };
+
+        req.onblocked = () => {
+            alert("Lütfen diğer sekmeleri kapatın.");
+            rej(new Error("DB Blocked"));
+        };
+
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
-            if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
-            if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
+                db.createObjectStore(DB_CONFIG.storeName, { keyPath: "id" });
+            }
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) {
+                db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
+            }
         };
+
         req.onsuccess = () => {
             dbInstance = req.result;
-            dbInstance.onversionchange = () => { 
-                dbInstance.close(); 
-                dbInstance = null; 
+
+            dbInstance.onversionchange = () => {
+                dbInstance.close();
+                dbInstance = null;
             };
+
             res(dbInstance);
         };
-        req.onerror = (e) => rej(new Error("DB Hatası: " + (e.target.error ? e.target.error.message : "Bilinmeyen Hata")));
+
+        req.onerror = (e) => {
+            rej(new Error(
+                "DB Hatası: " +
+                (e.target.error
+                    ? e.target.error.message
+                    : "Bilinmeyen Hata")
+            ));
+        };
     });
 }
 
 /* --- VALIDATION & INTEGRITY --- */
 const cleanNumberArray = (arr) => {
     if (!Array.isArray(arr)) return [];
+
     return arr
         .map(n => parseInt(n, 10))
         .filter(n => !isNaN(n) && typeof n === 'number' && n > 0);
@@ -187,38 +264,78 @@ const Validator = {
         try {
             if (!data || typeof data !== 'object') return null;
 
-            const validatedSets = Array.isArray(data.sets) 
-                ? data.sets.map(set => ({
-                    numbers: cleanNumberArray(set.numbers),
-                    jokers: cleanNumberArray(set.jokers),
-                    max: Number(set.max) || 49,
-                    jokerMax: Number(set.jokerMax) || 0
-                })).filter(set => set.numbers.length > 0)
+            const validatedSets = Array.isArray(data.sets)
+                ? data.sets
+                    .map(set => ({
+                        numbers: cleanNumberArray(set.numbers),
+                        jokers: cleanNumberArray(set.jokers),
+                        max: Number(set.max) || 49,
+                        jokerMax: Number(set.jokerMax) || 0
+                    }))
+                    .filter(set => set.numbers.length > 0)
                 : [];
 
             return {
-                id: data.id ? String(data.id) : String(Date.now()),
-                name: data.name ? escapeHTML(String(data.name)) : "İsimsiz Liste",
+                id: data.id
+                    ? String(data.id)
+                    : String(Date.now()),
+
+                name: data.name
+                    ? escapeHTML(String(data.name))
+                    : "İsimsiz Liste",
+
                 sets: validatedSets,
+
                 max: Number(data.max) || 49,
+
                 jokerMax: Number(data.jokerMax) || 0,
+
                 jokerPerSet: Number(data.jokerPerSet) || 0,
+
                 results: {
                     main: cleanNumberArray(data.results?.main),
                     joker: cleanNumberArray(data.results?.joker)
                 },
+
                 version: Number(data.version) || Date.now()
             };
-        } catch (e) { return null; }
+        } catch (e) {
+            return null;
+        }
     }
 };
 
+
+/*
+ * Web Locks API olmayan ortamlarda kullanılacak fallback.
+ *
+ * Değişiklik:
+ * - Önceki kuyrukta hata yutulmuyor.
+ * - Hatalı bir işlemden sonra kuyruk zinciri tekrar kullanılabilir durumda kalıyor.
+ * - workFn() hatası çağırana geri iletiliyor.
+ */
 let lockQueue = Promise.resolve();
+
 async function withLock(workFn) {
-    if (navigator.locks) return navigator.locks.request(DB_CONFIG.lockName, workFn);
-    const currentLock = lockQueue.then(() => workFn()).catch((err) => ErrorHandler.report("Queue Error", err));
-    lockQueue = currentLock;
-    return currentLock;
+    if (navigator.locks) {
+        return navigator.locks.request(
+            DB_CONFIG.lockName,
+            workFn
+        );
+    }
+
+    const run = lockQueue.then(() => workFn());
+
+    /*
+     * Kuyruğu reddedilmiş Promise üzerinde bırakmıyoruz.
+     * Böylece sonraki işlemler önceki hatadan dolayı kilitlenmiyor.
+     *
+     * Aynı zamanda run'ın gerçek sonucunu/gerçek hatasını çağırana
+     * ulaştırıyoruz.
+     */
+    lockQueue = run.catch(() => undefined);
+
+    return run;
 }
 
 /* --- DB OPERATIONS --- */
@@ -227,26 +344,47 @@ async function getDraft(id) {
         const db = await getDB();
         const tx = db.transaction(DB_CONFIG.draftStore, "readonly");
         const req = tx.objectStore(DB_CONFIG.draftStore).get(id);
-        return await new Promise(res => { req.onsuccess = () => res(req.result); });
-    } catch(e) { return null; }
+
+        return await new Promise(res => {
+            req.onsuccess = () => res(req.result);
+        });
+    } catch(e) {
+        return null;
+    }
 }
 
 async function saveDraft(id, data) {
     try {
         const db = await getDB();
         const tx = db.transaction(DB_CONFIG.draftStore, "readwrite");
-        tx.objectStore(DB_CONFIG.draftStore).put({id, data, ts: Date.now()});
-        await new Promise(res => tx.oncomplete = res);
-    } catch(e) { ErrorHandler.report("Draft Save Error", e); }
+
+        tx.objectStore(DB_CONFIG.draftStore).put({
+            id,
+            data,
+            ts: Date.now()
+        });
+
+        await new Promise(res => {
+            tx.oncomplete = res;
+        });
+    } catch(e) {
+        ErrorHandler.report("Draft Save Error", e);
+    }
 }
 
 async function deleteDraft(id) {
     try {
         const db = await getDB();
         const tx = db.transaction(DB_CONFIG.draftStore, "readwrite");
+
         tx.objectStore(DB_CONFIG.draftStore).delete(id);
-        await new Promise(res => tx.oncomplete = res);
-    } catch(e) { ErrorHandler.report("Draft Delete Error", e); }
+
+        await new Promise(res => {
+            tx.oncomplete = res;
+        });
+    } catch(e) {
+        ErrorHandler.report("Draft Delete Error", e);
+    }
 }
 
 async function getAllGroups() {
@@ -254,38 +392,69 @@ async function getAllGroups() {
         const db = await getDB();
         const tx = db.transaction(DB_CONFIG.storeName, "readonly");
         const req = tx.objectStore(DB_CONFIG.storeName).getAll();
+
         return await new Promise((res) => {
-            req.onsuccess = (e) => res((e.target.result || []).map(Validator.validateGroup).filter(Boolean));
+            req.onsuccess = (e) => {
+                res(
+                    (e.target.result || [])
+                        .map(Validator.validateGroup)
+                        .filter(Boolean)
+                );
+            };
         });
-    } catch (e) { return []; }
+    } catch (e) {
+        return [];
+    }
 }
 
 async function getGroupById(id) {
     if(!id) return null;
+
     try {
         const db = await getDB();
         const tx = db.transaction(DB_CONFIG.storeName, "readonly");
         const req = tx.objectStore(DB_CONFIG.storeName).get(String(id));
+
         return await new Promise((res) => {
-            req.onsuccess = (e) => res(Validator.validateGroup(e.target.result));
+            req.onsuccess = (e) => {
+                res(Validator.validateGroup(e.target.result));
+            };
         });
-    } catch(e) { return null; }
+    } catch(e) {
+        return null;
+    }
 }
 
 async function atomicSave(item) {
     return withLock(async () => {
         const val = Validator.validateGroup(item);
-        if (!val) throw new Error("Doğrulama hatası.");
+
+        if (!val) {
+            throw new Error("Doğrulama hatası.");
+        }
+
         try {
             const db = await getDB();
+
             return await new Promise((res, rej) => {
-                const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
+                const tx = db.transaction(
+                    DB_CONFIG.storeName,
+                    "readwrite"
+                );
+
                 val.version = Date.now();
+
                 tx.objectStore(DB_CONFIG.storeName).put(val);
+
                 tx.oncomplete = () => res();
-                tx.onerror = () => rej(new Error("Yazma hatası"));
+
+                tx.onerror = () => {
+                    rej(new Error("Yazma hatası"));
+                };
             });
-        } catch (err) { throw err; }
+        } catch (err) {
+            throw err;
+        }
     });
 }
 
@@ -293,24 +462,47 @@ async function deleteFromDB(id) {
     try {
         const db = await getDB();
         const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
+
         tx.objectStore(DB_CONFIG.storeName).delete(String(id));
-        await new Promise(res => tx.oncomplete = res);
-    } catch(e) { ErrorHandler.report("Delete Error", e); }
+
+        await new Promise(res => {
+            tx.oncomplete = res;
+        });
+    } catch(e) {
+        ErrorHandler.report("Delete Error", e);
+    }
 }
 
 /* --- YEDEKLEME VE İÇE AKTARMA (JSON) --- */
 async function exportBackup() {
     try {
         const groups = await getAllGroups();
-        if (groups.length === 0) { alert("Dışa aktarılacak kayıtlı veri bulunamadı."); return; }
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(groups, null, 2));
+
+        if (groups.length === 0) {
+            alert("Dışa aktarılacak kayıtlı veri bulunamadı.");
+            return;
+        }
+
+        const dataStr =
+            "data:text/json;charset=utf-8," +
+            encodeURIComponent(JSON.stringify(groups, null, 2));
+
         const downloadAnchor = document.createElement('a');
+
         downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `LuckyGenerator_Yedek_${new Date().toISOString().slice(0,10)}.json`);
+
+        downloadAnchor.setAttribute(
+            "download",
+            `LuckyGenerator_Yedek_${new Date().toISOString().slice(0,10)}.json`
+        );
+
         document.body.appendChild(downloadAnchor);
         downloadAnchor.click();
         downloadAnchor.remove();
-    } catch(e) { ErrorHandler.report("Export Error", e); }
+
+    } catch(e) {
+        ErrorHandler.report("Export Error", e);
+    }
 }
 
 function triggerImport() {
@@ -319,104 +511,245 @@ function triggerImport() {
 
 async function handleFileImport(event) {
     const file = event.target.files[0];
+
     if (!file) return;
+
     const reader = new FileReader();
+
     reader.onload = async (e) => {
         try {
             const importedData = JSON.parse(e.target.result);
-            if (!Array.isArray(importedData)) throw new Error("Geçersiz yedek dosyası formatı.");
+
+            if (!Array.isArray(importedData)) {
+                throw new Error("Geçersiz yedek dosyası formatı.");
+            }
+
             let count = 0;
+
             for (const item of importedData) {
                 const valid = Validator.validateGroup(item);
+
                 if (valid) {
                     await atomicSave(valid);
                     count++;
                 }
             }
+
             alert(`${count} adet liste başarıyla yükledi.`);
             renderCurrentState("mySets");
-        } catch(err) { alert("Yükleme başarısız: " + err.message); }
-        finally { event.target.value = ""; }
+
+        } catch(err) {
+            alert("Yükleme başarısız: " + err.message);
+        } finally {
+            event.target.value = "";
+        }
     };
+
     reader.readAsText(file);
 }
 
 /* --- NAVIGATION & UI LOGIC --- */
+
+/*
+ * Değişiklik:
+ * Storage persistence özelliği desteklenmiyor veya tarayıcı
+ * isteği reddediyorsa uygulamanın açılması engellenmiyor.
+ */
 async function requestPersistentStorage() {
-    if (navigator.storage && navigator.storage.persist) {
-        const isPersisted = await navigator.storage.persisted();
-        if (!isPersisted) await navigator.storage.persist();
+    try {
+        if (
+            navigator.storage &&
+            typeof navigator.storage.persist === "function"
+        ) {
+            let isPersisted = false;
+
+            if (
+                typeof navigator.storage.persisted === "function"
+            ) {
+                try {
+                    isPersisted = await navigator.storage.persisted();
+                } catch (e) {
+                    /*
+                     * persisted() başarısız olursa persistence isteğini
+                     * yine de deneyebiliriz.
+                     */
+                    isPersisted = false;
+                }
+            }
+
+            if (!isPersisted) {
+                try {
+                    await navigator.storage.persist();
+                } catch (e) {
+                    /*
+                     * Kalıcı depolama zorunlu değil.
+                     * Uygulamanın geri kalanının çalışmasına izin veriyoruz.
+                     */
+                    console.warn(
+                        "Kalıcı depolama kullanılamadı:",
+                        e
+                    );
+                }
+            }
+        }
+    } catch (e) {
+        /*
+         * Storage API ile ilgili beklenmeyen bir hata da uygulamanın
+         * açılışını durdurmamalı.
+         */
+        console.warn(
+            "Kalıcı depolama kontrolü başarısız:",
+            e
+        );
     }
 }
 
-window.onload = async () => { 
+window.onload = async () => {
     if (!CryptoEngine.isSecure) {
-        document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
+        document.body.innerHTML =
+            `<div style="padding:40px; text-align:center; color:#d32f2f;">
+                <h2>⚠ Güvenlik</h2>
+                <p>Web Crypto API desteklenmiyor.</p>
+            </div>`;
+
         return;
     }
-    
-    getEl("nav-btn-generate").addEventListener("click", () => navTo('generate'));
-    getEl("nav-btn-mySets").addEventListener("click", () => navTo('mySets'));
-    getEl("close-panel-btn").addEventListener("click", () => closeResultPanel(true));
-    getEl("btn-confirm-result").addEventListener("click", confirmResult);
-    getEl("btn-clean-result").addEventListener("click", cleanResult);
-    getEl("import-file-input").addEventListener("change", handleFileImport);
 
+    getEl("nav-btn-generate")
+        .addEventListener("click", () => navTo('generate'));
+
+    getEl("nav-btn-mySets")
+        .addEventListener("click", () => navTo('mySets'));
+
+    getEl("close-panel-btn")
+        .addEventListener("click", () => closeResultPanel(true));
+
+    getEl("btn-confirm-result")
+        .addEventListener("click", confirmResult);
+
+    getEl("btn-clean-result")
+        .addEventListener("click", cleanResult);
+
+    getEl("import-file-input")
+        .addEventListener("change", handleFileImport);
+
+    /*
+     * Persistence başarısız olsa bile uygulama devam eder.
+     */
     await requestPersistentStorage();
-    const state = history.state || {page:"generate", groupId:null};
+
+    const state = history.state || {
+        page:"generate",
+        groupId:null
+    };
+
     if (state.page === "panel" && state.groupId) {
         await renderCurrentState("mySets", state.groupId);
         openResultPanel(null, state.groupId, false);
     } else {
-        renderCurrentState(state.page, state.groupId); 
+        renderCurrentState(state.page, state.groupId);
     }
 };
 
-window.onpopstate = async (event) => { 
-    lastRequestId++; 
-    const state = event.state || {page:"generate", groupId:null}; 
+window.onpopstate = async (event) => {
+    lastRequestId++;
+
+    const state = event.state || {
+        page:"generate",
+        groupId:null
+    };
+
     if (state.page !== "panel") {
-        closeResultPanel(false); 
+        closeResultPanel(false);
     } else {
-        openResultPanel(null, state.groupId, false);
+        openResultPanel(
+            null,
+            state.groupId,
+            false
+        );
     }
-    await renderCurrentState(state.page, state.groupId); 
+
+    await renderCurrentState(
+        state.page,
+        state.groupId
+    );
 };
 
-function navTo(page, groupId = null) { 
-    if (isProcessing) return; 
-    history.pushState({page, groupId: groupId ? String(groupId) : null}, ""); 
-    renderCurrentState(page, groupId); 
+function navTo(page, groupId = null) {
+    if (isProcessing) return;
+
+    history.pushState(
+        {
+            page,
+            groupId: groupId ? String(groupId) : null
+        },
+        ""
+    );
+
+    renderCurrentState(page, groupId);
 }
 
 async function renderCurrentState(page, groupId) {
-    const currentRequestId = ++lastRequestId; 
+    const currentRequestId = ++lastRequestId;
     const container = getEl("view-container");
+
     if(!container) return;
-    
+
     if (page !== "panel") {
         const panel = getEl("resultPanel");
-        if(panel) panel.style.display = "none";
-        toggleBodyScroll(false); 
-        container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
+
+        if(panel) {
+            panel.style.display = "none";
+        }
+
+        toggleBodyScroll(false);
+
+        container.innerHTML =
+            `<div style="padding:20px; color:#666;">
+                Yükleniyor...
+            </div>`;
     }
-    
+
     try {
         if (page === "generate") {
-            if (currentRequestId === lastRequestId) await renderGeneratePage();
-        } else if (page === "mySets") { 
+            if (currentRequestId === lastRequestId) {
+                await renderGeneratePage();
+            }
+
+        } else if (page === "mySets") {
+
             if (groupId) {
                 const group = await getGroupById(groupId);
+
                 if (currentRequestId === lastRequestId) {
-                    group ? await renderViewGroup(group, currentRequestId) : await renderMySetsList(currentRequestId);
+                    group
+                        ? await renderViewGroup(
+                            group,
+                            currentRequestId
+                        )
+                        : await renderMySetsList(
+                            currentRequestId
+                        );
                 }
-            } else { await renderMySetsList(currentRequestId); }
+
+            } else {
+                await renderMySetsList(
+                    currentRequestId
+                );
+            }
         }
-    } catch (e) { 
-        ErrorHandler.report("Render Error", e); 
+
+    } catch (e) {
+        ErrorHandler.report(
+            "Render Error",
+            e
+        );
+
     } finally {
-        // [DÜZELTME 3]: Hızlı navigasyonda veya istek iptallerinde ekranda "Yükleniyor..." kalmasını engeller
-        if (currentRequestId !== lastRequestId && container.innerHTML.includes("Yükleniyor...")) {
+        if (
+            currentRequestId !== lastRequestId &&
+            container.innerHTML.includes("Yükleniyor...")
+        ) {
             container.innerHTML = "";
         }
     }
@@ -424,331 +757,932 @@ async function renderCurrentState(page, groupId) {
 
 /* --- GENERATE & SAVE LOGIC --- */
 async function renderGeneratePage() {
-    let storedInputs = {max:35, per:5, jMax:31, jPer:1, count:5};
+    let storedInputs = {
+        max:35,
+        per:5,
+        jMax:31,
+        jPer:1,
+        count:5
+    };
+
     const dSets = await getDraft("tempSets");
     const dInputs = await getDraft("tempInputs");
-    generatedSets = dSets ? dSets.data : [];
-    if(dInputs) storedInputs = dInputs.data;
-    
+
+    generatedSets = dSets
+        ? dSets.data
+        : [];
+
+    if(dInputs) {
+        storedInputs = dInputs.data;
+    }
+
     getEl("view-container").innerHTML = `
         <div class="container">
             <div class="card">
                 <b>Ana Grup (1 - ?)</b>
                 <input type="number" id="maxNumber" value="${storedInputs.max}">
+
                 <label>Seçilecek Sayı</label>
                 <input type="number" id="perSet" value="${storedInputs.per}">
+
                 <hr>
+
                 <b>Joker (1 - ?)</b>
                 <input type="number" id="jokerMax" value="${storedInputs.jMax}">
+
                 <label>Joker Sayısı</label>
                 <input type="number" id="jokerCount" value="${storedInputs.jPer}">
+
                 <hr>
+
                 <label>Kolon Sayısı</label>
                 <input type="number" id="setCount" value="${storedInputs.count}">
-                <button id="btn-generate-action">Rastgele Üret</button>
+
+                <button id="btn-generate-action">
+                    Rastgele Üret
+                </button>
             </div>
+
             <div id="results"></div>
         </div>`;
-    
-    getEl("btn-generate-action").addEventListener("click", generateSets);
+
+    getEl("btn-generate-action")
+        .addEventListener(
+            "click",
+            generateSets
+        );
+
     renderGeneratedSetsList();
 }
 
 function renderGeneratedSetsList() {
     const resultsDiv = getEl("results");
+
     if(!resultsDiv) return;
-    resultsDiv.innerHTML = ""; 
-    generatedSets.forEach((set, i) => { 
+
+    resultsDiv.innerHTML = "";
+
+    generatedSets.forEach((set, i) => {
         const card = document.createElement("div");
+
         card.className = "card";
-        card.innerHTML = `<b>${i+1}. Kolon</b>`;
-        card.appendChild(createBallsUI(set));
+
+        card.innerHTML =
+            `<b>${i+1}. Kolon</b>`;
+
+        card.appendChild(
+            createBallsUI(set)
+        );
+
         resultsDiv.appendChild(card);
-    }); 
-    if (generatedSets.length > 0) { 
-        const actionCard = document.createElement("div");
+    });
+
+    if (generatedSets.length > 0) {
+        const actionCard =
+            document.createElement("div");
+
         actionCard.className = "card";
+
         actionCard.innerHTML = `
-            <button class="delete-all-btn" id="btn-clear-generated">Üretilenleri Sil</button>
-            <label><b>Liste Adı</b></label>
-            <input type="text" id="groupNameInput" placeholder="İsim verin...">
-            <button id="btn-save-group">Kalıcı Olarak Kaydet</button>`;
+            <button
+                class="delete-all-btn"
+                id="btn-clear-generated">
+                Üretilenleri Sil
+            </button>
+
+            <label>
+                <b>Liste Adı</b>
+            </label>
+
+            <input
+                type="text"
+                id="groupNameInput"
+                placeholder="İsim verin...">
+
+            <button id="btn-save-group">
+                Kalıcı Olarak Kaydet
+            </button>`;
+
         resultsDiv.appendChild(actionCard);
-        
-        getEl("btn-clear-generated").addEventListener("click", clearGeneratedSets);
-        getEl("btn-save-group").addEventListener("click", saveGroup);
+
+        getEl("btn-clear-generated")
+            .addEventListener(
+                "click",
+                clearGeneratedSets
+            );
+
+        getEl("btn-save-group")
+            .addEventListener(
+                "click",
+                saveGroup
+            );
     }
 }
 
 async function generateSets() {
     if (isProcessing) return;
+
     const maxEl = getEl("maxNumber");
     const perEl = getEl("perSet");
     const jMaxEl = getEl("jokerMax");
     const jPerEl = getEl("jokerCount");
     const countEl = getEl("setCount");
 
-    if (!maxEl || !perEl || !jMaxEl || !jPerEl || !countEl) return;
+    if (
+        !maxEl ||
+        !perEl ||
+        !jMaxEl ||
+        !jPerEl ||
+        !countEl
+    ) return;
 
-    const max = parseInt(maxEl.value, 10) || 0;
-    const per = parseInt(perEl.value, 10) || 0;
-    const jMax = parseInt(jMaxEl.value, 10) || 0;
-    const jPer = parseInt(jPerEl.value, 10) || 0;
-    const count = parseInt(countEl.value, 10) || 0;
+    const max =
+        parseInt(maxEl.value, 10) || 0;
 
-    if (max <= 0 || per <= 0 || max < per || (jPer > 0 && jMax < jPer) || count < 1) { 
-        alert("Geçersiz parametre!"); 
-        return; 
+    const per =
+        parseInt(perEl.value, 10) || 0;
+
+    const jMax =
+        parseInt(jMaxEl.value, 10) || 0;
+
+    const jPer =
+        parseInt(jPerEl.value, 10) || 0;
+
+    const count =
+        parseInt(countEl.value, 10) || 0;
+
+    if (
+        max <= 0 ||
+        per <= 0 ||
+        max < per ||
+        (jPer > 0 && jMax < jPer) ||
+        count < 1
+    ) {
+        alert("Geçersiz parametre!");
+        return;
     }
+
     try {
         setLoading(true);
         isProcessing = true;
         generatedSets = [];
+
         for (let i = 0; i < count; i++) {
-            const mainPool = Array.from({length: max}, (_, k) => k + 1);
-            const n = secureShuffle([...mainPool]).slice(0, per).sort((a,b)=>a-b);
+            const mainPool =
+                Array.from(
+                    {length: max},
+                    (_, k) => k + 1
+                );
+
+            const n =
+                secureShuffle([...mainPool])
+                    .slice(0, per)
+                    .sort((a,b)=>a-b);
+
             let j = [];
+
             if (jMax > 0 && jPer > 0) {
-                const jokerPool = Array.from({length: jMax}, (_, k) => k + 1);
-                j = secureShuffle([...jokerPool]).slice(0, jPer).sort((a,b)=>a-b);
+                const jokerPool =
+                    Array.from(
+                        {length: jMax},
+                        (_, k) => k + 1
+                    );
+
+                j =
+                    secureShuffle([...jokerPool])
+                        .slice(0, jPer)
+                        .sort((a,b)=>a-b);
             }
-            generatedSets.push({numbers: n, jokers: j, max, jokerMax: jMax});
+
+            generatedSets.push({
+                numbers: n,
+                jokers: j,
+                max,
+                jokerMax: jMax
+            });
         }
-        await saveDraft("tempSets", generatedSets);
-        await saveDraft("tempInputs", {max, per, jMax, jPer, count});
+
+        await saveDraft(
+            "tempSets",
+            generatedSets
+        );
+
+        await saveDraft(
+            "tempInputs",
+            {
+                max,
+                per,
+                jMax,
+                jPer,
+                count
+            }
+        );
+
         renderGeneratedSetsList();
+
     } catch(e) {
-        ErrorHandler.report("Generate Error", e);
-    } finally { 
-        setLoading(false); 
-        isProcessing = false; 
+        ErrorHandler.report(
+            "Generate Error",
+            e
+        );
+
+    } finally {
+        setLoading(false);
+        isProcessing = false;
     }
 }
 
 async function saveGroup() {
     if (isProcessing) return;
-    const nameEl = getEl("groupNameInput");
-    if (!nameEl) return;
-    const name = nameEl.value.trim();
-    if (!name) { alert("İsim verin."); return; }
 
-    const maxVal = generatedSets.length > 0 ? generatedSets[0].max : (parseInt(getEl("maxNumber")?.value, 10) || 49);
-    const jMaxVal = generatedSets.length > 0 ? generatedSets[0].jokerMax : (parseInt(getEl("jokerMax")?.value, 10) || 0);
-    const jPerVal = parseInt(getEl("jokerCount")?.value, 10) || (generatedSets.length > 0 ? generatedSets[0].jokers.length : 0);
+    const nameEl =
+        getEl("groupNameInput");
+
+    if (!nameEl) return;
+
+    const name =
+        nameEl.value.trim();
+
+    if (!name) {
+        alert("İsim verin.");
+        return;
+    }
+
+    const maxVal =
+        generatedSets.length > 0
+            ? generatedSets[0].max
+            : (
+                parseInt(
+                    getEl("maxNumber")?.value,
+                    10
+                ) || 49
+            );
+
+    const jMaxVal =
+        generatedSets.length > 0
+            ? generatedSets[0].jokerMax
+            : (
+                parseInt(
+                    getEl("jokerMax")?.value,
+                    10
+                ) || 0
+            );
+
+    const jPerVal =
+        parseInt(
+            getEl("jokerCount")?.value,
+            10
+        ) ||
+        (
+            generatedSets.length > 0
+                ? generatedSets[0].jokers.length
+                : 0
+        );
 
     const group = {
-        id: String(Date.now()), name: name, sets: [...generatedSets],
-        max: maxVal, jokerMax: jMaxVal,
-        jokerPerSet: jPerVal, results: {main: [], joker: []}
+        id: String(Date.now()),
+        name: name,
+        sets: [...generatedSets],
+        max: maxVal,
+        jokerMax: jMaxVal,
+        jokerPerSet: jPerVal,
+        results: {
+            main: [],
+            joker: []
+        }
     };
-    try { 
+
+    try {
         setLoading(true);
         isProcessing = true;
+
         await atomicSave(group);
+
         await deleteDraft("tempSets");
         await deleteDraft("tempInputs");
+
         isProcessing = false;
-        navTo('mySets', group.id); 
-    } catch(err) { 
-        ErrorHandler.report("Save Error", err); 
-    } finally { 
+
+        navTo(
+            'mySets',
+            group.id
+        );
+
+    } catch(err) {
+        ErrorHandler.report(
+            "Save Error",
+            err
+        );
+
+    } finally {
         isProcessing = false;
-        setLoading(false); 
+        setLoading(false);
     }
 }
 
 /* --- VIEW SAVED DATA --- */
 async function renderMySetsList(reqId) {
-    const groups = await getAllGroups(); 
-    const view = getEl("view-container");
-    if (!view || reqId !== lastRequestId) return;
-    view.innerHTML = ""; 
-    const container = document.createElement("div"); 
-    container.className = "container"; 
+    const groups =
+        await getAllGroups();
+
+    const view =
+        getEl("view-container");
+
+    if (
+        !view ||
+        reqId !== lastRequestId
+    ) return;
+
+    view.innerHTML = "";
+
+    const container =
+        document.createElement("div");
+
+    container.className = "container";
+
     container.innerHTML = `
         <h3>Kayıtlı Listelerim</h3>
+
         <div style="margin-bottom: 15px;">
-            <button id="btn-export-backup" class="secondary-btn">Yedekle (JSON Dışa Aktar)</button>
-            <button id="btn-import-backup" class="secondary-btn">Yedek Yükle (JSON İçe Aktar)</button>
+            <button
+                id="btn-export-backup"
+                class="secondary-btn">
+                Yedekle (JSON Dışa Aktar)
+            </button>
+
+            <button
+                id="btn-import-backup"
+                class="secondary-btn">
+                Yedek Yükle (JSON İçe Aktar)
+            </button>
         </div>
     `;
-    
+
     if (groups.length === 0) {
-        container.innerHTML += "<p>Henüz kayıtlı kolon yok.</p>";
+        container.innerHTML +=
+            "<p>Henüz kayıtlı kolon yok.</p>";
+
     } else {
         groups.forEach(group => {
-            const card = document.createElement("div"); card.className = "card";
-            card.innerHTML = `<b>${escapeHTML(group.name)}</b><div style="font-size:12px; color:#666;">${group.sets.length} Kolon | ${group.max}'lık Sistem</div>`;
-            const btnView = document.createElement("button"); btnView.textContent = "Aç"; btnView.onclick = () => navTo("mySets", group.id);
-            const btnDel = document.createElement("button"); btnDel.textContent = "Sil"; btnDel.style.background = "#d32f2f"; btnDel.style.marginTop = "5px"; btnDel.onclick = () => deleteGroup(group.id);
-            card.append(btnView, btnDel); container.appendChild(card);
+            const card =
+                document.createElement("div");
+
+            card.className = "card";
+
+            card.innerHTML =
+                `<b>${escapeHTML(group.name)}</b>
+                 <div style="font-size:12px; color:#666;">
+                    ${group.sets.length} Kolon |
+                    ${group.max}'lık Sistem
+                 </div>`;
+
+            const btnView =
+                document.createElement("button");
+
+            btnView.textContent = "Aç";
+
+            btnView.onclick = () =>
+                navTo(
+                    "mySets",
+                    group.id
+                );
+
+            const btnDel =
+                document.createElement("button");
+
+            btnDel.textContent = "Sil";
+            btnDel.style.background = "#d32f2f";
+            btnDel.style.marginTop = "5px";
+
+            btnDel.onclick = () =>
+                deleteGroup(group.id);
+
+            card.append(
+                btnView,
+                btnDel
+            );
+
+            container.appendChild(card);
         });
     }
+
     view.appendChild(container);
 
-    getEl("btn-export-backup").addEventListener("click", exportBackup);
-    getEl("btn-import-backup").addEventListener("click", triggerImport);
+    getEl("btn-export-backup")
+        .addEventListener(
+            "click",
+            exportBackup
+        );
+
+    getEl("btn-import-backup")
+        .addEventListener(
+            "click",
+            triggerImport
+        );
 }
 
 async function renderViewGroup(group, reqId) {
-    const view = getEl("view-container");
-    if (!view || reqId !== lastRequestId) return;
-    const container = document.createElement("div"); container.className = "container";
-    container.innerHTML = `<h3>${escapeHTML(group.name)}</h3>`;
-    const hasRes = group.results.main.length > 0 || group.results.joker.length > 0;
-    const resCard = document.createElement("div"); resCard.className = "card";
-    resCard.innerHTML = `<b>Çıkan Sonuçlar:</b><div style="margin:10px 0; font-family:monospace; background:#f0f0f0; padding:5px; border-radius:4px;">
-        ${hasRes ? 'Ana: '+[...group.results.main].sort((a,b)=>a-b).join(', ') : 'Girilmedi'}<br>
-        ${group.jokerPerSet > 0 ? 'Joker: ' + (group.results.joker.length ? [...group.results.joker].sort((a,b)=>a-b).join(', ') : '-') : ''}
-    </div>`;
-    const openBtn = document.createElement("button"); openBtn.textContent = "Sonuçları Gir"; openBtn.onclick = () => openResultPanel(group.max, group.id);
-    resCard.appendChild(openBtn); container.append(resCard);
-    group.sets.forEach((set, i) => { 
-        const setCard = document.createElement("div"); setCard.className = "card";
-        setCard.innerHTML = `<b>${i+1}. Kolon</b>`;
-        setCard.appendChild(createBallsUI(set, group.results)); container.appendChild(setCard);
+    const view =
+        getEl("view-container");
+
+    if (
+        !view ||
+        reqId !== lastRequestId
+    ) return;
+
+    const container =
+        document.createElement("div");
+
+    container.className = "container";
+
+    container.innerHTML =
+        `<h3>${escapeHTML(group.name)}</h3>`;
+
+    const hasRes =
+        group.results.main.length > 0 ||
+        group.results.joker.length > 0;
+
+    const resCard =
+        document.createElement("div");
+
+    resCard.className = "card";
+
+    resCard.innerHTML =
+        `<b>Çıkan Sonuçlar:</b>
+        <div style="margin:10px 0; font-family:monospace; background:#f0f0f0; padding:5px; border-radius:4px;">
+            ${
+                hasRes
+                    ? 'Ana: ' +
+                      [...group.results.main]
+                        .sort((a,b)=>a-b)
+                        .join(', ')
+                    : 'Girilmedi'
+            }
+            <br>
+            ${
+                group.jokerPerSet > 0
+                    ? 'Joker: ' +
+                      (
+                        group.results.joker.length
+                            ? [...group.results.joker]
+                                .sort((a,b)=>a-b)
+                                .join(', ')
+                            : '-'
+                      )
+                    : ''
+            }
+        </div>`;
+
+    const openBtn =
+        document.createElement("button");
+
+    openBtn.textContent =
+        "Sonuçları Gir";
+
+    openBtn.onclick = () =>
+        openResultPanel(
+            group.max,
+            group.id
+        );
+
+    resCard.appendChild(openBtn);
+
+    container.append(resCard);
+
+    group.sets.forEach((set, i) => {
+        const setCard =
+            document.createElement("div");
+
+        setCard.className = "card";
+
+        setCard.innerHTML =
+            `<b>${i+1}. Kolon</b>`;
+
+        setCard.appendChild(
+            createBallsUI(
+                set,
+                group.results
+            )
+        );
+
+        container.appendChild(setCard);
     });
-    const backBtn = document.createElement("button"); backBtn.textContent = "Geri Dön"; backBtn.style.background = "#666"; backBtn.onclick = () => navTo("mySets");
+
+    const backBtn =
+        document.createElement("button");
+
+    backBtn.textContent =
+        "Geri Dön";
+
+    backBtn.style.background =
+        "#666";
+
+    backBtn.onclick = () =>
+        navTo("mySets");
+
     container.appendChild(backBtn);
-    view.innerHTML = ""; view.appendChild(container);
+
+    view.innerHTML = "";
+    view.appendChild(container);
 }
 
-function createBallsUI(set, results = null) {
-    const row = document.createElement("div"); row.className = "ball-row";
+function createBallsUI(
+    set,
+    results = null
+) {
+    const row =
+        document.createElement("div");
+
+    row.className =
+        "ball-row";
+
     set.numbers.forEach(n => {
-        const ball = document.createElement("div"); ball.className = "ball selected";
-        if(results && results.main.includes(Number(n))) ball.classList.add("result-selected");
-        ball.textContent = n; row.appendChild(ball);
+        const ball =
+            document.createElement("div");
+
+        ball.className =
+            "ball selected";
+
+        if (
+            results &&
+            results.main.includes(Number(n))
+        ) {
+            ball.classList.add(
+                "result-selected"
+            );
+        }
+
+        ball.textContent = n;
+
+        row.appendChild(ball);
     });
+
     set.jokers.forEach(j => {
-        const ball = document.createElement("div"); ball.className = "ball joker";
-        if(results && results.joker.includes(Number(j))) ball.classList.add("result-selected");
-        ball.textContent = j; row.appendChild(ball);
+        const ball =
+            document.createElement("div");
+
+        ball.className =
+            "ball joker";
+
+        if (
+            results &&
+            results.joker.includes(Number(j))
+        ) {
+            ball.classList.add(
+                "result-selected"
+            );
+        }
+
+        ball.textContent = j;
+
+        row.appendChild(ball);
     });
+
     return row;
 }
 
 /* --- RESULT PANEL & SYNC LOGIC --- */
-async function openResultPanel(max, groupId, shouldPushState = true) {
-    const group = await getGroupById(groupId); 
+async function openResultPanel(
+    max,
+    groupId,
+    shouldPushState = true
+) {
+    const group =
+        await getGroupById(groupId);
+
     if(!group) return;
-    const targetMax = max || group.max;
-    const resDiv = getEl("resultNumbers");
+
+    const targetMax =
+        max || group.max;
+
+    const resDiv =
+        getEl("resultNumbers");
+
     resDiv.innerHTML = "";
-    const createRow = (title, limit, isJoker) => {
-        const h = document.createElement("h4"); h.textContent = title; h.style.margin = "15px 0 5px 0";
-        const row = document.createElement("div"); row.className = "ball-row";
-        for(let i=1; i<=limit; i++) {
-            const ball = document.createElement("div");
-            ball.className = "ball" + (isJoker ? " joker" : "");
-            const list = isJoker ? group.results.joker : group.results.main;
-            if(list.includes(i)) ball.classList.add("result-selected");
-            ball.textContent = i;
-            ball.onclick = () => toggleResult(ball, groupId, i, isJoker);
-            row.appendChild(ball);
-        }
-        resDiv.append(h, row);
-    };
-    createRow(`Ana Sayılar (1-${targetMax})`, targetMax, false);
-    if (group.jokerPerSet > 0) createRow(`Joker Sayılar (1-${group.jokerMax})`, group.jokerMax, true);
-    if (shouldPushState) history.pushState({page: "panel", groupId: String(groupId)}, "");
-    getEl("resultPanel").style.display = "block";
+
+    const createRow =
+        (title, limit, isJoker) => {
+
+            const h =
+                document.createElement("h4");
+
+            h.textContent = title;
+
+            h.style.margin =
+                "15px 0 5px 0";
+
+            const row =
+                document.createElement("div");
+
+            row.className =
+                "ball-row";
+
+            for(let i=1; i<=limit; i++) {
+                const ball =
+                    document.createElement("div");
+
+                ball.className =
+                    "ball" +
+                    (
+                        isJoker
+                            ? " joker"
+                            : ""
+                    );
+
+                const list =
+                    isJoker
+                        ? group.results.joker
+                        : group.results.main;
+
+                if(list.includes(i)) {
+                    ball.classList.add(
+                        "result-selected"
+                    );
+                }
+
+                ball.textContent = i;
+
+                ball.onclick = () =>
+                    toggleResult(
+                        ball,
+                        groupId,
+                        i,
+                        isJoker
+                    );
+
+                row.appendChild(ball);
+            }
+
+            resDiv.append(
+                h,
+                row
+            );
+        };
+
+    createRow(
+        `Ana Sayılar (1-${targetMax})`,
+        targetMax,
+        false
+    );
+
+    if (group.jokerPerSet > 0) {
+        createRow(
+            `Joker Sayılar (1-${group.jokerMax})`,
+            group.jokerMax,
+            true
+        );
+    }
+
+    if (shouldPushState) {
+        history.pushState(
+            {
+                page: "panel",
+                groupId: String(groupId)
+            },
+            ""
+        );
+    }
+
+    getEl("resultPanel").style.display =
+        "block";
+
     toggleBodyScroll(true);
 }
 
-async function toggleResult(el, id, val, isJoker) {
-    if (isProcessing) return; 
+async function toggleResult(
+    el,
+    id,
+    val,
+    isJoker
+) {
+    if (isProcessing) return;
+
     isProcessing = true;
+
     el.style.opacity = "0.4";
+
     let updatedGroup = null;
+
     try {
-        const g = await getGroupById(id);
+        const g =
+            await getGroupById(id);
+
         if (g) {
-            const list = isJoker ? g.results.joker : g.results.main;
-            const idx = list.indexOf(val);
+            const list =
+                isJoker
+                    ? g.results.joker
+                    : g.results.main;
+
+            const idx =
+                list.indexOf(val);
+
             if (idx > -1) {
                 list.splice(idx, 1);
+
             } else {
-                const limit = isJoker ? (g.jokerPerSet > 0 ? g.jokerPerSet : 10) : 10;
-                if (list.length >= limit) { 
-                    alert(isJoker ? "Joker limiti!" : "Maks 10 sayı!"); 
-                    return; 
+                const limit =
+                    isJoker
+                        ? (
+                            g.jokerPerSet > 0
+                                ? g.jokerPerSet
+                                : 10
+                          )
+                        : 10;
+
+                if (list.length >= limit) {
+                    alert(
+                        isJoker
+                            ? "Joker limiti!"
+                            : "Maks 10 sayı!"
+                    );
+
+                    return;
                 }
+
                 list.push(val);
             }
+
             await atomicSave(g);
-            el.classList.toggle("result-selected");
+
+            el.classList.toggle(
+                "result-selected"
+            );
+
             updatedGroup = g;
         }
+
     } catch(e) {
-        ErrorHandler.report("Result Toggle Error", e);
-    } finally { 
-        el.style.opacity = "1"; 
-        isProcessing = false; 
-        // [DÜZELTME 1]: isProcessing açıldıktan SONRA arka planı yenileyerek Deadlock kilitlenmesini engeller
-        if (updatedGroup && history.state?.groupId === id) {
-            await renderViewGroup(updatedGroup, lastRequestId);
+        ErrorHandler.report(
+            "Result Toggle Error",
+            e
+        );
+
+    } finally {
+        el.style.opacity = "1";
+        isProcessing = false;
+
+        if (
+            updatedGroup &&
+            history.state?.groupId === id
+        ) {
+            await renderViewGroup(
+                updatedGroup,
+                lastRequestId
+            );
         }
     }
 }
 
-async function deleteGroup(id) { 
-    if (isProcessing || !confirm("Silinsin mi?")) return; 
-    try { setLoading(true); isProcessing = true; await deleteFromDB(id); await renderMySetsList(lastRequestId); } 
-    catch(e) { ErrorHandler.report("Delete Error", e); }
-    finally { setLoading(false); isProcessing = false; } 
+async function deleteGroup(id) {
+    if (
+        isProcessing ||
+        !confirm("Silinsin mi?")
+    ) return;
+
+    try {
+        setLoading(true);
+        isProcessing = true;
+
+        await deleteFromDB(id);
+
+        await renderMySetsList(
+            lastRequestId
+        );
+
+    } catch(e) {
+        ErrorHandler.report(
+            "Delete Error",
+            e
+        );
+
+    } finally {
+        setLoading(false);
+        isProcessing = false;
+    }
 }
 
-function closeResultPanel(forceBack = true) { 
-    const currentState = history.state;
-    const isPanelState = currentState && currentState.page === "panel";
-    getEl("resultPanel").style.display = "none"; 
+function closeResultPanel(
+    forceBack = true
+) {
+    const currentState =
+        history.state;
+
+    const isPanelState =
+        currentState &&
+        currentState.page === "panel";
+
+    getEl("resultPanel").style.display =
+        "none";
+
     toggleBodyScroll(false);
 
-    if (forceBack && isPanelState) {
+    if (
+        forceBack &&
+        isPanelState
+    ) {
         if (window.history.length > 1) {
             history.back();
         } else {
-            navTo('mySets', currentState.groupId);
+            navTo(
+                'mySets',
+                currentState.groupId
+            );
         }
     }
 }
 
-function confirmResult() { closeResultPanel(true); }
+function confirmResult() {
+    closeResultPanel(true);
+}
 
-async function cleanResult() { 
-    const id = history.state?.groupId;
-    if (isProcessing || !id || !confirm("Seçimler temizlensin mi?")) return; 
+async function cleanResult() {
+    const id =
+        history.state?.groupId;
+
+    if (
+        isProcessing ||
+        !id ||
+        !confirm("Seçimler temizlensin mi?")
+    ) return;
+
     let updatedGroup = null;
-    try { 
-        setLoading(true); isProcessing = true;
-        const g = await getGroupById(id); 
-        if(g) { 
-            g.results = {main: [], joker: []}; 
-            await atomicSave(g); 
+
+    try {
+        setLoading(true);
+        isProcessing = true;
+
+        const g =
+            await getGroupById(id);
+
+        if(g) {
+            g.results = {
+                main: [],
+                joker: []
+            };
+
+            await atomicSave(g);
+
             updatedGroup = g;
-            document.querySelectorAll("#resultNumbers .ball").forEach(b => b.classList.remove("result-selected"));
-        } 
-    } catch(e) { ErrorHandler.report("Clean Result Error", e); }
-    finally { 
-        setLoading(false); isProcessing = false; 
-        // [DÜZELTME 1]: Kilitlenme riskini önlemek için yenileme finally sonuna alındı
+
+            document
+                .querySelectorAll(
+                    "#resultNumbers .ball"
+                )
+                .forEach(b =>
+                    b.classList.remove(
+                        "result-selected"
+                    )
+                );
+        }
+
+    } catch(e) {
+        ErrorHandler.report(
+            "Clean Result Error",
+            e
+        );
+
+    } finally {
+        setLoading(false);
+        isProcessing = false;
+
         if (updatedGroup) {
-            await renderViewGroup(updatedGroup, lastRequestId);
+            await renderViewGroup(
+                updatedGroup,
+                lastRequestId
+            );
         }
     }
 }
 
 async function clearGeneratedSets() {
-    if (isProcessing || !confirm("Üretilen tüm kolonlar temizlensin mi?")) return;
+    if (
+        isProcessing ||
+        !confirm(
+            "Üretilen tüm kolonlar temizlensin mi?"
+        )
+    ) return;
+
     try {
         isProcessing = true;
+
         generatedSets = [];
-        await deleteDraft("tempSets");
-        await deleteDraft("tempInputs");
+
+        await deleteDraft(
+            "tempSets"
+        );
+
+        await deleteDraft(
+            "tempInputs"
+        );
+
         renderGeneratedSetsList();
+
     } catch(e) {
-        ErrorHandler.report("Clear Drafts Error", e);
+        ErrorHandler.report(
+            "Clear Drafts Error",
+            e
+        );
+
     } finally {
         isProcessing = false;
     }
@@ -756,3 +1690,4 @@ async function clearGeneratedSets() {
 </script>
 </body>
 </html>
+```
