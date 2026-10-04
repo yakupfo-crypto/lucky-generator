@@ -141,7 +141,7 @@ function secureShuffle(array) {
     return array;
 }
 
-/* --- DATABASE CONFIG --- */
+/* --- DATABASE CONFIG & SINGLETON CONNECTION --- */
 const DB_CONFIG = { 
     name: "LuckyDB", 
     version: 4, 
@@ -150,8 +150,11 @@ const DB_CONFIG = {
     lockName: "db_write_lock" 
 };
 
-function openDB() {
+let dbInstance = null;
+
+function getDB() {
     return new Promise((res, rej) => {
+        if (dbInstance) return res(dbInstance);
         const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
         req.onblocked = () => { alert("Lütfen diğer sekmeleri kapatın."); rej(new Error("DB Blocked")); };
         req.onupgradeneeded = (e) => {
@@ -160,9 +163,12 @@ function openDB() {
             if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) db.createObjectStore(DB_CONFIG.draftStore, { keyPath: "id" });
         };
         req.onsuccess = () => {
-            const db = req.result;
-            db.onversionchange = () => { db.close(); };
-            res(db);
+            dbInstance = req.result;
+            dbInstance.onversionchange = () => { 
+                dbInstance.close(); 
+                dbInstance = null; 
+            };
+            res(dbInstance);
         };
         req.onerror = (e) => rej(new Error("DB Hatası: " + (e.target.error ? e.target.error.message : "Bilinmeyen Hata")));
     });
@@ -217,68 +223,61 @@ async function withLock(workFn) {
 
 /* --- DB OPERATIONS --- */
 async function getDraft(id) {
-    let db;
     try {
-        db = await openDB();
+        const db = await getDB();
         const tx = db.transaction(DB_CONFIG.draftStore, "readonly");
         const req = tx.objectStore(DB_CONFIG.draftStore).get(id);
         return await new Promise(res => { req.onsuccess = () => res(req.result); });
-    } catch(e) { return null; } finally { if(db) db.close(); }
+    } catch(e) { return null; }
 }
 
 async function saveDraft(id, data) {
-    let db;
     try {
-        db = await openDB();
+        const db = await getDB();
         const tx = db.transaction(DB_CONFIG.draftStore, "readwrite");
         tx.objectStore(DB_CONFIG.draftStore).put({id, data, ts: Date.now()});
         await new Promise(res => tx.oncomplete = res);
-    } finally { if(db) db.close(); }
+    } catch(e) { ErrorHandler.report("Draft Save Error", e); }
 }
 
 async function deleteDraft(id) {
-    let db;
     try {
-        db = await openDB();
+        const db = await getDB();
         const tx = db.transaction(DB_CONFIG.draftStore, "readwrite");
         tx.objectStore(DB_CONFIG.draftStore).delete(id);
         await new Promise(res => tx.oncomplete = res);
-    } finally { if(db) db.close(); }
+    } catch(e) { ErrorHandler.report("Draft Delete Error", e); }
 }
 
 async function getAllGroups() {
-    let db;
     try {
-        db = await openDB();
+        const db = await getDB();
         const tx = db.transaction(DB_CONFIG.storeName, "readonly");
         const req = tx.objectStore(DB_CONFIG.storeName).getAll();
         return await new Promise((res) => {
             req.onsuccess = (e) => res((e.target.result || []).map(Validator.validateGroup).filter(Boolean));
         });
-    } catch (e) { return []; } finally { if(db) db.close(); }
+    } catch (e) { return []; }
 }
 
 async function getGroupById(id) {
     if(!id) return null;
-    let db;
     try {
-        db = await openDB();
+        const db = await getDB();
         const tx = db.transaction(DB_CONFIG.storeName, "readonly");
         const req = tx.objectStore(DB_CONFIG.storeName).get(String(id));
         return await new Promise((res) => {
             req.onsuccess = (e) => res(Validator.validateGroup(e.target.result));
         });
-    } catch(e) { return null; } finally { if(db) db.close(); }
+    } catch(e) { return null; }
 }
 
-/* DÜZELTME 1 UYGULANDI: Kilit yönetimi merkezi olarak atomicSave fonksiyonuna taşındı. */
 async function atomicSave(item) {
     return withLock(async () => {
         const val = Validator.validateGroup(item);
         if (!val) throw new Error("Doğrulama hatası.");
-        let db;
         try {
-            db = await openDB();
+            const db = await getDB();
             return await new Promise((res, rej) => {
                 const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
                 val.version = Date.now();
@@ -286,18 +285,17 @@ async function atomicSave(item) {
                 tx.oncomplete = () => res();
                 tx.onerror = () => rej(new Error("Yazma hatası"));
             });
-        } catch (err) { throw err; } finally { if (db) db.close(); }
+        } catch (err) { throw err; }
     });
 }
 
 async function deleteFromDB(id) {
-    let db;
     try {
-        db = await openDB();
+        const db = await getDB();
         const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
         tx.objectStore(DB_CONFIG.storeName).delete(String(id));
         await new Promise(res => tx.oncomplete = res);
-    } finally { if(db) db.close(); }
+    } catch(e) { ErrorHandler.report("Delete Error", e); }
 }
 
 /* --- YEDEKLEME VE İÇE AKTARMA (JSON) --- */
@@ -525,7 +523,7 @@ async function saveGroup() {
 
     const maxVal = generatedSets.length > 0 ? generatedSets[0].max : (parseInt(getEl("maxNumber")?.value, 10) || 49);
     const jMaxVal = generatedSets.length > 0 ? generatedSets[0].jokerMax : (parseInt(getEl("jokerMax")?.value, 10) || 0);
-    const jPerVal = parseInt(getEl("jokerCount")?.value, 10) || 0;
+    const jPerVal = parseInt(getEl("jokerCount")?.value, 10) || (generatedSets.length > 0 ? generatedSets[0].jokers.length : 0);
 
     const group = {
         id: String(Date.now()), name: name, sets: [...generatedSets],
@@ -647,7 +645,6 @@ async function openResultPanel(max, groupId, shouldPushState = true) {
     toggleBodyScroll(true);
 }
 
-/* DÜZELTME 1 UYGULANDI: toggleResult içindeki kilit sarmalı kaldırıldı, atomicSave üzerindeki tek kilit kullanıldı. */
 async function toggleResult(el, id, val, isJoker) {
     if (isProcessing) return; 
     isProcessing = true;
@@ -664,6 +661,8 @@ async function toggleResult(el, id, val, isJoker) {
                 const limit = isJoker ? g.jokerPerSet : 10;
                 if (list.length >= limit) { 
                     alert(isJoker ? "Joker limiti!" : "Maks 10 sayı!"); 
+                    isProcessing = false;
+                    el.style.opacity = "1";
                     return; 
                 }
                 list.push(val);
