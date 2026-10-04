@@ -375,8 +375,11 @@ window.onload = async () => {
 window.onpopstate = async (event) => { 
     lastRequestId++; 
     const state = event.state || {page:"generate", groupId:null}; 
-    if (state.page !== "panel") closeResultPanel(false); 
-    else if (state.page === "panel") openResultPanel(null, state.groupId, false);
+    if (state.page !== "panel") {
+        closeResultPanel(false); 
+    } else {
+        openResultPanel(null, state.groupId, false);
+    }
     await renderCurrentState(state.page, state.groupId); 
 };
 
@@ -392,9 +395,10 @@ async function renderCurrentState(page, groupId) {
     if(!container) return;
     
     if (page !== "panel") {
-        container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
-        getEl("resultPanel").style.display = "none";
+        const panel = getEl("resultPanel");
+        if(panel) panel.style.display = "none";
         toggleBodyScroll(false); 
+        container.innerHTML = `<div style="padding:20px; color:#666;">Yükleniyor...</div>`;
     }
     
     try {
@@ -658,7 +662,7 @@ async function toggleResult(el, id, val, isJoker) {
             if (idx > -1) {
                 list.splice(idx, 1);
             } else {
-                const limit = isJoker ? g.jokerPerSet : 10;
+                const limit = isJoker ? (g.jokerPerSet > 0 ? g.jokerPerSet : 10) : 10;
                 if (list.length >= limit) { 
                     alert(isJoker ? "Joker limiti!" : "Maks 10 sayı!"); 
                     isProcessing = false;
