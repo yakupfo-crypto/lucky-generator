@@ -115,7 +115,8 @@ const CryptoEngine = {
     isSecure: !!(window.crypto && window.crypto.getRandomValues),
     nextUint32: function(max) {
         if (!this.isSecure) throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
-        if (typeof max !== 'number' || max <= 0 || isNaN(max)) throw new Error("GEÇERSİZ MAKSİMUM DEĞER!");
+        if (typeof max !== 'number' || isNaN(max) || max <= 0) throw new Error("GEÇERSİZ MAKSİMUM DEĞER!");
+        if (max <= 1) return 0; // DÜZELTME 1: max = 1 veya geçersiz alt sınırlarda sonsuz döngüyü önler.
         const buf = new Uint32Array(1);
         const limit = Math.floor(0x100000000 / max) * max;
         let val;
@@ -175,7 +176,7 @@ const cleanNumberArray = (arr) => {
     if (!Array.isArray(arr)) return [];
     return arr
         .map(n => parseInt(n, 10))
-        .filter(n => !isNaN(n) && typeof n === 'number');
+        .filter(n => !isNaN(n) && typeof n === 'number' && n > 0); // DÜZELTME 4: 0 ve negatif değerler elendi.
 };
 
 const Validator = {
@@ -256,9 +257,8 @@ async function getAllGroups() {
         const req = tx.objectStore(DB_CONFIG.storeName).getAll();
         return await new Promise((res) => {
             req.onsuccess = (e) => res((e.target.result || []).map(Validator.validateGroup).filter(Boolean));
-            tx.oncomplete = () => db.close();
         });
-    } catch (e) { if(db) db.close(); return []; }
+    } catch (e) { return []; } finally { if(db) db.close(); } // DÜZELTME 2: DB bağlantısının kapanması garantiye alındı.
 }
 
 async function getGroupById(id) {
@@ -270,9 +270,8 @@ async function getGroupById(id) {
         const req = tx.objectStore(DB_CONFIG.storeName).get(String(id));
         return await new Promise((res) => {
             req.onsuccess = (e) => res(Validator.validateGroup(e.target.result));
-            tx.oncomplete = () => db.close();
         });
-    } catch(e) { if(db) db.close(); return null; }
+    } catch(e) { return null; } finally { if(db) db.close(); } // DÜZELTME 2: DB bağlantısının kapanması garantiye alındı.
 }
 
 async function atomicSave(item) {
@@ -285,10 +284,10 @@ async function atomicSave(item) {
             const tx = db.transaction(DB_CONFIG.storeName, "readwrite");
             val.version = Date.now();
             tx.objectStore(DB_CONFIG.storeName).put(val);
-            tx.oncomplete = () => { db.close(); res(); };
-            tx.onerror = () => { db.close(); rej(new Error("Yazma hatası")); };
+            tx.oncomplete = () => res();
+            tx.onerror = () => rej(new Error("Yazma hatası"));
         });
-    } catch (err) { if (db) db.close(); throw err; }
+    } catch (err) { throw err; } finally { if (db) db.close(); }
 }
 
 async function deleteFromDB(id) {
@@ -311,7 +310,7 @@ async function requestPersistentStorage() {
 
 window.onload = async () => { 
     if (!CryptoEngine.isSecure) {
-        document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠️ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
+        document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠️️ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
         return;
     }
     await requestPersistentStorage();
@@ -587,6 +586,7 @@ async function toggleResult(el, id, val, isJoker) {
     if (isProcessing) return; 
     isProcessing = true;
     el.style.opacity = "0.4";
+    let updatedGroup = null;
     try {
         await withLock(async () => {
             const g = await getGroupById(id);
@@ -601,8 +601,12 @@ async function toggleResult(el, id, val, isJoker) {
             }
             await atomicSave(g);
             el.classList.toggle("result-selected");
-            if(history.state?.groupId === id) await renderViewGroup(g, lastRequestId);
+            updatedGroup = g;
         });
+        // DÜZELTME 3: Lock kilitlenmesini önlemek için render işlemi kilit bloğunun dışına alındı.
+        if (updatedGroup && history.state?.groupId === id) {
+            await renderViewGroup(updatedGroup, lastRequestId);
+        }
     } catch(e) {
         ErrorHandler.report("Result Toggle Error", e);
     } finally { 
@@ -638,6 +642,7 @@ function confirmResult() { closeResultPanel(true); }
 async function cleanResult() { 
     const id = history.state?.groupId;
     if (isProcessing || !id || !confirm("Seçimler temizlensin mi?")) return; 
+    let updatedGroup = null;
     try { 
         setLoading(true); isProcessing = true;
         await withLock(async () => {
@@ -645,10 +650,13 @@ async function cleanResult() {
             if(g) { 
                 g.results = {main: [], joker: []}; 
                 await atomicSave(g); 
-                await renderViewGroup(g, lastRequestId);
+                updatedGroup = g;
                 document.querySelectorAll("#resultNumbers .ball").forEach(b => b.classList.remove("result-selected"));
             } 
         });
+        if (updatedGroup) {
+            await renderViewGroup(updatedGroup, lastRequestId);
+        }
     } catch(e) { ErrorHandler.report("Clean Result Error", e); }
     finally { setLoading(false); isProcessing = false; }
 }
