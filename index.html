@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
 <title>Lucky Generator Pro - Stable State</title>
 <style>
-    body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; transition: top 0.2s; }
-    body.modal-open { overflow: hidden; position: fixed; width: 100%; }
+    body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
+    body.modal-open { overflow: hidden; }
     header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position: relative; }
     .container{ padding:20px; }
     .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
@@ -23,13 +23,14 @@
     .card b{ display:block; margin-bottom:10px; color:#1976d2; }
     .ball.result-selected{ background:#1976d2; color:#fff; }
     .delete-all-btn { background: #d32f2f; margin-bottom: 10px; }
+    .secondary-btn { background: #555; margin-top: 5px; }
     #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index: 3000; pointer-events:none; }
     .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
     #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
     .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
     @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
     #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.6); z-index: 4000; cursor: wait; }
-    #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; }
+    #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; box-sizing: border-box; }
 </style>
 </head>
 <body>
@@ -46,35 +47,32 @@
 </div>
 
 <div class="bottom-nav">
-    <button onclick="navTo('generate')">Üret</button>
-    <button onclick="navTo('mySets')">Kayıtlarım</button>
+    <button id="nav-btn-generate">Üret</button>
+    <button id="nav-btn-mySets">Kayıtlarım</button>
 </div>
 
 <div id="resultPanel">
-    <h3 style="margin-top:0;">Sonuç Gir <span onclick="closeResultPanel(true)" style="float:right;cursor:pointer; padding: 5px;">×</span></h3>
+    <h3 style="margin-top:0;">Sonuç Gir <span id="close-panel-btn" style="float:right;cursor:pointer; padding: 5px;">×</span></h3>
     <div id="resultNumbers"></div>
     <div style="margin-top: 15px;">
-        <button onclick="confirmResult()">Tamamla</button>
-        <button onclick="cleanResult()" style="background:#999;margin-top:8px;">Tümünü Temizle</button>
+        <button id="btn-confirm-result">Tamamla</button>
+        <button id="btn-clean-result" style="background:#999;margin-top:8px;">Tümünü Temizle</button>
     </div>
 </div>
+
+<input type="file" id="import-file-input" accept=".json" style="display:none;">
 
 <script>
 /* --- CORE UTILITIES --- */
 const getEl = (id) => document.getElementById(id);
 const setLoading = (state) => { const el = getEl("global-loader"); if(el) el.style.display = state ? "block" : "none"; };
 
+// DÜZELTME 1: iOS ve Mobil Safari kilitlenme hatası düzeltildi (position: fixed kaldırıldı).
 function toggleBodyScroll(lock) {
     if (lock) {
-        const scrollY = window.scrollY || window.pageYOffset || 0;
-        document.body.style.top = `-${scrollY}px`;
         document.body.classList.add("modal-open");
     } else {
-        const scrollStr = document.body.style.top || "0px";
-        const scrollY = Math.abs(parseInt(scrollStr, 10)) || 0;
         document.body.classList.remove("modal-open");
-        document.body.style.top = '';
-        window.scrollTo(0, scrollY);
     }
 }
 
@@ -116,7 +114,7 @@ const CryptoEngine = {
     nextUint32: function(max) {
         if (!this.isSecure) throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
         if (typeof max !== 'number' || isNaN(max) || max <= 0) throw new Error("GEÇERSİZ MAKSİMUM DEĞER!");
-        if (max <= 1) return 0; // DÜZELTME 1: max = 1 veya geçersiz alt sınırlarda sonsuz döngüyü önler.
+        if (max <= 1) return 0;
         const buf = new Uint32Array(1);
         const limit = Math.floor(0x100000000 / max) * max;
         let val;
@@ -176,7 +174,7 @@ const cleanNumberArray = (arr) => {
     if (!Array.isArray(arr)) return [];
     return arr
         .map(n => parseInt(n, 10))
-        .filter(n => !isNaN(n) && typeof n === 'number' && n > 0); // DÜZELTME 4: 0 ve negatif değerler elendi.
+        .filter(n => !isNaN(n) && typeof n === 'number' && n > 0);
 };
 
 const Validator = {
@@ -258,7 +256,7 @@ async function getAllGroups() {
         return await new Promise((res) => {
             req.onsuccess = (e) => res((e.target.result || []).map(Validator.validateGroup).filter(Boolean));
         });
-    } catch (e) { return []; } finally { if(db) db.close(); } // DÜZELTME 2: DB bağlantısının kapanması garantiye alındı.
+    } catch (e) { return []; } finally { if(db) db.close(); }
 }
 
 async function getGroupById(id) {
@@ -271,7 +269,7 @@ async function getGroupById(id) {
         return await new Promise((res) => {
             req.onsuccess = (e) => res(Validator.validateGroup(e.target.result));
         });
-    } catch(e) { return null; } finally { if(db) db.close(); } // DÜZELTME 2: DB bağlantısının kapanması garantiye alındı.
+    } catch(e) { return null; } finally { if(db) db.close(); }
 }
 
 async function atomicSave(item) {
@@ -300,6 +298,51 @@ async function deleteFromDB(id) {
     } finally { if(db) db.close(); }
 }
 
+/* --- DÜZELTME 2: YEDEKLEME VE İÇE AKTARMA (JSON) --- */
+async function exportBackup() {
+    try {
+        const groups = await getAllGroups();
+        if (groups.length === 0) { alert("Dışa aktarılacak kayıtlı veri bulunamadı."); return; }
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(groups, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `LuckyGenerator_Yedek_${new Date().toISOString().slice(0,10)}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+    } catch(e) { ErrorHandler.report("Export Error", e); }
+}
+
+function triggerImport() {
+    getEl("import-file-input").click();
+}
+
+async function handleFileImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            if (!Array.isArray(importedData)) throw new Error("Geçersiz yedek dosyası formatı.");
+            let count = 0;
+            await withLock(async () => {
+                for (const item of importedData) {
+                    const valid = Validator.validateGroup(item);
+                    if (valid) {
+                        await atomicSave(valid);
+                        count++;
+                    }
+                }
+            });
+            alert(`${count} adet liste başarıyla yükledi.`);
+            renderCurrentState("mySets");
+        } catch(err) { alert("Yükleme başarısız: " + err.message); }
+        finally { event.target.value = ""; }
+    };
+    reader.readAsText(file);
+}
+
 /* --- NAVIGATION & UI LOGIC --- */
 async function requestPersistentStorage() {
     if (navigator.storage && navigator.storage.persist) {
@@ -310,9 +353,18 @@ async function requestPersistentStorage() {
 
 window.onload = async () => { 
     if (!CryptoEngine.isSecure) {
-        document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠️️ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
+        document.body.innerHTML = `<div style="padding:40px; text-align:center; color:#d32f2f;"><h2>⚠ Güvenlik</h2><p>Web Crypto API desteklenmiyor.</p></div>`;
         return;
     }
+    
+    // DÜZELTME 4: Inline Event Handler'lar kaldırılıp Event Listener'a dönüştürüldü.
+    getEl("nav-btn-generate").addEventListener("click", () => navTo('generate'));
+    getEl("nav-btn-mySets").addEventListener("click", () => navTo('mySets'));
+    getEl("close-panel-btn").addEventListener("click", () => closeResultPanel(true));
+    getEl("btn-confirm-result").addEventListener("click", confirmResult);
+    getEl("btn-clean-result").addEventListener("click", cleanResult);
+    getEl("import-file-input").addEventListener("change", handleFileImport);
+
     await requestPersistentStorage();
     const state = history.state || {page:"generate", groupId:null};
     if (state.page === "panel" && state.groupId) {
@@ -323,7 +375,9 @@ window.onload = async () => {
     }
 };
 
+// DÜZELTME 3: Hızlı navigasyon basışlarında async çakışmaları engellendi.
 window.onpopstate = async (event) => { 
+    lastRequestId++; 
     const state = event.state || {page:"generate", groupId:null}; 
     if (state.page !== "panel") closeResultPanel(false); 
     else if (state.page === "panel") openResultPanel(null, state.groupId, false);
@@ -384,10 +438,12 @@ async function renderGeneratePage() {
                 <hr>
                 <label>Kolon Sayısı</label>
                 <input type="number" id="setCount" value="${storedInputs.count}">
-                <button onclick="generateSets()">Rastgele Üret</button>
+                <button id="btn-generate-action">Rastgele Üret</button>
             </div>
             <div id="results"></div>
         </div>`;
+    
+    getEl("btn-generate-action").addEventListener("click", generateSets);
     renderGeneratedSetsList();
 }
 
@@ -406,11 +462,14 @@ function renderGeneratedSetsList() {
         const actionCard = document.createElement("div");
         actionCard.className = "card";
         actionCard.innerHTML = `
-            <button class="delete-all-btn" onclick="clearGeneratedSets()">Üretilenleri Sil</button>
+            <button class="delete-all-btn" id="btn-clear-generated">Üretilenleri Sil</button>
             <label><b>Liste Adı</b></label>
             <input type="text" id="groupNameInput" placeholder="İsim verin...">
-            <button onclick="saveGroup()">Kalıcı Olarak Kaydet</button>`;
+            <button id="btn-save-group">Kalıcı Olarak Kaydet</button>`;
         resultsDiv.appendChild(actionCard);
+        
+        getEl("btn-clear-generated").addEventListener("click", clearGeneratedSets);
+        getEl("btn-save-group").addEventListener("click", saveGroup);
     }
 }
 
@@ -501,7 +560,14 @@ async function renderMySetsList(reqId) {
     view.innerHTML = ""; 
     const container = document.createElement("div"); 
     container.className = "container"; 
-    container.innerHTML = `<h3>Kayıtlı Listelerim</h3>`;
+    container.innerHTML = `
+        <h3>Kayıtlı Listelerim</h3>
+        <div style="margin-bottom: 15px;">
+            <button id="btn-export-backup" class="secondary-btn">Yedekle (JSON Dışa Aktar)</button>
+            <button id="btn-import-backup" class="secondary-btn">Yedek Yükle (JSON İçe Aktar)</button>
+        </div>
+    `;
+    
     if (groups.length === 0) {
         container.innerHTML += "<p>Henüz kayıtlı kolon yok.</p>";
     } else {
@@ -514,6 +580,9 @@ async function renderMySetsList(reqId) {
         });
     }
     view.appendChild(container);
+
+    getEl("btn-export-backup").addEventListener("click", exportBackup);
+    getEl("btn-import-backup").addEventListener("click", triggerImport);
 }
 
 async function renderViewGroup(group, reqId) {
@@ -603,7 +672,6 @@ async function toggleResult(el, id, val, isJoker) {
             el.classList.toggle("result-selected");
             updatedGroup = g;
         });
-        // DÜZELTME 3: Lock kilitlenmesini önlemek için render işlemi kilit bloğunun dışına alındı.
         if (updatedGroup && history.state?.groupId === id) {
             await renderViewGroup(updatedGroup, lastRequestId);
         }
