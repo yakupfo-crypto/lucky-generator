@@ -130,6 +130,20 @@ window.onunhandledrejection = (event) => {
     return false;
 };
 
+/* --- GENERATION LIMITS --- */
+/*
+ * Üretim sırasında oluşturulan havuzların ve kolon sayısının
+ * tarayıcıyı gereksiz yere aşırı yüklememesi için üst sınırlar.
+ * Mevcut normal kullanım değerleri bu sınırların oldukça altındadır.
+ */
+const GENERATION_LIMITS = {
+    max: 1000,
+    per: 100,
+    jokerMax: 1000,
+    jokerPer: 100,
+    count: 100
+};
+
 let generatedSets = [];
 let lastRequestId = 0;
 let isProcessing = false;
@@ -1446,17 +1460,17 @@ async function renderGeneratePage() {
         <div class="container">
             <div class="card">
                 <b>Ana Grup (1 - ?)</b>
-                <input type="number" id="maxNumber" value="${storedInputs.max}">
+                <input type="number" id="maxNumber" min="1" max="${GENERATION_LIMITS.max}" value="${storedInputs.max}">
                 <label>Seçilecek Sayı</label>
-                <input type="number" id="perSet" value="${storedInputs.per}">
+                <input type="number" id="perSet" min="1" max="${GENERATION_LIMITS.per}" value="${storedInputs.per}">
                 <hr>
                 <b>Joker (1 - ?)</b>
-                <input type="number" id="jokerMax" value="${storedInputs.jMax}">
+                <input type="number" id="jokerMax" min="0" max="${GENERATION_LIMITS.jokerMax}" value="${storedInputs.jMax}">
                 <label>Joker Sayısı</label>
-                <input type="number" id="jokerCount" value="${storedInputs.jPer}">
+                <input type="number" id="jokerCount" min="0" max="${GENERATION_LIMITS.jokerPer}" value="${storedInputs.jPer}">
                 <hr>
                 <label>Kolon Sayısı</label>
-                <input type="number" id="setCount" value="${storedInputs.count}">
+                <input type="number" id="setCount" min="1" max="${GENERATION_LIMITS.count}" value="${storedInputs.count}">
                 <button id="btn-generate-action">Rastgele Üret</button>
             </div>
             <div id="results"></div>
@@ -1564,13 +1578,32 @@ async function generateSets() {
         parseInt(countEl.value, 10) || 0;
 
     if (
-        max <= 0 ||
-        per <= 0 ||
-        max < per ||
+        !Number.isSafeInteger(max) ||
+        !Number.isSafeInteger(per) ||
+        !Number.isSafeInteger(jMax) ||
+        !Number.isSafeInteger(jPer) ||
+        !Number.isSafeInteger(count) ||
+        max < 1 ||
+        max > GENERATION_LIMITS.max ||
+        per < 1 ||
+        per > GENERATION_LIMITS.per ||
+        per > max ||
+        jMax < 0 ||
+        jMax > GENERATION_LIMITS.jokerMax ||
+        jPer < 0 ||
+        jPer > GENERATION_LIMITS.jokerPer ||
         (jPer > 0 && jMax < jPer) ||
-        count < 1
+        count < 1 ||
+        count > GENERATION_LIMITS.count
     ) {
-        alert("Geçersiz parametre!");
+        alert(
+            `Geçersiz üretim parametresi! Üst sınırlar: ` +
+            `Ana maksimum ${GENERATION_LIMITS.max}, ` +
+            `ana seçim ${GENERATION_LIMITS.per}, ` +
+            `Joker maksimum ${GENERATION_LIMITS.jokerMax}, ` +
+            `Joker seçim ${GENERATION_LIMITS.jokerPer}, ` +
+            `kolon ${GENERATION_LIMITS.count}.`
+        );
         return;
     }
 
