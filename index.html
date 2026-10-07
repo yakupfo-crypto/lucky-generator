@@ -510,7 +510,7 @@ const Validator = {
                 data.name !== undefined &&
                 data.name !== null &&
                 String(data.name).trim() !== ""
-                    ? escapeHTML(String(data.name))
+                    ? String(data.name)
                     : "İsimsiz Liste";
 
             const rawVersion = Number(data.version);
@@ -1435,12 +1435,6 @@ window.onload = async () => {
         state.groupId
     ) {
 
-        /*
-         * Sayfa yenilenmişken panel state'i doğrudan açılmıştır.
-         * Bu durumda panelin öncesine ait uygulama state'i
-         * güvenilir biçimde bilinmediğinden history.back()
-         * kullanılmayacak.
-         */
         panelPreviousState = null;
 
         await renderCurrentState(
@@ -1448,10 +1442,6 @@ window.onload = async () => {
             state.groupId
         );
 
-        /*
-         * Panel açılışı için mevcut navigation isteği
-         * geçerli mi kontrolü openResultPanel içinde yapılır.
-         */
         await openResultPanel(
             null,
             state.groupId,
@@ -1473,11 +1463,6 @@ window.onpopstate = async (event) => {
 
     lastRequestId++;
 
-    /*
-     * Tarayıcı geri/ileri hareketi ile panel state'inden
-     * çıkıldığında artık panel için tutulmuş önceki state
-     * geçersizdir.
-     */
     panelPreviousState = null;
 
     const state =
@@ -1496,10 +1481,6 @@ window.onpopstate = async (event) => {
         state.groupId
     );
 
-    /*
-     * Panel state'i için renderCurrentState sonrasında
-     * güncel state kontrolü yapılıyor.
-     */
     if (
         state.page === "panel" &&
         state.groupId &&
@@ -1518,10 +1499,6 @@ function navTo(page, groupId = null) {
 
     if (isProcessing) return;
 
-    /*
-     * Panelden farklı bir sayfaya gidiliyorsa mevcut panel
-     * işlemlerinin eski state olarak kalmaması sağlanır.
-     */
     if (page !== "panel") {
         lastRequestId++;
         panelPreviousState = null;
@@ -1646,10 +1623,6 @@ async function renderGeneratePage() {
     const dInputs =
         await getDraft("tempInputs");
 
-    /*
-     * Draft verileri artık doğrudan kullanılmıyor.
-     * Önce yapısal doğrulamadan geçiriliyor.
-     */
     generatedSets =
         dSets
             ? normalizeGeneratedSetsDraft(dSets.data)
@@ -2265,11 +2238,6 @@ async function openResultPanel(
     shouldPushState = true
 ) {
 
-    /*
-     * Bu çağrının başladığı navigation isteğini kaydet.
-     * getGroupById() beklerken kullanıcı başka sayfaya geçerse
-     * eski işlem paneli açamayacak.
-     */
     const requestId =
         lastRequestId;
 
@@ -2279,10 +2247,6 @@ async function openResultPanel(
     const group =
         await getGroupById(groupId);
 
-    /*
-     * DB cevabı geldikten sonra hâlâ aynı navigation
-     * isteği ve aynı group state'i geçerli olmalı.
-     */
     if (
         requestId !== lastRequestId ||
         history.state?.groupId !== requestedGroupId ||
@@ -2389,9 +2353,6 @@ async function openResultPanel(
         );
     }
 
-    /*
-     * State yalnızca çağrı hâlâ geçerliyse eklenir.
-     */
     if (shouldPushState) {
 
         if (
@@ -2400,12 +2361,6 @@ async function openResultPanel(
             return;
         }
 
-        /*
-         * Panel state'ine geçmeden hemen önceki state'i
-         * uygulama içi olarak sakla.
-         *
-         * Bu state yalnızca aynı açılış işlemi için kullanılır.
-         */
         const currentState = history.state;
 
         panelPreviousState =
@@ -2429,10 +2384,6 @@ async function openResultPanel(
         );
     }
 
-    /*
-     * pushState sonrası da panelin hâlâ bu grup için
-     * geçerli olduğundan emin ol.
-     */
     if (
         history.state?.groupId !==
         requestedGroupId
@@ -2602,14 +2553,6 @@ function closeResultPanel(
         const currentGroupId =
             String(currentState.groupId);
 
-        /*
-         * Yalnızca panel açılırken gerçekten mevcut olan
-         * uygulama içi mySets state'i saklanmışsa history.back()
-         * kullanılır.
-         *
-         * Sayfa yenilenmişse panelPreviousState null olur ve
-         * doğrudan güvenli mySets state'ine gidilir.
-         */
         const previousState =
             panelPreviousState;
 
@@ -2623,11 +2566,6 @@ function closeResultPanel(
             history.back();
         } else {
 
-            /*
-             * Panel state'ine doğrudan ulaşılmış veya önceki
-             * uygulama state'i güvenilir biçimde bilinmiyor.
-             * Tarayıcı geçmişine körlemesine geri dönülmez.
-             */
             navTo(
                 'mySets',
                 currentGroupId
