@@ -131,6 +131,11 @@ window.onunhandledrejection = (event) => {
 };
 
 /* --- GENERATION LIMITS --- */
+/*
+ * Üretim sırasında oluşturulan havuzların ve kolon sayısının
+ * tarayıcıyı gereksiz yere aşırı yüklememesi için üst sınırlar.
+ * Mevcut normal kullanım değerleri bu sınırların oldukça altındadır.
+ */
 const GENERATION_LIMITS = {
     max: 1000,
     per: 100,
@@ -143,6 +148,16 @@ let generatedSets = [];
 let lastRequestId = 0;
 let isProcessing = false;
 let cryptoTimeout = null;
+
+/*
+ * Sonuç paneli açılırken mevcut uygulama state'ini
+ * ayrı olarak saklar.
+ *
+ * Sayfa yenilenmişse veya panel state'i doğrudan açılmışsa
+ * null kalır. Böylece closeResultPanel() körlemesine
+ * history.back() yapmaz.
+ */
+let panelPreviousState = null;
 
 /* --- SAFE HTML --- */
 function escapeHTML(str) {
@@ -377,6 +392,10 @@ const Validator = {
                     ? rawJokerPerSet
                     : 0;
 
+            /*
+             * Mantıksal üst sınırlar:
+             * jokerPerSet, jokerMax'tan büyük olamaz.
+             */
             const safeJokerPerSet =
                 jokerMax > 0
                     ? Math.min(jokerPerSet, jokerMax)
@@ -408,6 +427,11 @@ const Validator = {
                                 )
                                 : [];
 
+                        /*
+                         * Aynı kolon içinde tekrar eden sayıların
+                         * temizlenmesi yukarıdaki validateNumberList()
+                         * tarafından yapılır.
+                         */
                         return {
                             numbers,
                             jokers,
@@ -422,14 +446,24 @@ const Validator = {
                             return false;
                         }
 
+                        /*
+                         * Bir kolonun seçtiği ana sayı miktarı
+                         * sistem maksimumunu geçemez.
+                         */
                         if (set.numbers.length > max) {
                             return false;
                         }
 
+                        /*
+                         * Joker sistemi yoksa joker verisi kabul edilmez.
+                         */
                         if (jokerMax === 0 && set.jokers.length > 0) {
                             return false;
                         }
 
+                        /*
+                         * Joker sayısı jokerPerSet'i geçemez.
+                         */
                         if (
                             safeJokerPerSet > 0 &&
                             set.jokers.length > safeJokerPerSet
@@ -455,6 +489,9 @@ const Validator = {
                     )
                     : [];
 
+            /*
+             * Sonuç sayılarının da sistem sınırları içinde tutulması.
+             */
             const safeResultsMain = resultsMain.slice(0, 10);
 
             const safeResultsJoker =
@@ -518,9 +555,23 @@ async function withLock(workFn) {
         );
     }
 
+    /*
+     * Navigator Locks API olmayan ortamlarda işlemleri sıraya koy.
+     *
+     * ÖNEMLİ:
+     * Önceki kodda catch() hatayı yutup atomicSave()'un
+     * başarılıymış gibi devam etmesine neden olabiliyordu.
+     *
+     * Burada hata tekrar throw ediliyor.
+     */
     const currentLock = lockQueue.then(() => workFn());
 
-    lockQueue = currentLock.catch(() => {});
+    lockQueue = currentLock.catch(() => {
+        /*
+         * Kuyruğun sonraki işlemler için çalışmaya devam etmesini sağla.
+         * Hata mevcut çağrıya yine aktarılır.
+         */
+    });
 
     return currentLock;
 }
@@ -1093,6 +1144,10 @@ async function handleFileImport(event) {
 
             let count = 0;
 
+            /*
+             * Bilerek mevcut davranış korunmuştur.
+             * JSON kayıt sayısına üst sınır eklenmemiştir.
+             */
             for (const item of importedData) {
                 const valid =
                     Validator.validateGroup(item);
@@ -1125,6 +1180,175 @@ async function handleFileImport(event) {
     };
 
     reader.readAsText(file);
+}
+
+/* --- DRAFT VALIDATION --- */
+
+/*
+ * IndexedDB'den gelen geçici üretim verileri doğrudan
+ * arayüze verilmez.
+ *
+ * Normal uygulama tarafından oluşturulan doğru veriler
+ * aynen korunur. Yapısı bozuk olan kayıtlar ise
+ * kullanılmadan güvenli boş değere düşürülür.
+ */
+function normalizeGeneratedSetsDraft(data) {
+
+    if (!Array.isArray(data)) {
+        return [];
+    }
+
+    const safeSets = [];
+
+    for (const set of data) {
+
+        if (
+            !set ||
+            typeof set !== "object" ||
+            Array.isArray(set) ||
+            !Array.isArray(set.numbers) ||
+            !Array.isArray(set.jokers)
+        ) {
+            continue;
+        }
+
+        const rawMax = Number(set.max);
+        const rawJokerMax = Number(set.jokerMax);
+
+        if (
+            !Number.isSafeInteger(rawMax) ||
+            rawMax < 1 ||
+            rawMax > GENERATION_LIMITS.max
+        ) {
+            continue;
+        }
+
+        if (
+            !Number.isSafeInteger(rawJokerMax) ||
+            rawJokerMax < 0 ||
+            rawJokerMax > GENERATION_LIMITS.jokerMax
+        ) {
+            continue;
+        }
+
+        const numbers =
+            validateNumberList(
+                cleanNumberArray(set.numbers),
+                rawMax
+            );
+
+        const jokers =
+            rawJokerMax > 0
+                ? validateNumberList(
+                    cleanNumberArray(set.jokers),
+                    rawJokerMax
+                )
+                : [];
+
+        if (
+            numbers.length === 0 ||
+            numbers.length > GENERATION_LIMITS.per
+        ) {
+            continue;
+        }
+
+        if (
+            rawJokerMax === 0 &&
+            jokers.length > 0
+        ) {
+            continue;
+        }
+
+        if (
+            jokers.length > GENERATION_LIMITS.jokerPer
+        ) {
+            continue;
+        }
+
+        safeSets.push({
+            numbers,
+            jokers,
+            max: rawMax,
+            jokerMax: rawJokerMax
+        });
+    }
+
+    return safeSets;
+}
+
+function normalizeDraftInputs(data) {
+
+    const defaults = {
+        max: 35,
+        per: 5,
+        jMax: 31,
+        jPer: 1,
+        count: 5
+    };
+
+    if (
+        !data ||
+        typeof data !== "object" ||
+        Array.isArray(data)
+    ) {
+        return defaults;
+    }
+
+    const max = Number(data.max);
+    const per = Number(data.per);
+    const jMax = Number(data.jMax);
+    const jPer = Number(data.jPer);
+    const count = Number(data.count);
+
+    if (
+        !Number.isSafeInteger(max) ||
+        max < 1 ||
+        max > GENERATION_LIMITS.max
+    ) {
+        return defaults;
+    }
+
+    if (
+        !Number.isSafeInteger(per) ||
+        per < 1 ||
+        per > GENERATION_LIMITS.per ||
+        per > max
+    ) {
+        return defaults;
+    }
+
+    if (
+        !Number.isSafeInteger(jMax) ||
+        jMax < 0 ||
+        jMax > GENERATION_LIMITS.jokerMax
+    ) {
+        return defaults;
+    }
+
+    if (
+        !Number.isSafeInteger(jPer) ||
+        jPer < 0 ||
+        jPer > GENERATION_LIMITS.jokerPer ||
+        (jPer > 0 && jMax < jPer)
+    ) {
+        return defaults;
+    }
+
+    if (
+        !Number.isSafeInteger(count) ||
+        count < 1 ||
+        count > GENERATION_LIMITS.count
+    ) {
+        return defaults;
+    }
+
+    return {
+        max,
+        per,
+        jMax,
+        jPer,
+        count
+    };
 }
 
 /* --- NAVIGATION & UI LOGIC --- */
@@ -1210,11 +1434,24 @@ window.onload = async () => {
         state.page === "panel" &&
         state.groupId
     ) {
+
+        /*
+         * Sayfa yenilenmişken panel state'i doğrudan açılmıştır.
+         * Bu durumda panelin öncesine ait uygulama state'i
+         * güvenilir biçimde bilinmediğinden history.back()
+         * kullanılmayacak.
+         */
+        panelPreviousState = null;
+
         await renderCurrentState(
             "mySets",
             state.groupId
         );
 
+        /*
+         * Panel açılışı için mevcut navigation isteği
+         * geçerli mi kontrolü openResultPanel içinde yapılır.
+         */
         await openResultPanel(
             null,
             state.groupId,
@@ -1222,6 +1459,9 @@ window.onload = async () => {
         );
 
     } else {
+
+        panelPreviousState = null;
+
         renderCurrentState(
             state.page,
             state.groupId
@@ -1232,6 +1472,13 @@ window.onload = async () => {
 window.onpopstate = async (event) => {
 
     lastRequestId++;
+
+    /*
+     * Tarayıcı geri/ileri hareketi ile panel state'inden
+     * çıkıldığında artık panel için tutulmuş önceki state
+     * geçersizdir.
+     */
+    panelPreviousState = null;
 
     const state =
         event.state ||
@@ -1249,6 +1496,10 @@ window.onpopstate = async (event) => {
         state.groupId
     );
 
+    /*
+     * Panel state'i için renderCurrentState sonrasında
+     * güncel state kontrolü yapılıyor.
+     */
     if (
         state.page === "panel" &&
         state.groupId &&
@@ -1267,8 +1518,13 @@ function navTo(page, groupId = null) {
 
     if (isProcessing) return;
 
+    /*
+     * Panelden farklı bir sayfaya gidiliyorsa mevcut panel
+     * işlemlerinin eski state olarak kalmaması sağlanır.
+     */
     if (page !== "panel") {
         lastRequestId++;
+        panelPreviousState = null;
     }
 
     history.pushState(
@@ -1322,9 +1578,7 @@ async function renderCurrentState(page, groupId) {
                 currentRequestId ===
                 lastRequestId
             ) {
-                await renderGeneratePage(
-                    currentRequestId
-                );
+                await renderGeneratePage();
             }
 
         } else if (page === "mySets") {
@@ -1376,7 +1630,7 @@ async function renderCurrentState(page, groupId) {
 
 /* --- GENERATE & SAVE LOGIC --- */
 
-async function renderGeneratePage(requestId) {
+async function renderGeneratePage() {
 
     let storedInputs = {
         max:35,
@@ -1389,41 +1643,24 @@ async function renderGeneratePage(requestId) {
     const dSets =
         await getDraft("tempSets");
 
-    if (requestId !== lastRequestId) {
-        return;
-    }
-
     const dInputs =
         await getDraft("tempInputs");
 
-    if (requestId !== lastRequestId) {
-        return;
-    }
-
+    /*
+     * Draft verileri artık doğrudan kullanılmıyor.
+     * Önce yapısal doğrulamadan geçiriliyor.
+     */
     generatedSets =
         dSets
-            ? dSets.data
+            ? normalizeGeneratedSetsDraft(dSets.data)
             : [];
 
     if(dInputs) {
-        storedInputs = dInputs.data;
+        storedInputs =
+            normalizeDraftInputs(dInputs.data);
     }
 
-    if (requestId !== lastRequestId) {
-        return;
-    }
-
-    const viewContainer =
-        getEl("view-container");
-
-    if (
-        !viewContainer ||
-        requestId !== lastRequestId
-    ) {
-        return;
-    }
-
-    viewContainer.innerHTML = `
+    getEl("view-container").innerHTML = `
         <div class="container">
             <div class="card">
                 <b>Ana Grup (1 - ?)</b>
@@ -1443,21 +1680,11 @@ async function renderGeneratePage(requestId) {
             <div id="results"></div>
         </div>`;
 
-    if (requestId !== lastRequestId) {
-        return;
-    }
-
-    const generateButton =
-        getEl("btn-generate-action");
-
-    if (!generateButton) {
-        return;
-    }
-
-    generateButton.addEventListener(
-        "click",
-        generateSets
-    );
+    getEl("btn-generate-action")
+        .addEventListener(
+            "click",
+            generateSets
+        );
 
     renderGeneratedSetsList();
 }
@@ -2038,6 +2265,11 @@ async function openResultPanel(
     shouldPushState = true
 ) {
 
+    /*
+     * Bu çağrının başladığı navigation isteğini kaydet.
+     * getGroupById() beklerken kullanıcı başka sayfaya geçerse
+     * eski işlem paneli açamayacak.
+     */
     const requestId =
         lastRequestId;
 
@@ -2047,6 +2279,10 @@ async function openResultPanel(
     const group =
         await getGroupById(groupId);
 
+    /*
+     * DB cevabı geldikten sonra hâlâ aynı navigation
+     * isteği ve aynı group state'i geçerli olmalı.
+     */
     if (
         requestId !== lastRequestId ||
         history.state?.groupId !== requestedGroupId ||
@@ -2153,6 +2389,9 @@ async function openResultPanel(
         );
     }
 
+    /*
+     * State yalnızca çağrı hâlâ geçerliyse eklenir.
+     */
     if (shouldPushState) {
 
         if (
@@ -2160,6 +2399,26 @@ async function openResultPanel(
         ) {
             return;
         }
+
+        /*
+         * Panel state'ine geçmeden hemen önceki state'i
+         * uygulama içi olarak sakla.
+         *
+         * Bu state yalnızca aynı açılış işlemi için kullanılır.
+         */
+        const currentState = history.state;
+
+        panelPreviousState =
+            currentState &&
+            currentState.page === "mySets" &&
+            currentState.groupId !== undefined &&
+            currentState.groupId !== null &&
+            String(currentState.groupId) === requestedGroupId
+                ? {
+                    page: "mySets",
+                    groupId: requestedGroupId
+                }
+                : null;
 
         history.pushState(
             {
@@ -2170,10 +2429,15 @@ async function openResultPanel(
         );
     }
 
+    /*
+     * pushState sonrası da panelin hâlâ bu grup için
+     * geçerli olduğundan emin ol.
+     */
     if (
         history.state?.groupId !==
         requestedGroupId
     ) {
+        panelPreviousState = null;
         return;
     }
 
@@ -2339,28 +2603,36 @@ function closeResultPanel(
             String(currentState.groupId);
 
         /*
-         * Panel state'inden çıkarken tarayıcı geçmişindeki
-         * bilinmeyen bir önceki sayfaya history.back() ile
-         * gitmek yerine uygulamanın güvenli mySets state'i
-         * doğrudan mevcut history kaydına yazılır.
+         * Yalnızca panel açılırken gerçekten mevcut olan
+         * uygulama içi mySets state'i saklanmışsa history.back()
+         * kullanılır.
          *
-         * Böylece panel doğrudan açılmış veya sayfa
-         * yenilenmiş olsa bile uygulama dışına çıkılmaz.
+         * Sayfa yenilenmişse panelPreviousState null olur ve
+         * doğrudan güvenli mySets state'ine gidilir.
          */
-        history.replaceState(
-            {
-                page: "mySets",
-                groupId: currentGroupId
-            },
-            ""
-        );
+        const previousState =
+            panelPreviousState;
 
-        lastRequestId++;
+        panelPreviousState = null;
 
-        renderCurrentState(
-            "mySets",
-            currentGroupId
-        );
+        if (
+            previousState &&
+            previousState.page === "mySets" &&
+            String(previousState.groupId) === currentGroupId
+        ) {
+            history.back();
+        } else {
+
+            /*
+             * Panel state'ine doğrudan ulaşılmış veya önceki
+             * uygulama state'i güvenilir biçimde bilinmiyor.
+             * Tarayıcı geçmişine körlemesine geri dönülmez.
+             */
+            navTo(
+                'mySets',
+                currentGroupId
+            );
+        }
     }
 }
 
