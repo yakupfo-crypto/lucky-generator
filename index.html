@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -1550,12 +1549,6 @@ async function renderCurrentState(page, groupId) {
 
 async function renderGeneratePage() {
 
-    /*
-     * Bu render işleminin başlangıcındaki navigation isteğini
-     * sabitleriz. IndexedDB beklemeleri sırasında kullanıcı
-     * başka bir sayfaya geçerse eski render işlemi DOM'a
-     * tekrar yazı yazamaz.
-     */
     const requestId = lastRequestId;
 
     let storedInputs = {
@@ -1569,10 +1562,6 @@ async function renderGeneratePage() {
     const dSets =
         await getDraft("tempSets");
 
-    /*
-     * İlk asenkron işlemden sonra navigation değiştiyse
-     * bu eski render işlemini tamamen bırak.
-     */
     if (requestId !== lastRequestId) {
         return;
     }
@@ -1580,9 +1569,6 @@ async function renderGeneratePage() {
     const dInputs =
         await getDraft("tempInputs");
 
-    /*
-     * İkinci asenkron işlemden sonra da aynı kontrol yapılır.
-     */
     if (requestId !== lastRequestId) {
         return;
     }
@@ -1597,9 +1583,6 @@ async function renderGeneratePage() {
             normalizeDraftInputs(dInputs.data);
     }
 
-    /*
-     * DOM'a yazmadan hemen önce son kez navigation kontrolü.
-     */
     if (requestId !== lastRequestId) {
         return;
     }
@@ -1916,6 +1899,10 @@ async function saveGroup() {
 
         await deleteDraft("tempSets");
         await deleteDraft("tempInputs");
+
+        /* DÜZELTME: navTo() isProcessing=true durumunda
+           çalışmadığı için navigasyondan hemen önce serbest bırakılır. */
+        isProcessing = false;
 
         navTo(
             'mySets',
@@ -2657,4 +2644,3 @@ async function clearGeneratedSets() {
 </script>
 </body>
 </html>
-```
