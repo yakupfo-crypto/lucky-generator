@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -131,11 +132,6 @@ window.onunhandledrejection = (event) => {
 };
 
 /* --- GENERATION LIMITS --- */
-/*
- * Üretim sırasında oluşturulan havuzların ve kolon sayısının
- * tarayıcıyı gereksiz yere aşırı yüklememesi için üst sınırlar.
- * Mevcut normal kullanım değerleri bu sınırların oldukça altındadır.
- */
 const GENERATION_LIMITS = {
     max: 1000,
     per: 100,
@@ -149,14 +145,6 @@ let lastRequestId = 0;
 let isProcessing = false;
 let cryptoTimeout = null;
 
-/*
- * Sonuç paneli açılırken mevcut uygulama state'ini
- * ayrı olarak saklar.
- *
- * Sayfa yenilenmişse veya panel state'i doğrudan açılmışsa
- * null kalır. Böylece closeResultPanel() körlemesine
- * history.back() yapmaz.
- */
 let panelPreviousState = null;
 
 /* --- SAFE HTML --- */
@@ -392,10 +380,6 @@ const Validator = {
                     ? rawJokerPerSet
                     : 0;
 
-            /*
-             * Mantıksal üst sınırlar:
-             * jokerPerSet, jokerMax'tan büyük olamaz.
-             */
             const safeJokerPerSet =
                 jokerMax > 0
                     ? Math.min(jokerPerSet, jokerMax)
@@ -427,11 +411,6 @@ const Validator = {
                                 )
                                 : [];
 
-                        /*
-                         * Aynı kolon içinde tekrar eden sayıların
-                         * temizlenmesi yukarıdaki validateNumberList()
-                         * tarafından yapılır.
-                         */
                         return {
                             numbers,
                             jokers,
@@ -446,24 +425,14 @@ const Validator = {
                             return false;
                         }
 
-                        /*
-                         * Bir kolonun seçtiği ana sayı miktarı
-                         * sistem maksimumunu geçemez.
-                         */
                         if (set.numbers.length > max) {
                             return false;
                         }
 
-                        /*
-                         * Joker sistemi yoksa joker verisi kabul edilmez.
-                         */
                         if (jokerMax === 0 && set.jokers.length > 0) {
                             return false;
                         }
 
-                        /*
-                         * Joker sayısı jokerPerSet'i geçemez.
-                         */
                         if (
                             safeJokerPerSet > 0 &&
                             set.jokers.length > safeJokerPerSet
@@ -489,9 +458,6 @@ const Validator = {
                     )
                     : [];
 
-            /*
-             * Sonuç sayılarının da sistem sınırları içinde tutulması.
-             */
             const safeResultsMain = resultsMain.slice(0, 10);
 
             const safeResultsJoker =
@@ -555,22 +521,9 @@ async function withLock(workFn) {
         );
     }
 
-    /*
-     * Navigator Locks API olmayan ortamlarda işlemleri sıraya koy.
-     *
-     * ÖNEMLİ:
-     * Önceki kodda catch() hatayı yutup atomicSave()'un
-     * başarılıymış gibi devam etmesine neden olabiliyordu.
-     *
-     * Burada hata tekrar throw ediliyor.
-     */
     const currentLock = lockQueue.then(() => workFn());
 
     lockQueue = currentLock.catch(() => {
-        /*
-         * Kuyruğun sonraki işlemler için çalışmaya devam etmesini sağla.
-         * Hata mevcut çağrıya yine aktarılır.
-         */
     });
 
     return currentLock;
@@ -1144,10 +1097,6 @@ async function handleFileImport(event) {
 
             let count = 0;
 
-            /*
-             * Bilerek mevcut davranış korunmuştur.
-             * JSON kayıt sayısına üst sınır eklenmemiştir.
-             */
             for (const item of importedData) {
                 const valid =
                     Validator.validateGroup(item);
@@ -1184,14 +1133,6 @@ async function handleFileImport(event) {
 
 /* --- DRAFT VALIDATION --- */
 
-/*
- * IndexedDB'den gelen geçici üretim verileri doğrudan
- * arayüze verilmez.
- *
- * Normal uygulama tarafından oluşturulan doğru veriler
- * aynen korunur. Yapısı bozuk olan kayıtlar ise
- * kullanılmadan güvenli boş değere düşürülür.
- */
 function normalizeGeneratedSetsDraft(data) {
 
     if (!Array.isArray(data)) {
@@ -1609,6 +1550,14 @@ async function renderCurrentState(page, groupId) {
 
 async function renderGeneratePage() {
 
+    /*
+     * Bu render işleminin başlangıcındaki navigation isteğini
+     * sabitleriz. IndexedDB beklemeleri sırasında kullanıcı
+     * başka bir sayfaya geçerse eski render işlemi DOM'a
+     * tekrar yazı yazamaz.
+     */
+    const requestId = lastRequestId;
+
     let storedInputs = {
         max:35,
         per:5,
@@ -1620,8 +1569,23 @@ async function renderGeneratePage() {
     const dSets =
         await getDraft("tempSets");
 
+    /*
+     * İlk asenkron işlemden sonra navigation değiştiyse
+     * bu eski render işlemini tamamen bırak.
+     */
+    if (requestId !== lastRequestId) {
+        return;
+    }
+
     const dInputs =
         await getDraft("tempInputs");
+
+    /*
+     * İkinci asenkron işlemden sonra da aynı kontrol yapılır.
+     */
+    if (requestId !== lastRequestId) {
+        return;
+    }
 
     generatedSets =
         dSets
@@ -1631,6 +1595,13 @@ async function renderGeneratePage() {
     if(dInputs) {
         storedInputs =
             normalizeDraftInputs(dInputs.data);
+    }
+
+    /*
+     * DOM'a yazmadan hemen önce son kez navigation kontrolü.
+     */
+    if (requestId !== lastRequestId) {
+        return;
     }
 
     getEl("view-container").innerHTML = `
@@ -2686,3 +2657,4 @@ async function clearGeneratedSets() {
 </script>
 </body>
 </html>
+```
