@@ -1295,56 +1295,71 @@ function normalizeDraftInputs(data) {
         typeof data !== "object" ||
         Array.isArray(data)
     ) {
-        return defaults;
+        return { ...defaults };
     }
 
-    const max = Number(data.max);
-    const per = Number(data.per);
-    const jMax = Number(data.jMax);
-    const jPer = Number(data.jPer);
-    const count = Number(data.count);
+    const readInteger = (value) => {
+        if (
+            value === undefined ||
+            value === null ||
+            (
+                typeof value === "string" &&
+                value.trim() === ""
+            )
+        ) {
+            return null;
+        }
 
-    if (
-        !Number.isSafeInteger(max) ||
-        max < 1 ||
-        max > GENERATION_LIMITS.max
-    ) {
-        return defaults;
-    }
+        const number = Number(value);
 
-    if (
-        !Number.isSafeInteger(per) ||
-        per < 1 ||
-        per > GENERATION_LIMITS.per ||
-        per > max
-    ) {
-        return defaults;
-    }
+        if (!Number.isSafeInteger(number)) {
+            return null;
+        }
 
-    if (
-        !Number.isSafeInteger(jMax) ||
-        jMax < 0 ||
-        jMax > GENERATION_LIMITS.jokerMax
-    ) {
-        return defaults;
-    }
+        return number;
+    };
 
-    if (
-        !Number.isSafeInteger(jPer) ||
-        jPer < 0 ||
-        jPer > GENERATION_LIMITS.jokerPer ||
-        (jPer > 0 && jMax < jPer)
-    ) {
-        return defaults;
-    }
+    const rawMax = readInteger(data.max);
+    const max =
+        rawMax !== null &&
+        rawMax >= 1 &&
+        rawMax <= GENERATION_LIMITS.max
+            ? rawMax
+            : defaults.max;
 
-    if (
-        !Number.isSafeInteger(count) ||
-        count < 1 ||
-        count > GENERATION_LIMITS.count
-    ) {
-        return defaults;
-    }
+    const rawPer = readInteger(data.per);
+    const per =
+        rawPer !== null &&
+        rawPer >= 1 &&
+        rawPer <= GENERATION_LIMITS.per &&
+        rawPer <= max
+            ? rawPer
+            : Math.min(defaults.per, max);
+
+    const rawJMax = readInteger(data.jMax);
+    const jMax =
+        rawJMax !== null &&
+        rawJMax >= 0 &&
+        rawJMax <= GENERATION_LIMITS.jokerMax
+            ? rawJMax
+            : defaults.jMax;
+
+    const rawJPer = readInteger(data.jPer);
+    const jPer =
+        rawJPer !== null &&
+        rawJPer >= 0 &&
+        rawJPer <= GENERATION_LIMITS.jokerPer &&
+        (rawJPer === 0 || rawJPer <= jMax)
+            ? rawJPer
+            : Math.min(defaults.jPer, jMax);
+
+    const rawCount = readInteger(data.count);
+    const count =
+        rawCount !== null &&
+        rawCount >= 1 &&
+        rawCount <= GENERATION_LIMITS.count
+            ? rawCount
+            : defaults.count;
 
     return {
         max,
@@ -1604,6 +1619,7 @@ async function renderGeneratePage() {
 
     if (currentInputValues !== null) {
         storedInputs = normalizeDraftInputs(currentInputValues);
+        currentInputValues = { ...storedInputs };
     } else if (dInputs) {
         storedInputs = normalizeDraftInputs(dInputs.data);
         currentInputValues = { ...storedInputs };
