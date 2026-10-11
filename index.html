@@ -149,6 +149,7 @@ let panelPreviousState = null;
 let panelDraft = null;
 let panelDraftGroupId = null;
 let panelSelectionLimits = null;
+let panelBaseVersion = null;
 
 function escapeHTML(str) {
     if (!str) return "";
@@ -914,7 +915,7 @@ async function getGroupById(id) {
     }
 }
 
-async function atomicSave(item) {
+async function atomicSave(item, options = {}) {
     return withLock(async () => {
 
         const val = Validator.validateGroup(item);
@@ -947,36 +948,101 @@ async function atomicSave(item) {
             };
 
             let tx;
+            let conflict = false;
 
             try {
-                val.version = Date.now();
-
                 tx = db.transaction(
                     DB_CONFIG.storeName,
                     "readwrite"
                 );
 
-                tx.objectStore(DB_CONFIG.storeName).put(val);
+                const store = tx.objectStore(DB_CONFIG.storeName);
+                const request = store.get(val.id);
+
+                request.onsuccess = () => {
+                    if (settled) return;
+
+                    const current = request.result;
+
+                    if (options.requireExisting && !current) {
+                        conflict = true;
+                        fail(
+                            new Error(
+                                "Kayıtlı liste başka bir sekmede silinmiş. Eski seçimler kaydedilmedi."
+                            )
+                        );
+                        return;
+                    }
+
+                    if (
+                        options.expectedVersion !== undefined &&
+                        (
+                            !current ||
+                            Number(current.version) !==
+                            Number(options.expectedVersion)
+                        )
+                    ) {
+                        conflict = true;
+                        fail(
+                            new Error(
+                                "Liste başka bir sekmede değiştirilmiş. Eski verinin üzerine yazılmadı."
+                            )
+                        );
+                        return;
+                    }
+
+                    val.version = Math.max(
+                        Date.now(),
+                        Number(current?.version || 0) + 1
+                    );
+
+                    try {
+                        store.put(val);
+                    } catch(e) {
+                        fail(e);
+
+                        try {
+                            tx.abort();
+                        } catch(_) {}
+                    }
+                };
+
+                request.onerror = () => {
+                    fail(
+                        request.error ||
+                        new Error("Kayıt kontrolü başarısız.")
+                    );
+
+                    try {
+                        tx.abort();
+                    } catch(_) {}
+                };
 
             } catch(e) {
                 fail(e);
                 return;
             }
 
-            tx.oncomplete = success;
+            tx.oncomplete = () => {
+                if (!conflict) {
+                    success();
+                }
+            };
 
             tx.onerror = () => {
                 fail(
                     tx.error ||
-                    new Error("Yazma hatası")
+                    new Error("Yazma hatası.")
                 );
             };
 
             tx.onabort = () => {
-                fail(
-                    tx.error ||
-                    new Error("Yazma işlemi iptal edildi.")
-                );
+                if (!settled) {
+                    fail(
+                        tx.error ||
+                        new Error("Yazma işlemi iptal edildi.")
+                    );
+                }
             };
         });
     });
@@ -1432,6 +1498,7 @@ function navTo(page, groupId = null) {
         panelDraft = null;
         panelDraftGroupId = null;
         panelSelectionLimits = null;
+        panelBaseVersion = null;
     }
 
     history.pushState(
@@ -2044,19 +2111,10 @@ async function openResultPanel(
 
     if (!group) return;
 
-    if (!Array.isArray(group.sets) || group.sets.length === 0) {
-        alert("Bu listede sonuç girmek için kayıtlı kolon bulunamadı.");
-        return;
-    }
-
     const targetMax = max || group.max;
-    const requiredMainCount = group.sets[0].numbers.length;
     const resDiv = getEl("resultNumbers");
 
-    if (!resDiv || requiredMainCount < 1) {
-        alert("Kolondaki ana sayı adedi belirlenemedi.");
-        return;
-    }
+    if (!resDiv) return;
 
     panelDraft = {
         main: [...group.results.main],
@@ -2064,9 +2122,10 @@ async function openResultPanel(
     };
 
     panelDraftGroupId = requestedGroupId;
+    panelBaseVersion = group.version;
 
     panelSelectionLimits = {
-        main: requiredMainCount,
+        main: group.perSet,
         joker: group.jokerPerSet,
         max: targetMax,
         jokerMax: group.jokerMax
@@ -2157,6 +2216,7 @@ async function openResultPanel(
         panelDraft = null;
         panelDraftGroupId = null;
         panelSelectionLimits = null;
+        panelBaseVersion = null;
         panelPreviousState = null;
         return;
     }
@@ -2249,6 +2309,7 @@ function closeResultPanel(forceBack = true) {
     panelDraft = null;
     panelDraftGroupId = null;
     panelSelectionLimits = null;
+    panelBaseVersion = null;
 
     if (forceBack && isPanelState) {
         const currentGroupId = String(currentState.groupId);
@@ -2278,10 +2339,13 @@ function closeResultPanel(forceBack = true) {
 
 async function confirmResult() {
     const id = panelDraftGroupId;
+    const expectedVersion = panelBaseVersion;
 
     if (
         isProcessing ||
         !id ||
+        expectedVersion === null ||
+        expectedVersion === undefined ||
         !panelDraft ||
         !panelSelectionLimits ||
         String(history.state?.groupId) !== id
@@ -2293,18 +2357,24 @@ async function confirmResult() {
     const jokerSelection = [...panelDraft.joker];
 
     try {
+        setLoading(true);
+        isProcessing = true;
+
         const group = await getGroupById(id);
 
         if (!group) {
-            throw new Error("Kayıtlı liste bulunamadı.");
+            throw new Error(
+                "Kayıtlı liste bulunamadı veya başka bir sekmede silinmiş."
+            );
         }
 
-        if (!Array.isArray(group.sets) || group.sets.length === 0) {
-            alert("Kayıtlı listede kolon bulunamadı. Sonuç kaydedilemedi.");
-            return;
+        if (Number(group.version) !== Number(expectedVersion)) {
+            throw new Error(
+                "Liste başka bir sekmede değiştirilmiş. Eski seçimler kaydedilmedi. Listeyi yeniden açıp kontrol edin."
+            );
         }
 
-        const requiredMainCount = group.sets[0].numbers.length;
+        const requiredMainCount = group.perSet;
         const requiredJokerCount = group.jokerPerSet;
 
         if (mainSelection.length !== requiredMainCount) {
@@ -2323,19 +2393,20 @@ async function confirmResult() {
             return;
         }
 
-        setLoading(true);
-        isProcessing = true;
-
         group.results = {
             main: mainSelection,
             joker: jokerSelection
         };
 
-        await atomicSave(group);
+        await atomicSave(group, {
+            expectedVersion,
+            requireExisting: true
+        });
 
         panelDraft = null;
         panelDraftGroupId = null;
         panelSelectionLimits = null;
+        panelBaseVersion = null;
 
         const panel = getEl("resultPanel");
 
@@ -2359,7 +2430,11 @@ async function confirmResult() {
 
     } catch (e) {
         ErrorHandler.report("Confirm Result Error", e);
-        alert("Sonuçlar kaydedilemedi. Seçimler panelde korunmuştur.");
+
+        alert(
+            (e?.message || "Sonuçlar kaydedilemedi.") +
+            "\n\nPanel kapatılmadı. Listeyi yeniden açarak güncel veriyi kontrol edin."
+        );
 
     } finally {
         setLoading(false);
