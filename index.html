@@ -2285,14 +2285,33 @@ async function confirmResult() {
     const jokerSelection = [...panelDraft.joker];
 
     try {
-        setLoading(true);
-        isProcessing = true;
-
         const group = await getGroupById(id);
 
         if (!group) {
             throw new Error("Kayıtlı liste bulunamadı.");
         }
+
+        const requiredMainCount = group.perSet;
+        const requiredJokerCount = group.jokerPerSet;
+
+        if (mainSelection.length !== requiredMainCount) {
+            alert(
+                `Tamamlamak için tam ${requiredMainCount} ana sayı seçmelisiniz. ` +
+                `Şu anda ${mainSelection.length} ana sayı seçtiniz.`
+            );
+            return;
+        }
+
+        if (jokerSelection.length !== requiredJokerCount) {
+            alert(
+                `Tamamlamak için tam ${requiredJokerCount} joker sayısı seçmelisiniz. ` +
+                `Şu anda ${jokerSelection.length} joker sayısı seçtiniz.`
+            );
+            return;
+        }
+
+        setLoading(true);
+        isProcessing = true;
 
         group.results = {
             main: mainSelection,
