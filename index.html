@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -2045,10 +2044,19 @@ async function openResultPanel(
 
     if (!group) return;
 
+    if (!Array.isArray(group.sets) || group.sets.length === 0) {
+        alert("Bu listede sonuç girmek için kayıtlı kolon bulunamadı.");
+        return;
+    }
+
     const targetMax = max || group.max;
+    const requiredMainCount = group.sets[0].numbers.length;
     const resDiv = getEl("resultNumbers");
 
-    if (!resDiv) return;
+    if (!resDiv || requiredMainCount < 1) {
+        alert("Kolondaki ana sayı adedi belirlenemedi.");
+        return;
+    }
 
     panelDraft = {
         main: [...group.results.main],
@@ -2058,7 +2066,7 @@ async function openResultPanel(
     panelDraftGroupId = requestedGroupId;
 
     panelSelectionLimits = {
-        main: group.perSet,
+        main: requiredMainCount,
         joker: group.jokerPerSet,
         max: targetMax,
         jokerMax: group.jokerMax
@@ -2291,7 +2299,12 @@ async function confirmResult() {
             throw new Error("Kayıtlı liste bulunamadı.");
         }
 
-        const requiredMainCount = group.perSet;
+        if (!Array.isArray(group.sets) || group.sets.length === 0) {
+            alert("Kayıtlı listede kolon bulunamadı. Sonuç kaydedilemedi.");
+            return;
+        }
+
+        const requiredMainCount = group.sets[0].numbers.length;
         const requiredJokerCount = group.jokerPerSet;
 
         if (mainSelection.length !== requiredMainCount) {
@@ -2405,4 +2418,3 @@ async function clearGeneratedSets() {
 </script>
 </body>
 </html>
-```
