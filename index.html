@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -139,6 +140,7 @@ const GENERATION_LIMITS = {
 };
 
 let generatedSets = [];
+let currentInputValues = null;
 let lastRequestId = 0;
 let isProcessing = false;
 let cryptoTimeout = null;
@@ -1534,8 +1536,11 @@ async function renderGeneratePage() {
             ? normalizeGeneratedSetsDraft(dSets.data)
             : [];
 
-    if(dInputs) {
+    if (currentInputValues !== null) {
+        storedInputs = normalizeDraftInputs(currentInputValues);
+    } else if (dInputs) {
         storedInputs = normalizeDraftInputs(dInputs.data);
+        currentInputValues = { ...storedInputs };
     }
 
     if (requestId !== lastRequestId) {
@@ -1561,6 +1566,35 @@ async function renderGeneratePage() {
             </div>
             <div id="results"></div>
         </div>`;
+
+    const inputElements = {
+        max: getEl("maxNumber"),
+        per: getEl("perSet"),
+        jMax: getEl("jokerMax"),
+        jPer: getEl("jokerCount"),
+        count: getEl("setCount")
+    };
+
+    const saveCurrentInputs = () => {
+        const values = {
+            max: inputElements.max.value,
+            per: inputElements.per.value,
+            jMax: inputElements.jMax.value,
+            jPer: inputElements.jPer.value,
+            count: inputElements.count.value
+        };
+
+        currentInputValues = values;
+
+        saveDraft("tempInputs", values).catch(e => {
+            ErrorHandler.report("Draft Save Error", e);
+        });
+    };
+
+    Object.values(inputElements).forEach(input => {
+        input.addEventListener("input", saveCurrentInputs);
+        input.addEventListener("change", saveCurrentInputs);
+    });
 
     getEl("btn-generate-action").addEventListener(
         "click",
@@ -1701,6 +1735,14 @@ async function generateSets() {
                 jokerMax: jMax
             });
         }
+
+        currentInputValues = {
+            max,
+            per,
+            jMax,
+            jPer,
+            count
+        };
 
         await saveDraft("tempSets", generatedSets);
 
@@ -2344,3 +2386,4 @@ async function clearGeneratedSets() {
 </script>
 </body>
 </html>
+```
