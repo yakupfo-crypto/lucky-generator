@@ -1804,8 +1804,6 @@ async function generateSets() {
         setLoading(true);
         isProcessing = true;
 
-        // Yeni kolonlar önce ayrı bir dizide hazırlanır.
-        // İşlem başarısız olursa mevcut generatedSets korunur.
         const newGeneratedSets = [];
 
         for (let i = 0; i < count; i++) {
@@ -1839,10 +1837,8 @@ async function generateSets() {
             });
         }
 
-        // Yeni taslak kaydedilmeden mevcut kolonlar değiştirilmez.
         await saveDraft("tempSets", newGeneratedSets);
 
-        // Önceki kolonlar korunurken giriş değerleri de kaydedilir.
         await queueInputDraftSave({
             max,
             per,
@@ -1851,7 +1847,6 @@ async function generateSets() {
             count
         });
 
-        // Üretim ve taslak kaydı başarılı olduktan sonra yeni kolonlar uygulanır.
         generatedSets = newGeneratedSets;
 
         currentInputValues = {
@@ -2514,13 +2509,16 @@ async function clearGeneratedSets() {
     try {
         isProcessing = true;
 
-        generatedSets = [];
-
+        // Önce taslak silme işleminin başarıyla tamamlanması beklenir.
         await deleteDraft("tempSets");
+
+        // Taslak silinirse kolonlar bellekten temizlenir.
+        generatedSets = [];
 
         renderGeneratedSetsList();
 
     } catch(e) {
+        // Silme başarısız olursa mevcut kolonlar korunur.
         ErrorHandler.report("Clear Drafts Error", e);
 
     } finally {
