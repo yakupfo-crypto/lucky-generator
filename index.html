@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -1999,9 +1998,7 @@ async function saveGroup() {
     const maxVal = generatedSets[0].max;
     const jMaxVal = generatedSets[0].jokerMax;
 
-    const jPerVal =
-        parseInt(getEl("jokerCount")?.value, 10) ||
-        generatedSets[0].jokers.length;
+    const jPerVal = generatedSets[0].jokers.length;
 
     const perSetVal = generatedSets[0].numbers.length;
 
