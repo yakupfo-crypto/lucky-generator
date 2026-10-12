@@ -751,19 +751,22 @@ async function deleteDraft(id) {
     }
 }
 
+/* Giriş değerleri kaydedilemezse hata çağıran işleme iletilir. */
 function queueInputDraftSave(values) {
     const savedValues = { ...values };
 
     currentInputValues = { ...savedValues };
 
-    inputDraftSaveQueue = inputDraftSaveQueue
+    const saveOperation = inputDraftSaveQueue
         .catch(() => {})
-        .then(() => saveDraft("tempInputs", savedValues))
-        .catch(e => {
-            ErrorHandler.report("Draft Save Error", e);
-        });
+        .then(() => saveDraft("tempInputs", savedValues));
 
-    return inputDraftSaveQueue;
+    inputDraftSaveQueue = saveOperation;
+
+    return saveOperation.catch(e => {
+        ErrorHandler.report("Draft Save Error", e);
+        throw e;
+    });
 }
 
 async function getAllGroups() {
@@ -1832,12 +1835,17 @@ async function renderGeneratePage() {
             count: inputElements.count.value
         };
 
-        queueInputDraftSave(values);
+        return queueInputDraftSave(values);
     };
 
     Object.values(inputElements).forEach(input => {
-        input.addEventListener("input", saveCurrentInputs);
-        input.addEventListener("change", saveCurrentInputs);
+        input.addEventListener("input", () => {
+            saveCurrentInputs().catch(() => {});
+        });
+
+        input.addEventListener("change", () => {
+            saveCurrentInputs().catch(() => {});
+        });
     });
 
     getEl("btn-generate-action").addEventListener(
@@ -1981,8 +1989,11 @@ async function generateSets() {
             });
         }
 
-        await saveDraft("tempSets", newGeneratedSets);
-
+        /*
+         * Önce giriş değerleri kaydedilir.
+         * Bu kayıt başarısız olursa yeni kolon taslağı yazılmaz
+         * ve mevcut generatedSets değiştirilmez.
+         */
         await queueInputDraftSave({
             max,
             per,
@@ -1990,6 +2001,8 @@ async function generateSets() {
             jPer,
             count
         });
+
+        await saveDraft("tempSets", newGeneratedSets);
 
         generatedSets = newGeneratedSets;
 
