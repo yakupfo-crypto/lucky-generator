@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -608,7 +609,7 @@ async function getDraft(id) {
 
     } catch(e) {
         ErrorHandler.report("Draft Get Error", e);
-        return null;
+        throw e;
     }
 }
 
@@ -843,7 +844,7 @@ async function getAllGroups() {
 
     } catch (e) {
         ErrorHandler.report("Get All Groups Error", e);
-        return [];
+        throw e;
     }
 }
 
@@ -1723,21 +1724,57 @@ async function renderGeneratePage() {
         count:5
     };
 
-    const dSets = await getDraft("tempSets");
+    let dSets;
+    let dInputs;
 
-    if (requestId !== lastRequestId) {
-        return;
-    }
+    /*
+     * Taslak okuma hatası ile taslağın gerçekten bulunmaması
+     * birbirinden ayrılır. Okuma başarısızsa generatedSets
+     * değiştirilmez ve mevcut veri boşaltılmaz.
+     */
+    try {
+        dSets = await getDraft("tempSets");
 
-    await inputDraftSaveQueue;
+        if (requestId !== lastRequestId) {
+            return;
+        }
 
-    if (requestId !== lastRequestId) {
-        return;
-    }
+        await inputDraftSaveQueue;
 
-    const dInputs = await getDraft("tempInputs");
+        if (requestId !== lastRequestId) {
+            return;
+        }
 
-    if (requestId !== lastRequestId) {
+        dInputs = await getDraft("tempInputs");
+
+        if (requestId !== lastRequestId) {
+            return;
+        }
+
+    } catch(e) {
+        if (requestId !== lastRequestId) {
+            return;
+        }
+
+        const view = getEl("view-container");
+
+        if (view) {
+            view.innerHTML = `
+                <div class="container">
+                    <div class="card">
+                        <b style="color:#d32f2f;">Taslaklar okunamadı</b>
+                        <p>Veritabanına erişilemediği için kayıtlı üretim taslakları yüklenemedi.</p>
+                        <p>Mevcut üretilmiş kolon verisi otomatik olarak silinmedi. Verilerin üzerine yazmamak için sayfayı yeniden açmadan önce veritabanı erişiminin düzelmesini bekleyin.</p>
+                        <button id="btn-retry-draft-read">Tekrar Dene</button>
+                    </div>
+                </div>`;
+
+            getEl("btn-retry-draft-read").addEventListener(
+                "click",
+                () => renderCurrentState("generate")
+            );
+        }
+
         return;
     }
 
@@ -2049,8 +2086,39 @@ async function saveGroup() {
 
 async function renderMySetsList(reqId) {
 
-    const groups = await getAllGroups();
     const view = getEl("view-container");
+
+    if (!view || reqId !== lastRequestId) return;
+
+    let groups;
+
+    /*
+     * Veritabanı okuma hatası boş liste olarak yorumlanmaz.
+     * Gerçekten hiç kayıt yoksa boş liste mesajı gösterilir;
+     * okuma başarısızsa ayrı hata mesajı gösterilir.
+     */
+    try {
+        groups = await getAllGroups();
+    } catch(e) {
+        if (reqId !== lastRequestId) return;
+
+        view.innerHTML = `
+            <div class="container">
+                <div class="card">
+                    <b style="color:#d32f2f;">Veritabanına erişilemiyor</b>
+                    <p>Kayıtlı listeler okunamadı. Bu, kayıtlı listelerin silindiği anlamına gelmez.</p>
+                    <p>Veritabanı erişimi düzelene kadar liste boşmuş gibi gösterilmeyecek.</p>
+                    <button id="btn-retry-groups-read">Tekrar Dene</button>
+                </div>
+            </div>`;
+
+        getEl("btn-retry-groups-read").addEventListener(
+            "click",
+            () => renderCurrentState("mySets")
+        );
+
+        return;
+    }
 
     if (!view || reqId !== lastRequestId) return;
 
