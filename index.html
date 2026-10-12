@@ -140,6 +140,7 @@ const GENERATION_LIMITS = {
 
 let generatedSets = [];
 let currentInputValues = null;
+let inputDraftSaveQueue = Promise.resolve();
 let lastRequestId = 0;
 let isProcessing = false;
 let cryptoTimeout = null;
@@ -747,6 +748,21 @@ async function deleteDraft(id) {
         ErrorHandler.report("Draft Delete Error", e);
         throw e;
     }
+}
+
+function queueInputDraftSave(values) {
+    const savedValues = { ...values };
+
+    currentInputValues = { ...savedValues };
+
+    inputDraftSaveQueue = inputDraftSaveQueue
+        .catch(() => {})
+        .then(() => saveDraft("tempInputs", savedValues))
+        .catch(e => {
+            ErrorHandler.report("Draft Save Error", e);
+        });
+
+    return inputDraftSaveQueue;
 }
 
 async function getAllGroups() {
@@ -1606,6 +1622,12 @@ async function renderGeneratePage() {
         return;
     }
 
+    await inputDraftSaveQueue;
+
+    if (requestId !== lastRequestId) {
+        return;
+    }
+
     const dInputs = await getDraft("tempInputs");
 
     if (requestId !== lastRequestId) {
@@ -1666,11 +1688,7 @@ async function renderGeneratePage() {
             count: inputElements.count.value
         };
 
-        currentInputValues = values;
-
-        saveDraft("tempInputs", values).catch(e => {
-            ErrorHandler.report("Draft Save Error", e);
-        });
+        queueInputDraftSave(values);
     };
 
     Object.values(inputElements).forEach(input => {
@@ -1828,16 +1846,13 @@ async function generateSets() {
 
         await saveDraft("tempSets", generatedSets);
 
-        await saveDraft(
-            "tempInputs",
-            {
-                max,
-                per,
-                jMax,
-                jPer,
-                count
-            }
-        );
+        await queueInputDraftSave({
+            max,
+            per,
+            jMax,
+            jPer,
+            count
+        });
 
         renderGeneratedSetsList();
 
@@ -1909,7 +1924,6 @@ async function saveGroup() {
         await atomicSave(group);
 
         await deleteDraft("tempSets");
-        await deleteDraft("tempInputs");
 
         isProcessing = false;
 
@@ -2495,7 +2509,6 @@ async function clearGeneratedSets() {
         generatedSets = [];
 
         await deleteDraft("tempSets");
-        await deleteDraft("tempInputs");
 
         renderGeneratedSetsList();
 
