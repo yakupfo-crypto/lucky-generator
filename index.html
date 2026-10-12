@@ -1803,7 +1803,10 @@ async function generateSets() {
     try {
         setLoading(true);
         isProcessing = true;
-        generatedSets = [];
+
+        // Yeni kolonlar önce ayrı bir dizide hazırlanır.
+        // İşlem başarısız olursa mevcut generatedSets korunur.
+        const newGeneratedSets = [];
 
         for (let i = 0; i < count; i++) {
             const mainPool = Array.from(
@@ -1828,13 +1831,28 @@ async function generateSets() {
                     .sort((a,b) => a-b);
             }
 
-            generatedSets.push({
+            newGeneratedSets.push({
                 numbers: n,
                 jokers: j,
                 max,
                 jokerMax: jMax
             });
         }
+
+        // Yeni taslak kaydedilmeden mevcut kolonlar değiştirilmez.
+        await saveDraft("tempSets", newGeneratedSets);
+
+        // Önceki kolonlar korunurken giriş değerleri de kaydedilir.
+        await queueInputDraftSave({
+            max,
+            per,
+            jMax,
+            jPer,
+            count
+        });
+
+        // Üretim ve taslak kaydı başarılı olduktan sonra yeni kolonlar uygulanır.
+        generatedSets = newGeneratedSets;
 
         currentInputValues = {
             max,
@@ -1843,16 +1861,6 @@ async function generateSets() {
             jPer,
             count
         };
-
-        await saveDraft("tempSets", generatedSets);
-
-        await queueInputDraftSave({
-            max,
-            per,
-            jMax,
-            jPer,
-            count
-        });
 
         renderGeneratedSetsList();
 
