@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -1064,6 +1065,113 @@ async function atomicSave(item, options = {}) {
     });
 }
 
+/* Yeni: Grup kaydı ve taslak silme tek atomik işlemde yapılır. */
+async function atomicSaveGroupAndDeleteDraft(item, draftId) {
+    return withLock(async () => {
+
+        const val = Validator.validateGroup(item);
+
+        if (!val) {
+            throw new Error("Doğrulama hatası.");
+        }
+
+        const db = await getDB();
+
+        return await new Promise((resolve, reject) => {
+
+            let settled = false;
+
+            const fail = (error) => {
+                if (settled) return;
+                settled = true;
+
+                reject(
+                    error instanceof Error
+                        ? error
+                        : new Error(String(error))
+                );
+            };
+
+            const success = () => {
+                if (settled) return;
+                settled = true;
+                resolve();
+            };
+
+            let tx;
+
+            try {
+                tx = db.transaction(
+                    [DB_CONFIG.storeName, DB_CONFIG.draftStore],
+                    "readwrite"
+                );
+
+                const groupStore = tx.objectStore(DB_CONFIG.storeName);
+                const draftStore = tx.objectStore(DB_CONFIG.draftStore);
+                const request = groupStore.get(val.id);
+
+                request.onsuccess = () => {
+                    if (settled) return;
+
+                    const current = request.result;
+
+                    val.version = Math.max(
+                        Date.now(),
+                        Number(current?.version || 0) + 1
+                    );
+
+                    try {
+                        groupStore.put(val);
+                        draftStore.delete(draftId);
+                    } catch(e) {
+                        try {
+                            tx.abort();
+                        } catch(_) {}
+
+                        fail(e);
+                    }
+                };
+
+                request.onerror = () => {
+                    try {
+                        tx.abort();
+                    } catch(_) {}
+
+                    fail(
+                        request.error ||
+                        new Error("Kayıt kontrolü başarısız.")
+                    );
+                };
+
+                tx.oncomplete = success;
+
+                tx.onerror = () => {
+                    fail(
+                        tx.error ||
+                        new Error("Grup kaydı veya taslak silme işlemi başarısız.")
+                    );
+                };
+
+                tx.onabort = () => {
+                    fail(
+                        tx.error ||
+                        new Error("Grup kaydı ve taslak silme işlemi iptal edildi.")
+                    );
+                };
+
+            } catch(e) {
+                if (tx) {
+                    try {
+                        tx.abort();
+                    } catch(_) {}
+                }
+
+                fail(e);
+            }
+        });
+    });
+}
+
 async function deleteFromDB(id) {
     try {
         const db = await getDB();
@@ -1883,28 +1991,19 @@ async function saveGroup() {
         return;
     }
 
-    const maxVal =
-        generatedSets.length > 0
-            ? generatedSets[0].max
-            : (parseInt(getEl("maxNumber")?.value, 10) || 49);
+    if (generatedSets.length === 0) {
+        alert("Kaydedilecek kolon bulunamadı.");
+        return;
+    }
 
-    const jMaxVal =
-        generatedSets.length > 0
-            ? generatedSets[0].jokerMax
-            : (parseInt(getEl("jokerMax")?.value, 10) || 0);
+    const maxVal = generatedSets[0].max;
+    const jMaxVal = generatedSets[0].jokerMax;
 
     const jPerVal =
         parseInt(getEl("jokerCount")?.value, 10) ||
-        (
-            generatedSets.length > 0
-                ? generatedSets[0].jokers.length
-                : 0
-        );
+        generatedSets[0].jokers.length;
 
-    const perSetVal =
-        generatedSets.length > 0
-            ? generatedSets[0].numbers.length
-            : (parseInt(getEl("perSet")?.value, 10) || 5);
+    const perSetVal = generatedSets[0].numbers.length;
 
     const group = {
         id: String(Date.now()),
@@ -1924,9 +2023,14 @@ async function saveGroup() {
         setLoading(true);
         isProcessing = true;
 
-        await atomicSave(group);
+        /*
+         * Grup kaydı ve tempSets taslağının silinmesi aynı
+         * IndexedDB transaction'ında tamamlanır.
+         * İkisi birlikte başarılı olur veya ikisi de geri alınır.
+         */
+        await atomicSaveGroupAndDeleteDraft(group, "tempSets");
 
-        await deleteDraft("tempSets");
+        generatedSets = [];
 
         isProcessing = false;
 
@@ -1934,6 +2038,11 @@ async function saveGroup() {
 
     } catch(err) {
         ErrorHandler.report("Save Error", err);
+
+        alert(
+            "Kayıt tamamlanamadı. Kolonlar korunmuştur; tekrar deneyebilirsiniz.\n\n" +
+            (err?.message || "Bilinmeyen hata")
+        );
 
     } finally {
         isProcessing = false;
@@ -2509,16 +2618,13 @@ async function clearGeneratedSets() {
     try {
         isProcessing = true;
 
-        // Önce taslak silme işleminin başarıyla tamamlanması beklenir.
         await deleteDraft("tempSets");
 
-        // Taslak silinirse kolonlar bellekten temizlenir.
         generatedSets = [];
 
         renderGeneratedSetsList();
 
     } catch(e) {
-        // Silme başarısız olursa mevcut kolonlar korunur.
         ErrorHandler.report("Clear Drafts Error", e);
 
     } finally {
