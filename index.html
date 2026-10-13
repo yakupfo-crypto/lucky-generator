@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -588,7 +587,15 @@ async function getDraft(id) {
     });
 }
 
-async function saveDraft(id, data) {
+/*
+ * tempInputs kaydında istek zamanı, kuyruğa alınırken belirlenir.
+ * Veritabanındaki mevcut taslak aynı veya daha yeni bir zaman
+ * taşıyorsa eski taslak üzerine yazılmaz.
+ *
+ * Okuma, zaman karşılaştırması ve yazma aynı IndexedDB
+ * readwrite transaction'ında gerçekleştirilir.
+ */
+async function saveDraft(id, data, requestedTs = Date.now()) {
     return withLock(async () => {
         try {
             const db = await getDB();
@@ -623,15 +630,65 @@ async function saveDraft(id, data) {
 
                 const store = tx.objectStore(DB_CONFIG.draftStore);
 
-                try {
-                    store.put({
-                        id,
-                        data,
-                        ts: Date.now()
-                    });
-                } catch (e) {
-                    fail(e);
-                    return;
+                const writeDraft = () => {
+                    try {
+                        store.put({
+                            id,
+                            data,
+                            ts: requestedTs
+                        });
+                    } catch (e) {
+                        try {
+                            tx.abort();
+                        } catch (_) {}
+
+                        fail(e);
+                    }
+                };
+
+                if (id === "tempInputs") {
+                    let request;
+
+                    try {
+                        request = store.get(id);
+                    } catch (e) {
+                        try {
+                            tx.abort();
+                        } catch (_) {}
+
+                        fail(e);
+                        return;
+                    }
+
+                    request.onsuccess = () => {
+                        if (settled) return;
+
+                        const existingTs = Number(
+                            request.result?.ts ?? 0
+                        );
+
+                        if (
+                            Number.isFinite(existingTs) &&
+                            existingTs >= requestedTs
+                        ) {
+                            return;
+                        }
+
+                        writeDraft();
+                    };
+
+                    request.onerror = () => {
+                        try {
+                            tx.abort();
+                        } catch (_) {}
+
+                        fail(
+                            request.error ||
+                            new Error("Üretim giriş taslağı kontrol edilemedi.")
+                        );
+                    };
+                } else {
+                    writeDraft();
                 }
 
                 tx.oncomplete = success;
@@ -905,14 +962,20 @@ async function clearGeneratedSetsDraft() {
     });
 }
 
+/*
+ * Kayıt zamanı, işlem kuyruğa eklenirken alınır.
+ * Böylece aynı sekmede bekleyen eski bir kayıt, kuyruğa
+ * daha sonra eklenen yeni bir kayıtla karıştırılmaz.
+ */
 function queueInputDraftSave(values) {
     const savedValues = { ...values };
+    const savedAt = Date.now();
 
     currentInputValues = { ...savedValues };
 
     const saveOperation = inputDraftSaveQueue
         .catch(() => {})
-        .then(() => saveDraft("tempInputs", savedValues));
+        .then(() => saveDraft("tempInputs", savedValues, savedAt));
 
     inputDraftSaveQueue = saveOperation.catch(() => {});
 
