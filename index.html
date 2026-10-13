@@ -751,7 +751,6 @@ async function deleteDraft(id) {
     }
 }
 
-/* Giriş değerleri kaydedilemezse hata çağıran işleme iletilir. */
 function queueInputDraftSave(values) {
     const savedValues = { ...values };
 
@@ -761,7 +760,7 @@ function queueInputDraftSave(values) {
         .catch(() => {})
         .then(() => saveDraft("tempInputs", savedValues));
 
-    inputDraftSaveQueue = saveOperation;
+    inputDraftSaveQueue = saveOperation.catch(() => {});
 
     return saveOperation.catch(e => {
         ErrorHandler.report("Draft Save Error", e);
@@ -1068,7 +1067,6 @@ async function atomicSave(item, options = {}) {
     });
 }
 
-/* Grup kaydı ve taslak silme tek atomik işlemde yapılır. */
 async function atomicSaveGroupAndDeleteDraft(item, draftId) {
     return withLock(async () => {
 
@@ -1175,11 +1173,6 @@ async function atomicSaveGroupAndDeleteDraft(item, draftId) {
     });
 }
 
-/*
- * Kayıt silme de kaydetme işlemleriyle aynı Web Lock'u kullanır.
- * Web Locks desteklenmiyorsa mevcut withLock() yedek sıralama yöntemi çalışır.
- * Silme işlemi IndexedDB readwrite transaction'ında gerçekleştirilir.
- */
 async function deleteFromDB(id) {
     return withLock(async () => {
         try {
@@ -1722,7 +1715,6 @@ async function renderCurrentState(page, groupId) {
     }
 }
 
-/* Yalnızca bu fonksiyon güncellendi. */
 async function renderGeneratePage() {
 
     const requestId = lastRequestId;
@@ -1738,7 +1730,45 @@ async function renderGeneratePage() {
     let dSets;
     let dInputs;
 
-    const showDraftReadError = () => {
+    try {
+        dSets = await getDraft("tempSets");
+
+        if (requestId !== lastRequestId) {
+            return;
+        }
+
+        await inputDraftSaveQueue;
+
+        if (requestId !== lastRequestId) {
+            return;
+        }
+
+        try {
+            dInputs = await getDraft("tempInputs");
+        } catch(e) {
+            if (requestId !== lastRequestId) {
+                return;
+            }
+
+            if (currentInputValues === null) {
+                throw e;
+            }
+
+            ErrorHandler.report(
+                "Draft Inputs Read Error",
+                new Error(
+                    "Giriş taslağı okunamadı. Bellekteki güncel değerler korunuyor."
+                )
+            );
+
+            dInputs = null;
+        }
+
+        if (requestId !== lastRequestId) {
+            return;
+        }
+
+    } catch(e) {
         if (requestId !== lastRequestId) {
             return;
         }
@@ -1750,7 +1780,7 @@ async function renderGeneratePage() {
                 <div class="container">
                     <div class="card">
                         <b style="color:#d32f2f;">Taslaklar okunamadı</b>
-                        <p>Veritabanına erişilemediği için kayıtlı üretim taslakları yüklenemedi.</p>
+                        <p>Veritabanına erişilemediği için kayıtlı üretim kolonları yüklenemedi.</p>
                         <p>Mevcut üretilmiş kolon verisi otomatik olarak silinmedi. Verilerin üzerine yazmamak için sayfayı yeniden açmadan önce veritabanı erişiminin düzelmesini bekleyin.</p>
                         <button id="btn-retry-draft-read">Tekrar Dene</button>
                     </div>
@@ -1761,78 +1791,40 @@ async function renderGeneratePage() {
                 () => renderCurrentState("generate")
             );
         }
-    };
 
-    try {
-        dSets = await getDraft("tempSets");
-
-        if (requestId !== lastRequestId) {
-            return;
-        }
-    } catch(e) {
-        if (requestId !== lastRequestId) {
-            return;
-        }
-
-        ErrorHandler.report("Generated Sets Draft Read Error", e);
-        showDraftReadError();
         return;
-    }
-
-    try {
-        await inputDraftSaveQueue;
-    } catch(e) {
-        if (requestId !== lastRequestId) {
-            return;
-        }
-
-        ErrorHandler.report("Input Draft Queue Error", e);
-
-        if (currentInputValues === null) {
-            showDraftReadError();
-            return;
-        }
     }
 
     if (requestId !== lastRequestId) {
         return;
     }
 
-    try {
-        dInputs = await getDraft("tempInputs");
-    } catch(e) {
-        if (requestId !== lastRequestId) {
-            return;
-        }
+    const latestInputValues =
+        currentInputValues !== null
+            ? { ...currentInputValues }
+            : null;
 
-        ErrorHandler.report("Input Draft Read Error", e);
+    const restoredInputs =
+        latestInputValues !== null
+            ? latestInputValues
+            : dInputs
+                ? dInputs.data
+                : null;
 
-        if (currentInputValues === null) {
-            showDraftReadError();
-            return;
-        }
-    }
-
-    if (requestId !== lastRequestId) {
-        return;
-    }
-
-    generatedSets =
-        dSets
-            ? normalizeGeneratedSetsDraft(dSets.data)
-            : [];
-
-    if (currentInputValues !== null) {
-        storedInputs = normalizeDraftInputs(currentInputValues);
-        currentInputValues = { ...storedInputs };
-    } else if (dInputs) {
-        storedInputs = normalizeDraftInputs(dInputs.data);
+    if (restoredInputs !== null) {
+        storedInputs = normalizeDraftInputs(restoredInputs);
         currentInputValues = { ...storedInputs };
     }
 
+    const restoredSets = dSets
+        ? normalizeGeneratedSetsDraft(dSets.data)
+        : [];
+
     if (requestId !== lastRequestId) {
         return;
     }
+
+    generatedSets = restoredSets;
 
     getEl("view-container").innerHTML = `
         <div class="container">
