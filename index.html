@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -1175,7 +1176,7 @@ async function atomicSaveGroupAndDeleteDraft(item, draftId) {
 }
 
 /*
- * Değişiklik: Kayıt silme de kaydetme işlemleriyle aynı Web Lock'u kullanır.
+ * Kayıt silme de kaydetme işlemleriyle aynı Web Lock'u kullanır.
  * Web Locks desteklenmiyorsa mevcut withLock() yedek sıralama yöntemi çalışır.
  * Silme işlemi IndexedDB readwrite transaction'ında gerçekleştirilir.
  */
@@ -1721,6 +1722,7 @@ async function renderCurrentState(page, groupId) {
     }
 }
 
+/* Yalnızca bu fonksiyon güncellendi. */
 async function renderGeneratePage() {
 
     const requestId = lastRequestId;
@@ -1736,26 +1738,7 @@ async function renderGeneratePage() {
     let dSets;
     let dInputs;
 
-    try {
-        dSets = await getDraft("tempSets");
-
-        if (requestId !== lastRequestId) {
-            return;
-        }
-
-        await inputDraftSaveQueue;
-
-        if (requestId !== lastRequestId) {
-            return;
-        }
-
-        dInputs = await getDraft("tempInputs");
-
-        if (requestId !== lastRequestId) {
-            return;
-        }
-
-    } catch(e) {
+    const showDraftReadError = () => {
         if (requestId !== lastRequestId) {
             return;
         }
@@ -1778,7 +1761,59 @@ async function renderGeneratePage() {
                 () => renderCurrentState("generate")
             );
         }
+    };
 
+    try {
+        dSets = await getDraft("tempSets");
+
+        if (requestId !== lastRequestId) {
+            return;
+        }
+    } catch(e) {
+        if (requestId !== lastRequestId) {
+            return;
+        }
+
+        ErrorHandler.report("Generated Sets Draft Read Error", e);
+        showDraftReadError();
+        return;
+    }
+
+    try {
+        await inputDraftSaveQueue;
+    } catch(e) {
+        if (requestId !== lastRequestId) {
+            return;
+        }
+
+        ErrorHandler.report("Input Draft Queue Error", e);
+
+        if (currentInputValues === null) {
+            showDraftReadError();
+            return;
+        }
+    }
+
+    if (requestId !== lastRequestId) {
+        return;
+    }
+
+    try {
+        dInputs = await getDraft("tempInputs");
+    } catch(e) {
+        if (requestId !== lastRequestId) {
+            return;
+        }
+
+        ErrorHandler.report("Input Draft Read Error", e);
+
+        if (currentInputValues === null) {
+            showDraftReadError();
+            return;
+        }
+    }
+
+    if (requestId !== lastRequestId) {
         return;
     }
 
@@ -2703,3 +2738,4 @@ async function clearGeneratedSets() {
 </script>
 </body>
 </html>
+```
