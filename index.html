@@ -7,33 +7,33 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
 <title>Lucky Generator Pro - Stable State</title>
 <style>
-    body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom:100px; }
-    body.modal-open { overflow:hidden; }
-    header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position:relative; }
+    body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
+    body.modal-open { overflow: hidden; }
+    header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position: relative; }
     .container{ padding:20px; }
     .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
-    input{ width:100%; box-sizing:border-box; padding:8px; margin:5px 0 10px 0; }
-    button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top:5px; cursor:pointer; }
-    .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index:1000; }
+    input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
+    button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
+    .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-    .ball-item{ display:flex; flex-direction:column; align-items:center; gap:3px; }
-    .ball-order{ font-size:12px; line-height:14px; color:#333; text-align:center; }
-    .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select:none; transition:opacity 0.2s; }
+    .ball-wrap{ display:flex; flex-direction:column; align-items:center; gap:3px; }
+    .ball-order{ font-size:11px; line-height:12px; color:#666; text-align:center; }
+    .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select: none; transition: opacity 0.2s; }
     .ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
     .ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
     .ball.joker.result-selected{ background:#f44336!important; color:white!important; border:none; }
     .card b{ display:block; margin-bottom:10px; color:#1976d2; }
     .ball.result-selected{ background:#1976d2; color:#fff; }
-    .delete-all-btn { background:#d32f2f; margin-bottom:10px; }
-    .secondary-btn { background:#555; margin-top:5px; }
-    #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index:3000; pointer-events:none; }
-    .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family:monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events:auto; animation:slideIn 0.3s ease-out; }
-    #crypto-status { position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.2); font-size:10px; padding:2px; color:#e0e0e0; }
-    .engine-badge { display:inline-block; padding:2px 5px; border-radius:4px; font-weight:bold; background:#4caf50; color:white; }
+    .delete-all-btn { background: #d32f2f; margin-bottom: 10px; }
+    .secondary-btn { background: #555; margin-top: 5px; }
+    #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index: 3000; pointer-events:none; }
+    .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
+    #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
+    .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
     @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
-    #global-loader { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.6); z-index:4000; cursor:wait; }
-    #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index:2000; border-radius:20px 20px 0 0; box-sizing:border-box; }
+    #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.6); z-index: 4000; cursor: wait; }
+    #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; box-sizing: border-box; }
 </style>
 </head>
 <body>
@@ -56,9 +56,9 @@
 </div>
 
 <div id="resultPanel">
-    <h3 style="margin-top:0;">Sonuç Gir <span id="close-panel-btn" style="float:right;cursor:pointer; padding:5px;">×</span></h3>
+    <h3 style="margin-top:0;">Sonuç Gir <span id="close-panel-btn" style="float:right;cursor:pointer; padding: 5px;">×</span></h3>
     <div id="resultNumbers"></div>
-    <div style="margin-top:15px;">
+    <div style="margin-top: 15px;">
         <button id="btn-confirm-result">Tamamla</button>
         <button id="btn-clean-result" style="background:#999;margin-top:8px;">Tümünü Temizle</button>
     </div>
@@ -2115,7 +2115,7 @@ async function renderMySetsList(reqId) {
 
     container.innerHTML = `
         <h3>Kayıtlı Listelerim</h3>
-        <div style="margin-bottom:15px;">
+        <div style="margin-bottom: 15px;">
             <button id="btn-export-backup" class="secondary-btn">
                 Yedekle (JSON Dışa Aktar)
             </button>
@@ -2252,15 +2252,17 @@ function createBallsUI(set, results = null) {
     const row = document.createElement("div");
     row.className = "ball-row";
 
-    let order = 1;
+    let order = 0;
 
     set.numbers.forEach(n => {
-        const item = document.createElement("div");
-        item.className = "ball-item";
+        order++;
+
+        const wrap = document.createElement("div");
+        wrap.className = "ball-wrap";
 
         const number = document.createElement("div");
         number.className = "ball-order";
-        number.textContent = order++;
+        number.textContent = order;
 
         const ball = document.createElement("div");
         ball.className = "ball selected";
@@ -2271,17 +2273,19 @@ function createBallsUI(set, results = null) {
 
         ball.textContent = n;
 
-        item.append(number, ball);
-        row.appendChild(item);
+        wrap.append(number, ball);
+        row.appendChild(wrap);
     });
 
     set.jokers.forEach(j => {
-        const item = document.createElement("div");
-        item.className = "ball-item";
+        order++;
+
+        const wrap = document.createElement("div");
+        wrap.className = "ball-wrap";
 
         const number = document.createElement("div");
         number.className = "ball-order";
-        number.textContent = order++;
+        number.textContent = order;
 
         const ball = document.createElement("div");
         ball.className = "ball joker";
@@ -2292,8 +2296,8 @@ function createBallsUI(set, results = null) {
 
         ball.textContent = j;
 
-        item.append(number, ball);
-        row.appendChild(item);
+        wrap.append(number, ball);
+        row.appendChild(wrap);
     });
 
     return row;
