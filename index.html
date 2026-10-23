@@ -2122,12 +2122,7 @@ async function renderMySetsList(reqId) {
             <button id="btn-import-backup" class="secondary-btn">
                 Yedek Yükle (JSON İçe Aktar)
             </button>
-            <button id="btn-compare-four-lists" class="secondary-btn">
-                Dört Listeyi Otomatik Kontrol Et
-            </button>
         </div>
-        <div id="four-list-comparison-result" class="card"
-             style="display:none; white-space:pre-wrap; overflow-wrap:anywhere;"></div>
     `;
 
     if (groups.length === 0) {
@@ -2166,6 +2161,8 @@ async function renderMySetsList(reqId) {
 
     view.appendChild(container);
 
+    container.appendChild(createFourListCompareCard(groups));
+
     getEl("btn-export-backup").addEventListener(
         "click",
         exportBackup
@@ -2175,111 +2172,159 @@ async function renderMySetsList(reqId) {
         "click",
         triggerImport
     );
-
-    getEl("btn-compare-four-lists").addEventListener(
-        "click",
-        compareFourLists
-    );
 }
 
-async function compareFourLists() {
-    if (isProcessing) return;
+function createFourListCompareCard(groups) {
+    const card = document.createElement("div");
+    card.className = "card";
 
-    const output = getEl("four-list-comparison-result");
+    const title = document.createElement("b");
+    title.textContent = "Dört Listeyi Otomatik Karşılaştır";
+    card.appendChild(title);
 
-    if (!output) return;
+    const description = document.createElement("p");
+    description.textContent =
+        "Aynı numaralı kolonların üstünde 1 yazan ilk balonları kontrol eder. Dört balonun da mavi olmadığı kolon numaralarını bulur.";
+    card.appendChild(description);
 
-    output.style.display = "block";
-    output.textContent = "Dört liste kontrol ediliyor...";
+    const selectors = [];
 
-    try {
-        const groups = await getAllGroups();
+    for (let i = 0; i < 4; i++) {
+        const label = document.createElement("label");
+        label.textContent = `${i + 1}. Liste`;
+        label.style.display = "block";
+        label.style.marginTop = "10px";
 
-        const requiredNames = ["bir", "iki", "üç", "dört"];
-        const selectedGroups = [];
+        const select = document.createElement("select");
+        select.style.width = "100%";
+        select.style.boxSizing = "border-box";
+        select.style.padding = "10px";
+        select.style.marginTop = "5px";
 
-        for (const requiredName of requiredNames) {
-            const found = groups.filter(group =>
-                String(group.name)
-                    .trim()
-                    .toLocaleLowerCase("tr-TR") === requiredName
-            );
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Liste seçin";
+        select.appendChild(placeholder);
 
-            if (found.length !== 1) {
-                throw new Error(
-                    `"${requiredName}" adlı tam olarak bir kayıtlı liste bulunmalıdır.`
-                );
-            }
+        groups.forEach(group => {
+            const option = document.createElement("option");
+            option.value = String(group.id);
+            option.textContent = group.name;
+            select.appendChild(option);
+        });
 
-            const group = found[0];
+        selectors.push(select);
+        card.append(label, select);
+    }
 
-            if (!Array.isArray(group.sets) || group.sets.length < 100) {
-                throw new Error(
-                    `"${requiredName}" listesinde en az 100 kolon bulunmalıdır.`
-                );
-            }
+    const compareButton = document.createElement("button");
+    compareButton.textContent = "100 Kolonu Karşılaştır";
 
-            if (
-                !Array.isArray(group.results?.main) ||
-                group.results.main.length !== group.perSet
-            ) {
-                throw new Error(
-                    `"${requiredName}" listesinin ana sonuçları eksik. Önce Sonuçları Gir bölümünü tamamlayın.`
-                );
-            }
+    const output = document.createElement("div");
+    output.style.marginTop = "15px";
+    output.style.whiteSpace = "pre-wrap";
+    output.style.overflowWrap = "anywhere";
 
-            for (let i = 0; i < 100; i++) {
-                if (
-                    !Array.isArray(group.sets[i]?.numbers) ||
-                    group.sets[i].numbers.length === 0
-                ) {
+    compareButton.addEventListener("click", async () => {
+        output.textContent = "";
+
+        const ids = selectors.map(select => select.value);
+
+        if (ids.some(id => !id)) {
+            alert("Lütfen dört listenin tamamını seçin.");
+            return;
+        }
+
+        if (new Set(ids).size !== 4) {
+            alert("Dört farklı kayıtlı liste seçmelisiniz.");
+            return;
+        }
+
+        compareButton.disabled = true;
+        compareButton.textContent = "Karşılaştırılıyor...";
+
+        try {
+            const selectedGroups = [];
+
+            for (const id of ids) {
+                const group = await getGroupById(id);
+
+                if (!group) {
                     throw new Error(
-                        `"${requiredName}" listesinin ${i + 1}. kolonunda kontrol edilecek ana sayı bulunamadı.`
+                        "Seçilen listelerden biri okunamadı. Kayıtlarınızı kontrol edip tekrar deneyin."
                     );
                 }
+
+                if (group.sets.length < 100) {
+                    throw new Error(
+                        `"${group.name}" listesinde 100 kolon bulunmuyor.`
+                    );
+                }
+
+                if (
+                    !Array.isArray(group.results?.main) ||
+                    group.results.main.length !== group.perSet
+                ) {
+                    throw new Error(
+                        `"${group.name}" listesine sonuç girilmemiş veya ana sonuç sayısı eksik. Önce bu listenin sonuçlarını kaydedin.`
+                    );
+                }
+
+                for (let i = 0; i < 100; i++) {
+                    if (
+                        !Array.isArray(group.sets[i]?.numbers) ||
+                        !Number.isInteger(group.sets[i].numbers[0])
+                    ) {
+                        throw new Error(
+                            `"${group.name}" listesinin ${i + 1}. kolonundaki ilk balon okunamadı.`
+                        );
+                    }
+                }
+
+                selectedGroups.push(group);
             }
 
-            selectedGroups.push(group);
-        }
+            const matchingColumns = [];
 
-        const matchingColumns = [];
+            for (let i = 0; i < 100; i++) {
+                const allFourNotBlue = selectedGroups.every(group => {
+                    const firstBall = group.sets[i].numbers[0];
 
-        for (let i = 0; i < 100; i++) {
-            let allFourNotBlue = true;
+                    return !group.results.main.includes(firstBall);
+                });
 
-            for (const group of selectedGroups) {
-                const firstBall = Number(group.sets[i].numbers[0]);
-
-                const isBlue = group.results.main.includes(firstBall);
-
-                if (isBlue) {
-                    allFourNotBlue = false;
-                    break;
+                if (allFourNotBlue) {
+                    matchingColumns.push(i + 1);
                 }
             }
 
-            if (allFourNotBlue) {
-                matchingColumns.push(i + 1);
+            if (matchingColumns.length === 0) {
+                output.textContent =
+                    "Sonuç: Koşulu sağlayan kolon bulunamadı.";
+            } else {
+                output.textContent =
+                    `Koşulu sağlayan kolon sayısı: ${matchingColumns.length}\n\n` +
+                    `Kolon numaraları:\n${matchingColumns.join(", ")}`;
             }
-        }
 
-        if (matchingColumns.length > 0) {
-            output.textContent =
-                "KOŞULA UYAN KOLON NUMARALARI\n\n" +
-                matchingColumns.join(", ") +
-                "\n\nToplam: " +
-                matchingColumns.length +
-                " kolon.";
-        } else {
-            output.textContent =
-                "1–100 arasındaki kolonlarda dört listenin de ilk sıra balonunun mavi olmadığı bir kolon bulunamadı.";
+        } catch (error) {
+            alert(error.message || "Karşılaştırma yapılamadı.");
+        } finally {
+            compareButton.disabled = false;
+            compareButton.textContent = "100 Kolonu Karşılaştır";
         }
+    });
 
-    } catch (error) {
-        output.textContent =
-            "Kontrol yapılamadı.\n\n" +
-            (error?.message || "Bilinmeyen hata");
+    card.append(compareButton, output);
+
+    if (groups.length < 4) {
+        const note = document.createElement("p");
+        note.textContent =
+            "Karşılaştırma için en az dört kayıtlı listeniz olmalı.";
+        card.appendChild(note);
     }
+
+    return card;
 }
 
 async function renderViewGroup(group, reqId) {
