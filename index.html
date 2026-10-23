@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -2121,7 +2122,12 @@ async function renderMySetsList(reqId) {
             <button id="btn-import-backup" class="secondary-btn">
                 Yedek Yükle (JSON İçe Aktar)
             </button>
+            <button id="btn-compare-four-lists" class="secondary-btn">
+                Dört Listeyi Otomatik Kontrol Et
+            </button>
         </div>
+        <div id="four-list-comparison-result" class="card"
+             style="display:none; white-space:pre-wrap; overflow-wrap:anywhere;"></div>
     `;
 
     if (groups.length === 0) {
@@ -2169,6 +2175,111 @@ async function renderMySetsList(reqId) {
         "click",
         triggerImport
     );
+
+    getEl("btn-compare-four-lists").addEventListener(
+        "click",
+        compareFourLists
+    );
+}
+
+async function compareFourLists() {
+    if (isProcessing) return;
+
+    const output = getEl("four-list-comparison-result");
+
+    if (!output) return;
+
+    output.style.display = "block";
+    output.textContent = "Dört liste kontrol ediliyor...";
+
+    try {
+        const groups = await getAllGroups();
+
+        const requiredNames = ["bir", "iki", "üç", "dört"];
+        const selectedGroups = [];
+
+        for (const requiredName of requiredNames) {
+            const found = groups.filter(group =>
+                String(group.name)
+                    .trim()
+                    .toLocaleLowerCase("tr-TR") === requiredName
+            );
+
+            if (found.length !== 1) {
+                throw new Error(
+                    `"${requiredName}" adlı tam olarak bir kayıtlı liste bulunmalıdır.`
+                );
+            }
+
+            const group = found[0];
+
+            if (!Array.isArray(group.sets) || group.sets.length < 100) {
+                throw new Error(
+                    `"${requiredName}" listesinde en az 100 kolon bulunmalıdır.`
+                );
+            }
+
+            if (
+                !Array.isArray(group.results?.main) ||
+                group.results.main.length !== group.perSet
+            ) {
+                throw new Error(
+                    `"${requiredName}" listesinin ana sonuçları eksik. Önce Sonuçları Gir bölümünü tamamlayın.`
+                );
+            }
+
+            for (let i = 0; i < 100; i++) {
+                if (
+                    !Array.isArray(group.sets[i]?.numbers) ||
+                    group.sets[i].numbers.length === 0
+                ) {
+                    throw new Error(
+                        `"${requiredName}" listesinin ${i + 1}. kolonunda kontrol edilecek ana sayı bulunamadı.`
+                    );
+                }
+            }
+
+            selectedGroups.push(group);
+        }
+
+        const matchingColumns = [];
+
+        for (let i = 0; i < 100; i++) {
+            let allFourNotBlue = true;
+
+            for (const group of selectedGroups) {
+                const firstBall = Number(group.sets[i].numbers[0]);
+
+                const isBlue = group.results.main.includes(firstBall);
+
+                if (isBlue) {
+                    allFourNotBlue = false;
+                    break;
+                }
+            }
+
+            if (allFourNotBlue) {
+                matchingColumns.push(i + 1);
+            }
+        }
+
+        if (matchingColumns.length > 0) {
+            output.textContent =
+                "KOŞULA UYAN KOLON NUMARALARI\n\n" +
+                matchingColumns.join(", ") +
+                "\n\nToplam: " +
+                matchingColumns.length +
+                " kolon.";
+        } else {
+            output.textContent =
+                "1–100 arasındaki kolonlarda dört listenin de ilk sıra balonunun mavi olmadığı bir kolon bulunamadı.";
+        }
+
+    } catch (error) {
+        output.textContent =
+            "Kontrol yapılamadı.\n\n" +
+            (error?.message || "Bilinmeyen hata");
+    }
 }
 
 async function renderViewGroup(group, reqId) {
