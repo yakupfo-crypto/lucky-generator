@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -17,6 +16,8 @@
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .ball-item{ display:flex; flex-direction:column; align-items:center; gap:4px; flex:0 0 38px; }
+    .ball-order{ font-size:11px; line-height:12px; font-weight:700; color:#666; text-align:center; }
     .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select: none; transition: opacity 0.2s; }
     .ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
     .ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
@@ -751,22 +752,19 @@ async function deleteDraft(id) {
     }
 }
 
-/* Giriş değerleri kaydedilemezse hata çağıran işleme iletilir. */
 function queueInputDraftSave(values) {
     const savedValues = { ...values };
 
     currentInputValues = { ...savedValues };
 
-    const saveOperation = inputDraftSaveQueue
+    inputDraftSaveQueue = inputDraftSaveQueue
         .catch(() => {})
-        .then(() => saveDraft("tempInputs", savedValues));
+        .then(() => saveDraft("tempInputs", savedValues))
+        .catch(e => {
+            ErrorHandler.report("Draft Save Error", e);
+        });
 
-    inputDraftSaveQueue = saveOperation;
-
-    return saveOperation.catch(e => {
-        ErrorHandler.report("Draft Save Error", e);
-        throw e;
-    });
+    return inputDraftSaveQueue;
 }
 
 async function getAllGroups() {
@@ -1068,7 +1066,6 @@ async function atomicSave(item, options = {}) {
     });
 }
 
-/* Yeni: Grup kaydı ve taslak silme tek atomik işlemde yapılır. */
 async function atomicSaveGroupAndDeleteDraft(item, draftId) {
     return withLock(async () => {
 
@@ -1730,11 +1727,6 @@ async function renderGeneratePage() {
     let dSets;
     let dInputs;
 
-    /*
-     * Taslak okuma hatası ile taslağın gerçekten bulunmaması
-     * birbirinden ayrılır. Okuma başarısızsa generatedSets
-     * değiştirilmez ve mevcut veri boşaltılmaz.
-     */
     try {
         dSets = await getDraft("tempSets");
 
@@ -1835,17 +1827,12 @@ async function renderGeneratePage() {
             count: inputElements.count.value
         };
 
-        return queueInputDraftSave(values);
+        queueInputDraftSave(values);
     };
 
     Object.values(inputElements).forEach(input => {
-        input.addEventListener("input", () => {
-            saveCurrentInputs().catch(() => {});
-        });
-
-        input.addEventListener("change", () => {
-            saveCurrentInputs().catch(() => {});
-        });
+        input.addEventListener("input", saveCurrentInputs);
+        input.addEventListener("change", saveCurrentInputs);
     });
 
     getEl("btn-generate-action").addEventListener(
@@ -1989,11 +1976,8 @@ async function generateSets() {
             });
         }
 
-        /*
-         * Önce giriş değerleri kaydedilir.
-         * Bu kayıt başarısız olursa yeni kolon taslağı yazılmaz
-         * ve mevcut generatedSets değiştirilmez.
-         */
+        await saveDraft("tempSets", newGeneratedSets);
+
         await queueInputDraftSave({
             max,
             per,
@@ -2001,8 +1985,6 @@ async function generateSets() {
             jPer,
             count
         });
-
-        await saveDraft("tempSets", newGeneratedSets);
 
         generatedSets = newGeneratedSets;
 
@@ -2070,11 +2052,6 @@ async function saveGroup() {
         setLoading(true);
         isProcessing = true;
 
-        /*
-         * Grup kaydı ve tempSets taslağının silinmesi aynı
-         * IndexedDB transaction'ında tamamlanır.
-         * İkisi birlikte başarılı olur veya ikisi de geri alınır.
-         */
         await atomicSaveGroupAndDeleteDraft(group, "tempSets");
 
         generatedSets = [];
@@ -2105,11 +2082,6 @@ async function renderMySetsList(reqId) {
 
     let groups;
 
-    /*
-     * Veritabanı okuma hatası boş liste olarak yorumlanmaz.
-     * Gerçekten hiç kayıt yoksa boş liste mesajı gösterilir;
-     * okuma başarısızsa ayrı hata mesajı gösterilir.
-     */
     try {
         groups = await getAllGroups();
     } catch(e) {
@@ -2279,31 +2251,38 @@ function createBallsUI(set, results = null) {
     const row = document.createElement("div");
     row.className = "ball-row";
 
-    set.numbers.forEach(n => {
+    let order = 0;
+
+    const addBall = (number, isJoker = false) => {
+        const item = document.createElement("div");
+        item.className = "ball-item";
+
+        const orderLabel = document.createElement("span");
+        orderLabel.className = "ball-order";
+        orderLabel.textContent = String(++order);
+
         const ball = document.createElement("div");
+        ball.className = isJoker ? "ball joker" : "ball selected";
 
-        ball.className = "ball selected";
-
-        if (results && results.main.includes(Number(n))) {
+        if (
+            results &&
+            (
+                isJoker
+                    ? results.joker.includes(Number(number))
+                    : results.main.includes(Number(number))
+            )
+        ) {
             ball.classList.add("result-selected");
         }
 
-        ball.textContent = n;
-        row.appendChild(ball);
-    });
+        ball.textContent = number;
 
-    set.jokers.forEach(j => {
-        const ball = document.createElement("div");
+        item.append(orderLabel, ball);
+        row.appendChild(item);
+    };
 
-        ball.className = "ball joker";
-
-        if (results && results.joker.includes(Number(j))) {
-            ball.classList.add("result-selected");
-        }
-
-        ball.textContent = j;
-        row.appendChild(ball);
-    });
+    set.numbers.forEach(number => addBall(number));
+    set.jokers.forEach(number => addBall(number, true));
 
     return row;
 }
