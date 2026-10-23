@@ -1,4 +1,4 @@
-
+```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -18,7 +18,7 @@
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
     .ball-wrap{ display:flex; flex-direction:column; align-items:center; gap:3px; }
-    .ball-order{ font-size:11px; line-height:12px; color:#666; text-align:center; }
+    .ball-order{ font-size:12px; line-height:14px; color:#333; font-weight:700; text-align:center; }
     .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select: none; transition: opacity 0.2s; }
     .ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
     .ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
@@ -1067,6 +1067,7 @@ async function atomicSave(item, options = {}) {
     });
 }
 
+/* Yeni: Grup kaydı ve taslak silme tek atomik işlemde yapılır. */
 async function atomicSaveGroupAndDeleteDraft(item, draftId) {
     return withLock(async () => {
 
@@ -1728,6 +1729,11 @@ async function renderGeneratePage() {
     let dSets;
     let dInputs;
 
+    /*
+     * Taslak okuma hatası ile taslağın gerçekten bulunmaması
+     * birbirinden ayrılır. Okuma başarısızsa generatedSets
+     * değiştirilmez ve mevcut veri boşaltılmaz.
+     */
     try {
         dSets = await getDraft("tempSets");
 
@@ -2053,6 +2059,11 @@ async function saveGroup() {
         setLoading(true);
         isProcessing = true;
 
+        /*
+         * Grup kaydı ve tempSets taslağının silinmesi aynı
+         * IndexedDB transaction'ında tamamlanır.
+         * İkisi birlikte başarılı olur veya ikisi de geri alınır.
+         */
         await atomicSaveGroupAndDeleteDraft(group, "tempSets");
 
         generatedSets = [];
@@ -2083,6 +2094,11 @@ async function renderMySetsList(reqId) {
 
     let groups;
 
+    /*
+     * Veritabanı okuma hatası boş liste olarak yorumlanmaz.
+     * Gerçekten hiç kayıt yoksa boş liste mesajı gösterilir;
+     * okuma başarısızsa ayrı hata mesajı gösterilir.
+     */
     try {
         groups = await getAllGroups();
     } catch(e) {
@@ -2252,52 +2268,41 @@ function createBallsUI(set, results = null) {
     const row = document.createElement("div");
     row.className = "ball-row";
 
-    let order = 0;
-
-    set.numbers.forEach(n => {
-        order++;
-
+    const addBall = (number, order, isJoker) => {
         const wrap = document.createElement("div");
         wrap.className = "ball-wrap";
 
-        const number = document.createElement("div");
-        number.className = "ball-order";
-        number.textContent = order;
+        const orderLabel = document.createElement("div");
+        orderLabel.className = "ball-order";
+        orderLabel.textContent = order;
 
         const ball = document.createElement("div");
-        ball.className = "ball selected";
+        ball.className = isJoker ? "ball joker" : "ball selected";
 
-        if (results && results.main.includes(Number(n))) {
+        if (
+            results &&
+            (
+                isJoker
+                    ? results.joker.includes(Number(number))
+                    : results.main.includes(Number(number))
+            )
+        ) {
             ball.classList.add("result-selected");
         }
 
-        ball.textContent = n;
+        ball.textContent = number;
 
-        wrap.append(number, ball);
+        wrap.appendChild(orderLabel);
+        wrap.appendChild(ball);
         row.appendChild(wrap);
+    };
+
+    set.numbers.forEach((n, i) => {
+        addBall(n, i + 1, false);
     });
 
-    set.jokers.forEach(j => {
-        order++;
-
-        const wrap = document.createElement("div");
-        wrap.className = "ball-wrap";
-
-        const number = document.createElement("div");
-        number.className = "ball-order";
-        number.textContent = order;
-
-        const ball = document.createElement("div");
-        ball.className = "ball joker";
-
-        if (results && results.joker.includes(Number(j))) {
-            ball.classList.add("result-selected");
-        }
-
-        ball.textContent = j;
-
-        wrap.append(number, ball);
-        row.appendChild(wrap);
+    set.jokers.forEach((j, i) => {
+        addBall(j, i + 1, true);
     });
 
     return row;
@@ -2707,3 +2712,4 @@ async function clearGeneratedSets() {
 </script>
 </body>
 </html>
+```
