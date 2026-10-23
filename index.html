@@ -1067,7 +1067,6 @@ async function atomicSave(item, options = {}) {
     });
 }
 
-/* Yeni: Grup kaydı ve taslak silme tek atomik işlemde yapılır. */
 async function atomicSaveGroupAndDeleteDraft(item, draftId) {
     return withLock(async () => {
 
@@ -1729,11 +1728,6 @@ async function renderGeneratePage() {
     let dSets;
     let dInputs;
 
-    /*
-     * Taslak okuma hatası ile taslağın gerçekten bulunmaması
-     * birbirinden ayrılır. Okuma başarısızsa generatedSets
-     * değiştirilmez ve mevcut veri boşaltılmaz.
-     */
     try {
         dSets = await getDraft("tempSets");
 
@@ -2059,11 +2053,6 @@ async function saveGroup() {
         setLoading(true);
         isProcessing = true;
 
-        /*
-         * Grup kaydı ve tempSets taslağının silinmesi aynı
-         * IndexedDB transaction'ında tamamlanır.
-         * İkisi birlikte başarılı olur veya ikisi de geri alınır.
-         */
         await atomicSaveGroupAndDeleteDraft(group, "tempSets");
 
         generatedSets = [];
@@ -2094,11 +2083,6 @@ async function renderMySetsList(reqId) {
 
     let groups;
 
-    /*
-     * Veritabanı okuma hatası boş liste olarak yorumlanmaz.
-     * Gerçekten hiç kayıt yoksa boş liste mesajı gösterilir;
-     * okuma başarısızsa ayrı hata mesajı gösterilir.
-     */
     try {
         groups = await getAllGroups();
     } catch(e) {
