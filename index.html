@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -14,6 +13,7 @@
     .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
     input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
     button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
+    button:disabled{ opacity:0.6; cursor:wait; }
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
@@ -34,6 +34,34 @@
     @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
     #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.6); z-index: 4000; cursor: wait; }
     #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; box-sizing: border-box; }
+
+    /* Dört liste karşılaştırma sonuçları */
+    .compare-result-section{
+        margin-top:12px;
+        padding:12px;
+        border:1px solid #e0e0e0;
+        border-radius:8px;
+        background:#fafcff;
+    }
+    .compare-result-section b{
+        color:#1976d2;
+        margin-bottom:8px;
+    }
+    .compare-result-count{
+        font-weight:bold;
+        margin:6px 0;
+    }
+    .compare-result-numbers{
+        line-height:1.8;
+        overflow-wrap:anywhere;
+        word-break:normal;
+    }
+    .compare-odd{
+        border-left:4px solid #1976d2;
+    }
+    .compare-even{
+        border-left:4px solid #ef8f00;
+    }
 </style>
 </head>
 <body>
@@ -1495,23 +1523,6 @@ function normalizeDraftInputs(data) {
     };
 }
 
-async function requestPersistentStorage() {
-    if (
-        navigator.storage &&
-        navigator.storage.persist
-    ) {
-        try {
-            const isPersisted = await navigator.storage.persisted();
-
-            if (!isPersisted) {
-                await navigator.storage.persist();
-            }
-        } catch(e) {
-            ErrorHandler.report("Persistent Storage Error", e);
-        }
-    }
-}
-
 window.onload = async () => {
 
     if (!CryptoEngine.isSecure) {
@@ -2175,9 +2186,15 @@ async function renderMySetsList(reqId) {
 }
 
 /*
- * GÜNCELLENEN BÖLÜM:
- * Dört kayıtlı listeyi karşılaştırır ve koşulu sağlayan
- * kolon numaralarını toplam, tek ve çift olarak gösterir.
+ * DÖRT LİSTEYİ OTOMATİK KARŞILAŞTIR
+ *
+ * Mevcut koşul korunur:
+ * Dört listenin aynı kolon numarasındaki ilk balonu da
+ * kendi listesinin sonuçlarında bulunmuyorsa kolon eşleşir.
+ *
+ * Ek özellik:
+ * Koşulu sağlayan kolon numaraları son rakamlarına göre
+ * tek ve çift gruplarına ayrılır ve ayrı ayrı sayılır.
  */
 function createFourListCompareCard(groups) {
     const card = document.createElement("div");
@@ -2189,7 +2206,7 @@ function createFourListCompareCard(groups) {
 
     const description = document.createElement("p");
     description.textContent =
-        "Aynı numaralı kolonların üstünde 1 yazan ilk balonları kontrol eder. Dört listede de ilk balonu çıkan ana sonuçlarda bulunmayan kolonları belirler; bulunan kolonları tek ve çift numaralarına göre ayırır.";
+        "Aynı numaralı kolonların üstünde 1 yazan ilk balonları kontrol eder. Dört balonun da mavi olmadığı kolon numaralarını bulur. Sonuçlar ayrıca kolon numarasının son rakamına göre tek ve çift olarak ayrılır.";
     card.appendChild(description);
 
     const selectors = [];
@@ -2226,20 +2243,48 @@ function createFourListCompareCard(groups) {
     compareButton.textContent = "100 Kolonu Karşılaştır";
 
     const output = document.createElement("div");
-
     output.style.marginTop = "15px";
     output.style.whiteSpace = "pre-wrap";
     output.style.overflowWrap = "anywhere";
-    output.style.lineHeight = "1.8";
-    output.style.padding = "12px";
-    output.style.background = "#f5f8fc";
-    output.style.border = "1px solid #dce5ef";
-    output.style.borderRadius = "8px";
-    output.style.display = "none";
-    output.setAttribute("aria-live", "polite");
+
+    /*
+     * Sonuç alanlarını güvenli şekilde oluşturur.
+     * Kolon numaraları ve adetler metin olarak gösterilir.
+     */
+    const appendResultSection = (
+        heading,
+        count,
+        numbers,
+        className
+    ) => {
+        const section = document.createElement("div");
+        section.className = `compare-result-section ${className || ""}`;
+
+        const sectionTitle = document.createElement("b");
+        sectionTitle.textContent = heading;
+
+        const countText = document.createElement("div");
+        countText.className = "compare-result-count";
+        countText.textContent = `Kolon adedi: ${count}`;
+
+        const numberText = document.createElement("div");
+        numberText.className = "compare-result-numbers";
+        numberText.textContent =
+            numbers.length > 0
+                ? numbers.join(", ")
+                : "Yok";
+
+        section.append(
+            sectionTitle,
+            countText,
+            numberText
+        );
+
+        output.appendChild(section);
+    };
 
     compareButton.addEventListener("click", async () => {
-        output.textContent = "";
+        output.replaceChildren();
 
         const ids = selectors.map(select => select.value);
 
@@ -2298,10 +2343,11 @@ function createFourListCompareCard(groups) {
             }
 
             /*
-             * Mevcut karşılaştırma koşulu korunmuştur:
-             * Dört listenin her birinde, ilgili kolonun ilk
-             * balonu o listenin kaydedilmiş ana sonuçlarında
-             * bulunmuyorsa kolon numarası eşleşenlere eklenir.
+             * MEVCUT KARŞILAŞTIRMA KOŞULU
+             *
+             * Her listedeki aynı numaralı kolonun ilk sayısı,
+             * o listenin kaydedilmiş ana sonuçlarında bulunmamalı.
+             * Dört liste de bu koşulu sağlarsa kolon eşleşir.
              */
             const matchingColumns = [];
 
@@ -2318,8 +2364,14 @@ function createFourListCompareCard(groups) {
             }
 
             /*
-             * Kolon numaraları 1-100 aralığındadır.
-             * % 2 işlemiyle tek ve çift kolonlar ayrılır.
+             * EKLENEN TEK / ÇİFT ANALİZİ
+             *
+             * Burada kolonun içindeki sayılara değil,
+             * kolon numarasının son rakamına bakılır.
+             *
+             * Örnek:
+             * 1, 3, 5, 7, 9, 11, 13 = tek kolon numaraları
+             * 2, 4, 6, 8, 10, 12, 14 = çift kolon numaraları
              */
             const oddColumns = matchingColumns.filter(
                 columnNumber => columnNumber % 2 === 1
@@ -2329,43 +2381,67 @@ function createFourListCompareCard(groups) {
                 columnNumber => columnNumber % 2 === 0
             );
 
-            const formatColumns = columns => {
-                return columns.length > 0
-                    ? columns.join(", ")
-                    : "Yok";
-            };
+            /*
+             * Karşılaştırma sonucu sıfır olsa bile bütün
+             * sonuç bölümleri ve adetleri gösterilir.
+             */
+            const summary = document.createElement("div");
+            summary.className = "compare-result-section";
 
-            const resultLines = [
-                "DÖRT LİSTEYİ OTOMATİK KARŞILAŞTIRMA SONUCU",
-                "==========================================",
-                "",
-                `Koşulu sağlayan toplam kolon sayısı: ${matchingColumns.length}`,
-                "",
-                "Koşulu sağlayan kolon numaraları:",
-                formatColumns(matchingColumns),
-                "",
-                "------------------------------------------",
+            const summaryTitle = document.createElement("b");
+            summaryTitle.textContent = "Karşılaştırma Sonucu";
+
+            const summaryCount = document.createElement("div");
+            summaryCount.className = "compare-result-count";
+            summaryCount.textContent =
+                `Koşulu sağlayan toplam kolon sayısı: ${matchingColumns.length}`;
+
+            const summaryLabel = document.createElement("div");
+            summaryLabel.style.fontWeight = "bold";
+            summaryLabel.style.marginTop = "10px";
+            summaryLabel.textContent = "Kolon numaraları:";
+
+            const summaryNumbers = document.createElement("div");
+            summaryNumbers.className = "compare-result-numbers";
+            summaryNumbers.textContent =
+                matchingColumns.length > 0
+                    ? matchingColumns.join(", ")
+                    : "Koşulu sağlayan kolon bulunamadı.";
+
+            summary.append(
+                summaryTitle,
+                summaryCount,
+                summaryLabel,
+                summaryNumbers
+            );
+
+            output.appendChild(summary);
+
+            appendResultSection(
                 "TEK KOLON NUMARALARI",
-                "------------------------------------------",
-                `Tek kolon adedi: ${oddColumns.length}`,
-                `Tek kolon numaraları: ${formatColumns(oddColumns)}`,
-                "",
-                "------------------------------------------",
-                "ÇİFT KOLON NUMARALARI",
-                "------------------------------------------",
-                `Çift kolon adedi: ${evenColumns.length}`,
-                `Çift kolon numaraları: ${formatColumns(evenColumns)}`
-            ];
+                oddColumns.length,
+                oddColumns,
+                "compare-odd"
+            );
 
-            output.textContent = resultLines.join("\n");
-            output.style.display = "block";
+            appendResultSection(
+                "ÇİFT KOLON NUMARALARI",
+                evenColumns.length,
+                evenColumns,
+                "compare-even"
+            );
+
+            const explanation = document.createElement("p");
+            explanation.style.fontSize = "12px";
+            explanation.style.color = "#666";
+            explanation.style.marginTop = "12px";
+            explanation.textContent =
+                "Not: Tek/çift ayrımı kolon numarasının son rakamına göre yapılır. Tek numaralı kolonlar 1, 3, 5, 7 ve 9 ile; çift numaralı kolonlar 0, 2, 4, 6 ve 8 ile biter.";
+
+            output.appendChild(explanation);
 
         } catch (error) {
-            output.textContent = "";
-            output.style.display = "none";
-
             alert(error.message || "Karşılaştırma yapılamadı.");
-
         } finally {
             compareButton.disabled = false;
             compareButton.textContent = "100 Kolonu Karşılaştır";
