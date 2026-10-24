@@ -2298,14 +2298,24 @@ function createFourListCompareCard(groups) {
                 }
             }
 
-            if (matchingColumns.length === 0) {
-                output.textContent =
-                    "Sonuç: Koşulu sağlayan kolon bulunamadı.";
-            } else {
-                output.textContent =
-                    `Koşulu sağlayan kolon sayısı: ${matchingColumns.length}\n\n` +
-                    `Kolon numaraları:\n${matchingColumns.join(", ")}`;
-            }
+            const oddColumns = matchingColumns.filter(
+                columnNumber => columnNumber % 2 !== 0
+            );
+
+            const evenColumns = matchingColumns.filter(
+                columnNumber => columnNumber % 2 === 0
+            );
+
+            output.textContent =
+                `Koşulu sağlayan toplam kolon sayısı: ${matchingColumns.length}\n\n` +
+                `Tüm koşulu sağlayan kolon numaraları:\n` +
+                `${matchingColumns.length > 0 ? matchingColumns.join(", ") : "Yok"}\n\n` +
+                `TEK KOLON NUMARALARI\n` +
+                `Tek kolon sayısı: ${oddColumns.length}\n` +
+                `${oddColumns.length > 0 ? oddColumns.join(", ") : "Yok"}\n\n` +
+                `ÇİFT KOLON NUMARALARI\n` +
+                `Çift kolon sayısı: ${evenColumns.length}\n` +
+                `${evenColumns.length > 0 ? evenColumns.join(", ") : "Yok"}`;
 
         } catch (error) {
             alert(error.message || "Karşılaştırma yapılamadı.");
