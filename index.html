@@ -17,6 +17,8 @@
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .ball-item{ display:flex; flex-direction:column; align-items:center; gap:4px; flex:0 0 38px; }
+    .ball-order{ font-size:11px; line-height:12px; font-weight:700; color:#666; text-align:center; }
     .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select: none; transition: opacity 0.2s; }
     .ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
     .ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
@@ -1065,7 +1067,6 @@ async function atomicSave(item, options = {}) {
     });
 }
 
-/* Yeni: Grup kaydı ve taslak silme tek atomik işlemde yapılır. */
 async function atomicSaveGroupAndDeleteDraft(item, draftId) {
     return withLock(async () => {
 
@@ -1727,11 +1728,6 @@ async function renderGeneratePage() {
     let dSets;
     let dInputs;
 
-    /*
-     * Taslak okuma hatası ile taslağın gerçekten bulunmaması
-     * birbirinden ayrılır. Okuma başarısızsa generatedSets
-     * değiştirilmez ve mevcut veri boşaltılmaz.
-     */
     try {
         dSets = await getDraft("tempSets");
 
@@ -2057,11 +2053,6 @@ async function saveGroup() {
         setLoading(true);
         isProcessing = true;
 
-        /*
-         * Grup kaydı ve tempSets taslağının silinmesi aynı
-         * IndexedDB transaction'ında tamamlanır.
-         * İkisi birlikte başarılı olur veya ikisi de geri alınır.
-         */
         await atomicSaveGroupAndDeleteDraft(group, "tempSets");
 
         generatedSets = [];
@@ -2092,11 +2083,6 @@ async function renderMySetsList(reqId) {
 
     let groups;
 
-    /*
-     * Veritabanı okuma hatası boş liste olarak yorumlanmaz.
-     * Gerçekten hiç kayıt yoksa boş liste mesajı gösterilir;
-     * okuma başarısızsa ayrı hata mesajı gösterilir.
-     */
     try {
         groups = await getAllGroups();
     } catch(e) {
@@ -2175,6 +2161,8 @@ async function renderMySetsList(reqId) {
 
     view.appendChild(container);
 
+    container.appendChild(createFourListCompareCard(groups));
+
     getEl("btn-export-backup").addEventListener(
         "click",
         exportBackup
@@ -2184,6 +2172,159 @@ async function renderMySetsList(reqId) {
         "click",
         triggerImport
     );
+}
+
+function createFourListCompareCard(groups) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("b");
+    title.textContent = "Dört Listeyi Otomatik Karşılaştır";
+    card.appendChild(title);
+
+    const description = document.createElement("p");
+    description.textContent =
+        "Aynı numaralı kolonların üstünde 1 yazan ilk balonları kontrol eder. Dört balonun da mavi olmadığı kolon numaralarını bulur.";
+    card.appendChild(description);
+
+    const selectors = [];
+
+    for (let i = 0; i < 4; i++) {
+        const label = document.createElement("label");
+        label.textContent = `${i + 1}. Liste`;
+        label.style.display = "block";
+        label.style.marginTop = "10px";
+
+        const select = document.createElement("select");
+        select.style.width = "100%";
+        select.style.boxSizing = "border-box";
+        select.style.padding = "10px";
+        select.style.marginTop = "5px";
+
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Liste seçin";
+        select.appendChild(placeholder);
+
+        groups.forEach(group => {
+            const option = document.createElement("option");
+            option.value = String(group.id);
+            option.textContent = group.name;
+            select.appendChild(option);
+        });
+
+        selectors.push(select);
+        card.append(label, select);
+    }
+
+    const compareButton = document.createElement("button");
+    compareButton.textContent = "100 Kolonu Karşılaştır";
+
+    const output = document.createElement("div");
+    output.style.marginTop = "15px";
+    output.style.whiteSpace = "pre-wrap";
+    output.style.overflowWrap = "anywhere";
+
+    compareButton.addEventListener("click", async () => {
+        output.textContent = "";
+
+        const ids = selectors.map(select => select.value);
+
+        if (ids.some(id => !id)) {
+            alert("Lütfen dört listenin tamamını seçin.");
+            return;
+        }
+
+        if (new Set(ids).size !== 4) {
+            alert("Dört farklı kayıtlı liste seçmelisiniz.");
+            return;
+        }
+
+        compareButton.disabled = true;
+        compareButton.textContent = "Karşılaştırılıyor...";
+
+        try {
+            const selectedGroups = [];
+
+            for (const id of ids) {
+                const group = await getGroupById(id);
+
+                if (!group) {
+                    throw new Error(
+                        "Seçilen listelerden biri okunamadı. Kayıtlarınızı kontrol edip tekrar deneyin."
+                    );
+                }
+
+                if (group.sets.length < 100) {
+                    throw new Error(
+                        `"${group.name}" listesinde 100 kolon bulunmuyor.`
+                    );
+                }
+
+                if (
+                    !Array.isArray(group.results?.main) ||
+                    group.results.main.length !== group.perSet
+                ) {
+                    throw new Error(
+                        `"${group.name}" listesine sonuç girilmemiş veya ana sonuç sayısı eksik. Önce bu listenin sonuçlarını kaydedin.`
+                    );
+                }
+
+                for (let i = 0; i < 100; i++) {
+                    if (
+                        !Array.isArray(group.sets[i]?.numbers) ||
+                        !Number.isInteger(group.sets[i].numbers[0])
+                    ) {
+                        throw new Error(
+                            `"${group.name}" listesinin ${i + 1}. kolonundaki ilk balon okunamadı.`
+                        );
+                    }
+                }
+
+                selectedGroups.push(group);
+            }
+
+            const matchingColumns = [];
+
+            for (let i = 0; i < 100; i++) {
+                const allFourNotBlue = selectedGroups.every(group => {
+                    const firstBall = group.sets[i].numbers[0];
+
+                    return !group.results.main.includes(firstBall);
+                });
+
+                if (allFourNotBlue) {
+                    matchingColumns.push(i + 1);
+                }
+            }
+
+            if (matchingColumns.length === 0) {
+                output.textContent =
+                    "Sonuç: Koşulu sağlayan kolon bulunamadı.";
+            } else {
+                output.textContent =
+                    `Koşulu sağlayan kolon sayısı: ${matchingColumns.length}\n\n` +
+                    `Kolon numaraları:\n${matchingColumns.join(", ")}`;
+            }
+
+        } catch (error) {
+            alert(error.message || "Karşılaştırma yapılamadı.");
+        } finally {
+            compareButton.disabled = false;
+            compareButton.textContent = "100 Kolonu Karşılaştır";
+        }
+    });
+
+    card.append(compareButton, output);
+
+    if (groups.length < 4) {
+        const note = document.createElement("p");
+        note.textContent =
+            "Karşılaştırma için en az dört kayıtlı listeniz olmalı.";
+        card.appendChild(note);
+    }
+
+    return card;
 }
 
 async function renderViewGroup(group, reqId) {
@@ -2266,31 +2407,38 @@ function createBallsUI(set, results = null) {
     const row = document.createElement("div");
     row.className = "ball-row";
 
-    set.numbers.forEach(n => {
+    let order = 0;
+
+    const addBall = (number, isJoker = false) => {
+        const item = document.createElement("div");
+        item.className = "ball-item";
+
+        const orderLabel = document.createElement("span");
+        orderLabel.className = "ball-order";
+        orderLabel.textContent = String(++order);
+
         const ball = document.createElement("div");
+        ball.className = isJoker ? "ball joker" : "ball selected";
 
-        ball.className = "ball selected";
-
-        if (results && results.main.includes(Number(n))) {
+        if (
+            results &&
+            (
+                isJoker
+                    ? results.joker.includes(Number(number))
+                    : results.main.includes(Number(number))
+            )
+        ) {
             ball.classList.add("result-selected");
         }
 
-        ball.textContent = n;
-        row.appendChild(ball);
-    });
+        ball.textContent = number;
 
-    set.jokers.forEach(j => {
-        const ball = document.createElement("div");
+        item.append(orderLabel, ball);
+        row.appendChild(item);
+    };
 
-        ball.className = "ball joker";
-
-        if (results && results.joker.includes(Number(j))) {
-            ball.classList.add("result-selected");
-        }
-
-        ball.textContent = j;
-        row.appendChild(ball);
-    });
+    set.numbers.forEach(number => addBall(number));
+    set.jokers.forEach(number => addBall(number, true));
 
     return row;
 }
