@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -2305,16 +2306,45 @@ function createFourListCompareCard(groups) {
                 number => number % 2 === 0
             );
 
+            const oddSum = oddColumns.reduce(
+                (total, number) => total + number,
+                0
+            );
+
+            const evenSum = evenColumns.reduce(
+                (total, number) => total + number,
+                0
+            );
+
+            const oddAverage = oddColumns.length > 0
+                ? oddSum / oddColumns.length
+                : null;
+
+            const evenAverage = evenColumns.length > 0
+                ? evenSum / evenColumns.length
+                : null;
+
+            const formatNumber = number =>
+                number.toLocaleString("tr-TR", {
+                    maximumFractionDigits: 4
+                });
+
             output.textContent =
                 `Koşulu sağlayan toplam kolon sayısı: ${matchingColumns.length}\n\n` +
                 `Koşulu sağlayan kolon numaraları:\n` +
                 `${matchingColumns.length > 0 ? matchingColumns.join(", ") : "Yok"}\n\n` +
+                `TEK SAYILI KOLONLAR\n` +
                 `Tek sayılı kolon sayısı: ${oddColumns.length}\n` +
                 `Tek sayılı kolon numaraları:\n` +
-                `${oddColumns.length > 0 ? oddColumns.join(", ") : "Yok"}\n\n` +
+                `${oddColumns.length > 0 ? oddColumns.join(", ") : "Yok"}\n` +
+                `Tek sayılı kolon numaralarının toplamı: ${formatNumber(oddSum)}\n` +
+                `Tek sayılı kolon numaralarının ortalaması: ${oddAverage !== null ? formatNumber(oddAverage) : "Hesaplanamadı (kolon yok)"}\n\n` +
+                `ÇİFT SAYILI KOLONLAR\n` +
                 `Çift sayılı kolon sayısı: ${evenColumns.length}\n` +
                 `Çift sayılı kolon numaraları:\n` +
-                `${evenColumns.length > 0 ? evenColumns.join(", ") : "Yok"}`;
+                `${evenColumns.length > 0 ? evenColumns.join(", ") : "Yok"}\n` +
+                `Çift sayılı kolon numaralarının toplamı: ${formatNumber(evenSum)}\n` +
+                `Çift sayılı kolon numaralarının ortalaması: ${evenAverage !== null ? formatNumber(evenAverage) : "Hesaplanamadı (kolon yok)"}`;
 
         } catch (error) {
             alert(error.message || "Karşılaştırma yapılamadı.");
