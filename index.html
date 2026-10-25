@@ -2329,29 +2329,22 @@ function createFourListCompareCard(groups) {
                     maximumFractionDigits: 4
                 });
 
-            const formatAverage = average =>
-                average === null
-                    ? "Hesaplanamadı (kolon yok)"
-                    : formatNumber(average);
-
             output.textContent =
                 `Koşulu sağlayan toplam kolon sayısı: ${matchingColumns.length}\n\n` +
                 `Koşulu sağlayan kolon numaraları:\n` +
                 `${matchingColumns.length > 0 ? matchingColumns.join(", ") : "Yok"}\n\n` +
-
                 `TEK SAYILI KOLONLAR\n` +
-                `Tek sayılı kolon adedi: ${oddColumns.length}\n` +
+                `Tek sayılı kolon sayısı: ${oddColumns.length}\n` +
                 `Tek sayılı kolon numaraları:\n` +
                 `${oddColumns.length > 0 ? oddColumns.join(", ") : "Yok"}\n` +
-                `Tek kolon numaralarının toplamı: ${oddSum}\n` +
-                `Tek kolon numaralarının toplamı / tek kolon adedi: ${formatAverage(oddAverage)}\n\n` +
-
+                `Tek sayılı kolon numaralarının toplamı: ${formatNumber(oddSum)}\n` +
+                `Tek sayılı kolon numaralarının ortalaması: ${oddAverage !== null ? formatNumber(oddAverage) : "Hesaplanamadı (kolon yok)"}\n\n` +
                 `ÇİFT SAYILI KOLONLAR\n` +
-                `Çift sayılı kolon adedi: ${evenColumns.length}\n` +
+                `Çift sayılı kolon sayısı: ${evenColumns.length}\n` +
                 `Çift sayılı kolon numaraları:\n` +
                 `${evenColumns.length > 0 ? evenColumns.join(", ") : "Yok"}\n` +
-                `Çift kolon numaralarının toplamı: ${evenSum}\n` +
-                `Çift kolon numaralarının toplamı / çift kolon adedi: ${formatAverage(evenAverage)}`;
+                `Çift sayılı kolon numaralarının toplamı: ${formatNumber(evenSum)}\n` +
+                `Çift sayılı kolon numaralarının ortalaması: ${evenAverage !== null ? formatNumber(evenAverage) : "Hesaplanamadı (kolon yok)"}`;
 
         } catch (error) {
             alert(error.message || "Karşılaştırma yapılamadı.");
