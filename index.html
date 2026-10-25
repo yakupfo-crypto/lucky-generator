@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -2299,22 +2298,22 @@ function createFourListCompareCard(groups) {
             }
 
             const oddColumns = matchingColumns.filter(
-                columnNumber => columnNumber % 2 !== 0
+                number => number % 2 === 1
             );
 
             const evenColumns = matchingColumns.filter(
-                columnNumber => columnNumber % 2 === 0
+                number => number % 2 === 0
             );
 
             output.textContent =
                 `Koşulu sağlayan toplam kolon sayısı: ${matchingColumns.length}\n\n` +
-                `Tüm koşulu sağlayan kolon numaraları:\n` +
+                `Koşulu sağlayan kolon numaraları:\n` +
                 `${matchingColumns.length > 0 ? matchingColumns.join(", ") : "Yok"}\n\n` +
-                `TEK KOLON NUMARALARI\n` +
-                `Tek kolon sayısı: ${oddColumns.length}\n` +
+                `Tek sayılı kolon sayısı: ${oddColumns.length}\n` +
+                `Tek sayılı kolon numaraları:\n` +
                 `${oddColumns.length > 0 ? oddColumns.join(", ") : "Yok"}\n\n` +
-                `ÇİFT KOLON NUMARALARI\n` +
-                `Çift kolon sayısı: ${evenColumns.length}\n` +
+                `Çift sayılı kolon sayısı: ${evenColumns.length}\n` +
+                `Çift sayılı kolon numaraları:\n` +
                 `${evenColumns.length > 0 ? evenColumns.join(", ") : "Yok"}`;
 
         } catch (error) {
