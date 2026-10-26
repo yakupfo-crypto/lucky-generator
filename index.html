@@ -12,7 +12,31 @@
     .container{ padding:20px; }
     .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
     input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
+
+    /* Sonuç Gir toplu sayı yapıştırma alanı */
+    #bulkResultNumbers {
+        width: 100%;
+        min-height: 90px;
+        box-sizing: border-box;
+        padding: 10px;
+        margin: 8px 0;
+        border: 1px solid #bbb;
+        border-radius: 8px;
+        font-size: 16px;
+        resize: vertical;
+        font-family: Arial, sans-serif;
+    }
+
+    #bulk-result-status {
+        font-size: 13px;
+        margin: 5px 0 10px;
+        color: #555;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+
     button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
@@ -56,7 +80,28 @@
 
 <div id="resultPanel">
     <h3 style="margin-top:0;">Sonuç Gir <span id="close-panel-btn" style="float:right;cursor:pointer; padding: 5px;">×</span></h3>
+
+    <!-- Toplu sayı yapıştırma alanı -->
+    <div>
+        <label for="bulkResultNumbers">
+            <b>Sonuç Sayılarını Toplu Yapıştır</b>
+        </label>
+
+        <textarea
+            id="bulkResultNumbers"
+            placeholder="Örnek: 1 2 5 10 12 14 24 28 30 31 32 33 39 47 48 53 66 68 71 74 76 77"
+            aria-describedby="bulk-result-status"
+        ></textarea>
+
+        <button type="button" id="btn-apply-bulk-results">
+            Yapıştırılan Sayıları Renklendir
+        </button>
+
+        <div id="bulk-result-status" aria-live="polite"></div>
+    </div>
+
     <div id="resultNumbers"></div>
+
     <div style="margin-top: 15px;">
         <button id="btn-confirm-result">Tamamla</button>
         <button id="btn-clean-result" style="background:#999;margin-top:8px;">Tümünü Temizle</button>
@@ -161,6 +206,138 @@ function escapeHTML(str) {
     p.textContent = str;
 
     return p.innerHTML;
+}
+
+/*
+ * SONUÇ SAYILARINI TOPLU UYGULA
+ *
+ * Boşluk, satır sonu, virgül ve noktalı virgülle ayrılmış
+ * sayıları okur ve ana sayı balonlarını işaretler.
+ *
+ * Joker sonuçları bu alan üzerinden otomatik seçilmez;
+ * joker balonları kendi bölümünden seçilebilir.
+ *
+ * Bu fonksiyon global kapsamda tanımlanmıştır. Böylece
+ * window.onload içindeki olay dinleyicisi fonksiyona erişebilir.
+ */
+function applyBulkResultNumbers() {
+    if (
+        !panelDraft ||
+        !panelSelectionLimits ||
+        !panelDraftGroupId ||
+        String(history.state?.groupId) !== panelDraftGroupId ||
+        history.state?.page !== "panel"
+    ) {
+        return;
+    }
+
+    const textarea = getEl("bulkResultNumbers");
+    const status = getEl("bulk-result-status");
+
+    if (!textarea || !status) return;
+
+    const raw = textarea.value.trim();
+
+    if (!raw) {
+        status.textContent = "Lütfen sayı listesini yapıştırın.";
+        return;
+    }
+
+    /*
+     * Örnek kabul edilen biçimler:
+     * 1 2 5 10
+     * 1, 2, 5, 10
+     * 1; 2; 5; 10
+     * Her satıra bir sayı
+     */
+    const tokens = raw.split(/[\s,;]+/).filter(Boolean);
+
+    const values = [];
+
+    for (const token of tokens) {
+        if (!/^\d+$/.test(token)) {
+            status.textContent =
+                `Geçersiz değer: "${token}". Yalnızca pozitif tam sayılar girin.`;
+            return;
+        }
+
+        const value = Number(token);
+
+        if (!Number.isSafeInteger(value) || value < 1) {
+            status.textContent =
+                `Geçersiz sayı: "${token}". Yalnızca pozitif tam sayılar girin.`;
+            return;
+        }
+
+        values.push(value);
+    }
+
+    const uniqueValues = [...new Set(values)];
+
+    const mainMax = panelSelectionLimits.max;
+
+    const mainValues = uniqueValues.filter(
+        value => value <= mainMax
+    );
+
+    const outOfRangeValues = uniqueValues.filter(
+        value => value > mainMax
+    );
+
+    /*
+     * Ana seçim listesini toplu yapıştırılan sayılara göre güncelle.
+     * Kaydetme sırasında mevcut perSet kuralı yine uygulanır.
+     */
+    panelDraft.main = [...mainValues];
+
+    /*
+     * Yalnızca ana sayı bölümündeki balonları güncelle.
+     * Joker balonlarının seçimleri değiştirilmez.
+     */
+    document
+        .querySelectorAll("#resultNumbers .ball")
+        .forEach(ball => {
+            if (ball.classList.contains("joker")) {
+                return;
+            }
+
+            const number = Number(ball.textContent);
+
+            ball.classList.toggle(
+                "result-selected",
+                panelDraft.main.includes(number)
+            );
+        });
+
+    const messages = [];
+
+    messages.push(
+        `${mainValues.length} ana sayı balonu renklendirildi.`
+    );
+
+    if (uniqueValues.length !== values.length) {
+        messages.push("Tekrarlanan sayılar bir kez değerlendirildi.");
+    }
+
+    if (outOfRangeValues.length > 0) {
+        messages.push(
+            `Ana sayı aralığı (${mainMax}) dışında kalan sayılar: ${outOfRangeValues.join(", ")}.`
+        );
+    }
+
+    const requiredMainCount = panelSelectionLimits.main;
+
+    if (mainValues.length !== requiredMainCount) {
+        messages.push(
+            `Kaydetmek için tam ${requiredMainCount} ana sayı seçilmelidir.`
+        );
+    } else {
+        messages.push(
+            "Ana sayı adedi kayıt için uygun."
+        );
+    }
+
+    status.textContent = messages.join(" ");
 }
 
 const CryptoEngine = {
@@ -1547,6 +1724,12 @@ window.onload = async () => {
         cleanResult
     );
 
+    /* Toplu yapıştırma düğmesinin olay dinleyicisi */
+    getEl("btn-apply-bulk-results").addEventListener(
+        "click",
+        applyBulkResultNumbers
+    );
+
     getEl("import-file-input").addEventListener(
         "change",
         handleFileImport
@@ -2237,11 +2420,6 @@ function createFourListCompareCard(groups) {
     output.style.overflowWrap = "anywhere";
     output.style.lineHeight = "1.5";
 
-    /*
-     * Balonun ekrandaki sıra numarasına göre türünü ve değerini bulur.
-     * createBallsUI ile aynı sırayı kullanır:
-     * önce numbers, sonra jokers.
-     */
     function getBallAtPosition(group, columnIndex, position) {
         const set = group.sets[columnIndex];
 
@@ -2283,11 +2461,6 @@ function createFourListCompareCard(groups) {
         return null;
     }
 
-    /*
-     * İlgili balonun mavi olup olmadığını kendi sonuç grubuna göre
-     * kontrol eder. Ana sayı ana sonuçlarda, joker ise joker
-     * sonuçlarında aranır.
-     */
     function isBallBlue(group, ball) {
         if (!ball) {
             return false;
@@ -2441,11 +2614,6 @@ function createFourListCompareCard(groups) {
                     );
                 }
 
-                /*
-                 * Her listede 100 kolonun her birinde en az 22 balon
-                 * olmalı. Balon sırası, ekrandaki numaralandırmayla
-                 * aynı olacak şekilde kontrol edilir.
-                 */
                 for (let i = 0; i < 100; i++) {
                     const set = group.sets[i];
 
@@ -2486,16 +2654,6 @@ function createFourListCompareCard(groups) {
                 selectedGroups.push(group);
             }
 
-            /*
-             * Her balon sırası bağımsız işlenir.
-             *
-             * Örnek:
-             * - 1. balon: dört listede de 1. sıradaki balon mavi değilse
-             *   kolon koşulu sağlar.
-             * - 2. balon: dört listede de 2. sıradaki balon mavi değilse
-             *   kolon koşulu sağlar.
-             * - Aynı kontrol 22. balona kadar devam eder.
-             */
             const positionResults = [];
 
             for (let position = 1; position <= 22; position++) {
@@ -2746,6 +2904,8 @@ async function openResultPanel(
 
     const targetMax = max || group.max;
     const resDiv = getEl("resultNumbers");
+    const bulkTextarea = getEl("bulkResultNumbers");
+    const bulkStatus = getEl("bulk-result-status");
 
     if (!resDiv) return;
 
@@ -2765,6 +2925,18 @@ async function openResultPanel(
     };
 
     resDiv.innerHTML = "";
+
+    /*
+     * Yeni liste veya panel açıldığında önceki toplu giriş metnini
+     * temizle; başka bir listeye ait sayılar yanlışlıkla uygulanmasın.
+     */
+    if (bulkTextarea) {
+        bulkTextarea.value = "";
+    }
+
+    if (bulkStatus) {
+        bulkStatus.textContent = "";
+    }
 
     const createRow = (title, limit, isJoker) => {
         const h = document.createElement("h4");
@@ -2886,20 +3058,27 @@ function toggleResult(el, id, val, isJoker) {
     if (index !== -1) {
         list.splice(index, 1);
         el.classList.remove("result-selected");
-        return;
+    } else {
+        if (list.length >= limit) {
+            alert(
+                isJoker
+                    ? `En fazla ${limit} joker sayısı seçebilirsiniz!`
+                    : `En fazla ${limit} ana sayı seçebilirsiniz!`
+            );
+            return;
+        }
+
+        list.push(val);
+        el.classList.add("result-selected");
     }
 
-    if (list.length >= limit) {
-        alert(
-            isJoker
-                ? `En fazla ${limit} joker sayısı seçebilirsiniz!`
-                : `En fazla ${limit} ana sayı seçebilirsiniz!`
-        );
-        return;
-    }
+    const status = getEl("bulk-result-status");
 
-    list.push(val);
-    el.classList.add("result-selected");
+    if (status) {
+        status.textContent =
+            `Ana sayı seçimi: ${panelDraft.main.length}/${panelSelectionLimits.main}. ` +
+            `Joker sayı seçimi: ${panelDraft.joker.length}/${panelSelectionLimits.joker}.`;
+    }
 }
 
 async function deleteGroup(id) {
@@ -2943,6 +3122,17 @@ function closeResultPanel(forceBack = true) {
     panelDraftGroupId = null;
     panelSelectionLimits = null;
     panelBaseVersion = null;
+
+    const bulkTextarea = getEl("bulkResultNumbers");
+    const bulkStatus = getEl("bulk-result-status");
+
+    if (bulkTextarea) {
+        bulkTextarea.value = "";
+    }
+
+    if (bulkStatus) {
+        bulkStatus.textContent = "";
+    }
 
     if (forceBack && isPanelState) {
         const currentGroupId = String(currentState.groupId);
@@ -3049,6 +3239,17 @@ async function confirmResult() {
 
         toggleBodyScroll(false);
 
+        const bulkTextarea = getEl("bulkResultNumbers");
+        const bulkStatus = getEl("bulk-result-status");
+
+        if (bulkTextarea) {
+            bulkTextarea.value = "";
+        }
+
+        if (bulkStatus) {
+            bulkStatus.textContent = "";
+        }
+
         panelPreviousState = null;
 
         history.replaceState(
@@ -3097,13 +3298,24 @@ function cleanResult() {
         .forEach(ball => {
             ball.classList.remove("result-selected");
         });
+
+    const bulkTextarea = getEl("bulkResultNumbers");
+    const bulkStatus = getEl("bulk-result-status");
+
+    if (bulkTextarea) {
+        bulkTextarea.value = "";
+    }
+
+    if (bulkStatus) {
+        bulkStatus.textContent = "Tüm ana sayı ve joker seçimleri temizlendi.";
+    }
 }
 
 async function clearGeneratedSets() {
 
     if (
         isProcessing ||
-        !confirm("Üretilen tüm kolonlar temizlensin mi?")
+        !confirm("Üretilen tüm kolonlar temizlensin?")
     ) return;
 
     try {
