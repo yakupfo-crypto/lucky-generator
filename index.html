@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -13,7 +14,6 @@
     .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
     input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
 
-    /* Sonuç Gir toplu sayı yapıştırma alanı */
     #bulkResultNumbers {
         width: 100%;
         min-height: 90px;
@@ -81,7 +81,6 @@
 <div id="resultPanel">
     <h3 style="margin-top:0;">Sonuç Gir <span id="close-panel-btn" style="float:right;cursor:pointer; padding: 5px;">×</span></h3>
 
-    <!-- Toplu sayı yapıştırma alanı -->
     <div>
         <label for="bulkResultNumbers">
             <b>Sonuç Sayılarını Toplu Yapıştır</b>
@@ -208,18 +207,6 @@ function escapeHTML(str) {
     return p.innerHTML;
 }
 
-/*
- * SONUÇ SAYILARINI TOPLU UYGULA
- *
- * Boşluk, satır sonu, virgül ve noktalı virgülle ayrılmış
- * sayıları okur ve ana sayı balonlarını işaretler.
- *
- * Joker sonuçları bu alan üzerinden otomatik seçilmez;
- * joker balonları kendi bölümünden seçilebilir.
- *
- * Bu fonksiyon global kapsamda tanımlanmıştır. Böylece
- * window.onload içindeki olay dinleyicisi fonksiyona erişebilir.
- */
 function applyBulkResultNumbers() {
     if (
         !panelDraft ||
@@ -243,13 +230,6 @@ function applyBulkResultNumbers() {
         return;
     }
 
-    /*
-     * Örnek kabul edilen biçimler:
-     * 1 2 5 10
-     * 1, 2, 5, 10
-     * 1; 2; 5; 10
-     * Her satıra bir sayı
-     */
     const tokens = raw.split(/[\s,;]+/).filter(Boolean);
 
     const values = [];
@@ -284,16 +264,8 @@ function applyBulkResultNumbers() {
         value => value > mainMax
     );
 
-    /*
-     * Ana seçim listesini toplu yapıştırılan sayılara göre güncelle.
-     * Kaydetme sırasında mevcut perSet kuralı yine uygulanır.
-     */
     panelDraft.main = [...mainValues];
 
-    /*
-     * Yalnızca ana sayı bölümündeki balonları güncelle.
-     * Joker balonlarının seçimleri değiştirilmez.
-     */
     document
         .querySelectorAll("#resultNumbers .ball")
         .forEach(ball => {
@@ -1724,7 +1696,6 @@ window.onload = async () => {
         cleanResult
     );
 
-    /* Toplu yapıştırma düğmesinin olay dinleyicisi */
     getEl("btn-apply-bulk-results").addEventListener(
         "click",
         applyBulkResultNumbers
@@ -2356,18 +2327,6 @@ async function renderMySetsList(reqId) {
     );
 }
 
-/*
- * DÖRT LİSTEYİ OTOMATİK KARŞILAŞTIR
- *
- * Ekranda gösterilen balon sırası:
- * 1. Önce set.numbers dizisindeki balonlar
- * 2. Ardından set.jokers dizisindeki joker balonları
- *
- * Her sıra bağımsız karşılaştırılır.
- * Bir sıradaki balonun mavi olup olmadığı kendi sonuç grubuna
- * göre kontrol edilir: ana balon results.main, joker balonu
- * results.joker ile değerlendirilir.
- */
 function createFourListCompareCard(groups) {
     const card = document.createElement("div");
     card.className = "card";
@@ -2378,7 +2337,7 @@ function createFourListCompareCard(groups) {
 
     const description = document.createElement("p");
     description.textContent =
-        "Her kolondaki 1–22 sıralı balonları ayrı ayrı karşılaştırır. Her balon sırası için dört listede de ilgili balonun mavi olmadığı kolonları bulur; sonuçları tek ve çift kolonlar olarak ayrıca gösterir.";
+        "Her kolondaki 1–22 sıralı balonları ayrı ayrı karşılaştırır. Her balon sırası için dört listede de ilgili balonun mavi olmadığı kolonları bulur.";
     card.appendChild(description);
 
     const selectors = [];
@@ -2423,7 +2382,11 @@ function createFourListCompareCard(groups) {
     function getBallAtPosition(group, columnIndex, position) {
         const set = group.sets[columnIndex];
 
-        if (!set || !Array.isArray(set.numbers) || !Array.isArray(set.jokers)) {
+        if (
+            !set ||
+            !Array.isArray(set.numbers) ||
+            !Array.isArray(set.jokers)
+        ) {
             return null;
         }
 
@@ -2475,86 +2438,10 @@ function createFourListCompareCard(groups) {
             group.results.main.includes(ball.number);
     }
 
-    function getOddEvenStats(columnNumbers) {
-        const oddColumns = columnNumbers.filter(number => number % 2 === 1);
-        const evenColumns = columnNumbers.filter(number => number % 2 === 0);
-
-        const oddSum = oddColumns.reduce(
-            (total, number) => total + number,
-            0
-        );
-
-        const evenSum = evenColumns.reduce(
-            (total, number) => total + number,
-            0
-        );
-
-        const oddAverage = oddColumns.length > 0
-            ? oddSum / oddColumns.length
-            : null;
-
-        const evenAverage = evenColumns.length > 0
-            ? evenSum / evenColumns.length
-            : null;
-
-        return {
-            oddColumns,
-            evenColumns,
-            oddSum,
-            evenSum,
-            oddAverage,
-            evenAverage
-        };
-    }
-
-    function formatNumber(number) {
-        return number.toLocaleString("tr-TR", {
-            maximumFractionDigits: 4
-        });
-    }
-
     function formatColumnList(columns) {
         return columns.length > 0
             ? columns.join(", ")
             : "Yok";
-    }
-
-    function formatStats(columns, label) {
-        const stats = getOddEvenStats(columns);
-
-        return (
-            `${label} SAYILI KOLONLAR\n` +
-            `${label} sayılı kolon sayısı: ${
-                label === "TEK"
-                    ? stats.oddColumns.length
-                    : stats.evenColumns.length
-            }\n` +
-            `${label} sayılı kolon numaraları:\n${
-                label === "TEK"
-                    ? formatColumnList(stats.oddColumns)
-                    : formatColumnList(stats.evenColumns)
-            }\n` +
-            `${label} sayılı kolon numaralarının toplamı: ${
-                formatNumber(
-                    label === "TEK"
-                        ? stats.oddSum
-                        : stats.evenSum
-                )
-            }\n` +
-            `${label} sayılı kolon numaralarının ortalaması: ${
-                (
-                    label === "TEK"
-                        ? stats.oddAverage
-                        : stats.evenAverage
-                ) !== null
-                    ? formatNumber(
-                        label === "TEK"
-                            ? stats.oddAverage
-                            : stats.evenAverage
-                    )
-                    : "Hesaplanamadı (kolon yok)"
-            }`
-        );
     }
 
     compareButton.addEventListener("click", async () => {
@@ -2690,7 +2577,6 @@ function createFourListCompareCard(groups) {
 
             for (const result of positionResults) {
                 const matchingColumns = result.matchingColumns;
-                const stats = getOddEvenStats(matchingColumns);
 
                 lines.push("========================================");
                 lines.push(`${result.position}. BALON SIRASI`);
@@ -2702,42 +2588,6 @@ function createFourListCompareCard(groups) {
 
                 lines.push("Koşulu sağlayan kolon numaraları:");
                 lines.push(formatColumnList(matchingColumns));
-                lines.push("");
-
-                lines.push("TEK SAYILI KOLONLAR");
-                lines.push(
-                    `Tek sayılı kolon sayısı: ${stats.oddColumns.length}`
-                );
-                lines.push("Tek sayılı kolon numaraları:");
-                lines.push(formatColumnList(stats.oddColumns));
-                lines.push(
-                    `Tek sayılı kolon numaralarının toplamı: ${formatNumber(stats.oddSum)}`
-                );
-                lines.push(
-                    `Tek sayılı kolon numaralarının ortalaması: ${
-                        stats.oddAverage !== null
-                            ? formatNumber(stats.oddAverage)
-                            : "Hesaplanamadı (kolon yok)"
-                    }`
-                );
-                lines.push("");
-
-                lines.push("ÇİFT SAYILI KOLONLAR");
-                lines.push(
-                    `Çift sayılı kolon sayısı: ${stats.evenColumns.length}`
-                );
-                lines.push("Çift sayılı kolon numaraları:");
-                lines.push(formatColumnList(stats.evenColumns));
-                lines.push(
-                    `Çift sayılı kolon numaralarının toplamı: ${formatNumber(stats.evenSum)}`
-                );
-                lines.push(
-                    `Çift sayılı kolon numaralarının ortalaması: ${
-                        stats.evenAverage !== null
-                            ? formatNumber(stats.evenAverage)
-                            : "Hesaplanamadı (kolon yok)"
-                    }`
-                );
                 lines.push("");
             }
 
@@ -2926,10 +2776,6 @@ async function openResultPanel(
 
     resDiv.innerHTML = "";
 
-    /*
-     * Yeni liste veya panel açıldığında önceki toplu giriş metnini
-     * temizle; başka bir listeye ait sayılar yanlışlıkla uygulanmasın.
-     */
     if (bulkTextarea) {
         bulkTextarea.value = "";
     }
