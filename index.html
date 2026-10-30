@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -2578,16 +2577,43 @@ function createFourListCompareCard(groups) {
             for (const result of positionResults) {
                 const matchingColumns = result.matchingColumns;
 
+                const matchingCount = matchingColumns.length;
+
+                const columnSum = matchingColumns.reduce(
+                    (total, columnNumber) => total + columnNumber,
+                    0
+                );
+
                 lines.push("========================================");
                 lines.push(`${result.position}. BALON SIRASI`);
                 lines.push("========================================");
 
                 lines.push(
-                    `Koşulu sağlayan toplam kolon sayısı: ${matchingColumns.length}`
+                    `Koşulu sağlayan toplam kolon sayısı: ${matchingCount}`
                 );
 
                 lines.push("Koşulu sağlayan kolon numaraları:");
                 lines.push(formatColumnList(matchingColumns));
+
+                lines.push(
+                    `Kolon numaralarının toplamı: ${columnSum}`
+                );
+
+                if (matchingCount > 0) {
+                    const average = columnSum / matchingCount;
+
+                    lines.push(
+                        `Ortalama hesaplama: ${columnSum} / ${matchingCount} = ${average.toLocaleString("tr-TR", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        })}`
+                    );
+                } else {
+                    lines.push(
+                        "Ortalama hesaplama: Yapılamadı (koşulu sağlayan kolon yok)."
+                    );
+                }
+
                 lines.push("");
             }
 
