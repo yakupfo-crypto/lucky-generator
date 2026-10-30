@@ -2561,9 +2561,24 @@ function createFourListCompareCard(groups) {
                     }
                 }
 
+                const matchingCount = matchingColumns.length;
+
+                const columnSum = matchingColumns.reduce(
+                    (total, columnNumber) => total + columnNumber,
+                    0
+                );
+
+                const average =
+                    matchingCount > 0
+                        ? columnSum / matchingCount
+                        : null;
+
                 positionResults.push({
                     position,
-                    matchingColumns
+                    matchingColumns,
+                    matchingCount,
+                    columnSum,
+                    average
                 });
             }
 
@@ -2574,36 +2589,49 @@ function createFourListCompareCard(groups) {
             lines.push("Koşul: Aynı kolon numarasındaki dört listede de ilgili sıradaki balon mavi olmamalıdır.");
             lines.push("");
 
+            lines.push("========================================");
+            lines.push("ORTALAMA SONUÇLARI ÖZETİ");
+            lines.push("========================================");
+
             for (const result of positionResults) {
-                const matchingColumns = result.matchingColumns;
+                const averageText =
+                    result.average !== null
+                        ? result.average.toLocaleString("tr-TR", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        })
+                        : "Hesaplanamadı";
 
-                const matchingCount = matchingColumns.length;
-
-                const columnSum = matchingColumns.reduce(
-                    (total, columnNumber) => total + columnNumber,
-                    0
+                lines.push(
+                    `${result.position}. Balon Sırası : ${averageText}`
                 );
+            }
 
+            lines.push("");
+            lines.push("========================================");
+            lines.push("AYRINTILI KARŞILAŞTIRMA SONUÇLARI");
+            lines.push("========================================");
+            lines.push("");
+
+            for (const result of positionResults) {
                 lines.push("========================================");
                 lines.push(`${result.position}. BALON SIRASI`);
                 lines.push("========================================");
 
                 lines.push(
-                    `Koşulu sağlayan toplam kolon sayısı: ${matchingCount}`
+                    `Koşulu sağlayan toplam kolon sayısı: ${result.matchingCount}`
                 );
 
                 lines.push("Koşulu sağlayan kolon numaraları:");
-                lines.push(formatColumnList(matchingColumns));
+                lines.push(formatColumnList(result.matchingColumns));
 
                 lines.push(
-                    `Kolon numaralarının toplamı: ${columnSum}`
+                    `Kolon numaralarının toplamı: ${result.columnSum}`
                 );
 
-                if (matchingCount > 0) {
-                    const average = columnSum / matchingCount;
-
+                if (result.average !== null) {
                     lines.push(
-                        `Ortalama hesaplama: ${columnSum} / ${matchingCount} = ${average.toLocaleString("tr-TR", {
+                        `Ortalama hesaplama: ${result.columnSum} / ${result.matchingCount} = ${result.average.toLocaleString("tr-TR", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2
                         })}`
