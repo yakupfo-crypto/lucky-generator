@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -16,23 +17,6 @@
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-
-    .ball-item{
-        display:flex;
-        flex-direction:column;
-        align-items:center;
-        gap:3px;
-    }
-
-    .ball-order{
-        font-size:13px;
-        font-weight:bold;
-        color:#333;
-        line-height:16px;
-        text-align:center;
-        min-height:16px;
-    }
-
     .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select: none; transition: opacity 0.2s; }
     .ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
     .ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
@@ -48,6 +32,23 @@
     @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
     #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.6); z-index: 4000; cursor: wait; }
     #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; box-sizing: border-box; }
+
+    .ball-column-first{
+        position:relative;
+    }
+
+    .ball-column-order{
+        position:absolute;
+        top:-19px;
+        left:50%;
+        transform:translateX(-50%);
+        font-size:13px;
+        font-weight:700;
+        line-height:14px;
+        color:#333;
+        white-space:nowrap;
+        pointer-events:none;
+    }
 </style>
 </head>
 <body>
@@ -2277,7 +2278,7 @@ async function renderViewGroup(group, reqId) {
     view.appendChild(container);
 }
 
-function createBallsUI(set, results = null, orderNumber = null) {
+function createBallsUI(set, results = null, columnOrder = null) {
 
     const row = document.createElement("div");
     row.className = "ball-row";
@@ -2293,25 +2294,17 @@ function createBallsUI(set, results = null, orderNumber = null) {
 
         ball.textContent = n;
 
-        if (index === 0 && orderNumber !== null) {
+        if (index === 0 && columnOrder !== null) {
+            ball.classList.add("ball-column-first");
 
-            const item = document.createElement("div");
-            item.className = "ball-item";
+            const order = document.createElement("span");
+            order.className = "ball-column-order";
+            order.textContent = columnOrder;
 
-            const order = document.createElement("div");
-            order.className = "ball-order";
-            order.textContent = orderNumber;
-
-            item.appendChild(order);
-            item.appendChild(ball);
-
-            row.appendChild(item);
-
-        } else {
-
-            row.appendChild(ball);
-
+            ball.appendChild(order);
         }
+
+        row.appendChild(ball);
     });
 
     set.jokers.forEach(j => {
