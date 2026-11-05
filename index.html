@@ -12,35 +12,27 @@
     .container{ padding:20px; }
     .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
     input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
-
-    #bulkResultNumbers {
-        width: 100%;
-        min-height: 90px;
-        box-sizing: border-box;
-        padding: 10px;
-        margin: 8px 0;
-        border: 1px solid #bbb;
-        border-radius: 8px;
-        font-size: 16px;
-        resize: vertical;
-        font-family: Arial, sans-serif;
-    }
-
-    #bulk-result-status {
-        font-size: 13px;
-        margin: 5px 0 10px;
-        color: #555;
-        line-height: 1.5;
-        overflow-wrap: anywhere;
-    }
-
     button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-    .ball-item{ display:flex; flex-direction:column; align-items:center; gap:4px; flex:0 0 38px; }
-    .ball-order{ font-size:11px; line-height:12px; font-weight:700; color:#666; text-align:center; }
+
+    .ball-item{
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:3px;
+    }
+
+    .ball-order{
+        font-size:13px;
+        font-weight:bold;
+        color:#333;
+        line-height:16px;
+        text-align:center;
+        min-height:16px;
+    }
+
     .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select: none; transition: opacity 0.2s; }
     .ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
     .ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
@@ -79,27 +71,7 @@
 
 <div id="resultPanel">
     <h3 style="margin-top:0;">Sonuç Gir <span id="close-panel-btn" style="float:right;cursor:pointer; padding: 5px;">×</span></h3>
-
-    <div>
-        <label for="bulkResultNumbers">
-            <b>Sonuç Sayılarını Toplu Yapıştır</b>
-        </label>
-
-        <textarea
-            id="bulkResultNumbers"
-            placeholder="Örnek: 1 2 5 10 12 14 24 28 30 31 32 33 39 47 48 53 66 68 71 74 76 77"
-            aria-describedby="bulk-result-status"
-        ></textarea>
-
-        <button type="button" id="btn-apply-bulk-results">
-            Yapıştırılan Sayıları Renklendir
-        </button>
-
-        <div id="bulk-result-status" aria-live="polite"></div>
-    </div>
-
     <div id="resultNumbers"></div>
-
     <div style="margin-top: 15px;">
         <button id="btn-confirm-result">Tamamla</button>
         <button id="btn-clean-result" style="background:#999;margin-top:8px;">Tümünü Temizle</button>
@@ -204,111 +176,6 @@ function escapeHTML(str) {
     p.textContent = str;
 
     return p.innerHTML;
-}
-
-function applyBulkResultNumbers() {
-    if (
-        !panelDraft ||
-        !panelSelectionLimits ||
-        !panelDraftGroupId ||
-        String(history.state?.groupId) !== panelDraftGroupId ||
-        history.state?.page !== "panel"
-    ) {
-        return;
-    }
-
-    const textarea = getEl("bulkResultNumbers");
-    const status = getEl("bulk-result-status");
-
-    if (!textarea || !status) return;
-
-    const raw = textarea.value.trim();
-
-    if (!raw) {
-        status.textContent = "Lütfen sayı listesini yapıştırın.";
-        return;
-    }
-
-    const tokens = raw.split(/[\s,;]+/).filter(Boolean);
-
-    const values = [];
-
-    for (const token of tokens) {
-        if (!/^\d+$/.test(token)) {
-            status.textContent =
-                `Geçersiz değer: "${token}". Yalnızca pozitif tam sayılar girin.`;
-            return;
-        }
-
-        const value = Number(token);
-
-        if (!Number.isSafeInteger(value) || value < 1) {
-            status.textContent =
-                `Geçersiz sayı: "${token}". Yalnızca pozitif tam sayılar girin.`;
-            return;
-        }
-
-        values.push(value);
-    }
-
-    const uniqueValues = [...new Set(values)];
-
-    const mainMax = panelSelectionLimits.max;
-
-    const mainValues = uniqueValues.filter(
-        value => value <= mainMax
-    );
-
-    const outOfRangeValues = uniqueValues.filter(
-        value => value > mainMax
-    );
-
-    panelDraft.main = [...mainValues];
-
-    document
-        .querySelectorAll("#resultNumbers .ball")
-        .forEach(ball => {
-            if (ball.classList.contains("joker")) {
-                return;
-            }
-
-            const number = Number(ball.textContent);
-
-            ball.classList.toggle(
-                "result-selected",
-                panelDraft.main.includes(number)
-            );
-        });
-
-    const messages = [];
-
-    messages.push(
-        `${mainValues.length} ana sayı balonu renklendirildi.`
-    );
-
-    if (uniqueValues.length !== values.length) {
-        messages.push("Tekrarlanan sayılar bir kez değerlendirildi.");
-    }
-
-    if (outOfRangeValues.length > 0) {
-        messages.push(
-            `Ana sayı aralığı (${mainMax}) dışında kalan sayılar: ${outOfRangeValues.join(", ")}.`
-        );
-    }
-
-    const requiredMainCount = panelSelectionLimits.main;
-
-    if (mainValues.length !== requiredMainCount) {
-        messages.push(
-            `Kaydetmek için tam ${requiredMainCount} ana sayı seçilmelidir.`
-        );
-    } else {
-        messages.push(
-            "Ana sayı adedi kayıt için uygun."
-        );
-    }
-
-    status.textContent = messages.join(" ");
 }
 
 const CryptoEngine = {
@@ -1214,6 +1081,7 @@ async function atomicSave(item, options = {}) {
     });
 }
 
+/* Yeni: Grup kaydı ve taslak silme tek atomik işlemde yapılır. */
 async function atomicSaveGroupAndDeleteDraft(item, draftId) {
     return withLock(async () => {
 
@@ -1695,11 +1563,6 @@ window.onload = async () => {
         cleanResult
     );
 
-    getEl("btn-apply-bulk-results").addEventListener(
-        "click",
-        applyBulkResultNumbers
-    );
-
     getEl("import-file-input").addEventListener(
         "change",
         handleFileImport
@@ -1880,6 +1743,11 @@ async function renderGeneratePage() {
     let dSets;
     let dInputs;
 
+    /*
+     * Taslak okuma hatası ile taslağın gerçekten bulunmaması
+     * birbirinden ayrılır. Okuma başarısızsa generatedSets
+     * değiştirilmez ve mevcut veri boşaltılmaz.
+     */
     try {
         dSets = await getDraft("tempSets");
 
@@ -2010,7 +1878,7 @@ function renderGeneratedSetsList() {
         card.className = "card";
         card.innerHTML = `<b>${i+1}. Kolon</b>`;
 
-        card.appendChild(createBallsUI(set));
+        card.appendChild(createBallsUI(set, null, i + 1));
 
         resultsDiv.appendChild(card);
     });
@@ -2205,6 +2073,11 @@ async function saveGroup() {
         setLoading(true);
         isProcessing = true;
 
+        /*
+         * Grup kaydı ve tempSets taslağının silinmesi aynı
+         * IndexedDB transaction'ında tamamlanır.
+         * İkisi birlikte başarılı olur veya ikisi de geri alınır.
+         */
         await atomicSaveGroupAndDeleteDraft(group, "tempSets");
 
         generatedSets = [];
@@ -2235,6 +2108,11 @@ async function renderMySetsList(reqId) {
 
     let groups;
 
+    /*
+     * Veritabanı okuma hatası boş liste olarak yorumlanmaz.
+     * Gerçekten hiç kayıt yoksa boş liste mesajı gösterilir;
+     * okuma başarısızsa ayrı hata mesajı gösterilir.
+     */
     try {
         groups = await getAllGroups();
     } catch(e) {
@@ -2313,8 +2191,6 @@ async function renderMySetsList(reqId) {
 
     view.appendChild(container);
 
-    container.appendChild(createFourListCompareCard(groups));
-
     getEl("btn-export-backup").addEventListener(
         "click",
         exportBackup
@@ -2324,347 +2200,6 @@ async function renderMySetsList(reqId) {
         "click",
         triggerImport
     );
-}
-
-function createFourListCompareCard(groups) {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const title = document.createElement("b");
-    title.textContent = "Dört Listeyi Otomatik Karşılaştır";
-    card.appendChild(title);
-
-    const description = document.createElement("p");
-    description.textContent =
-        "Her kolondaki 1–22 sıralı balonları ayrı ayrı karşılaştırır. Her balon sırası için dört listede de ilgili balonun mavi olmadığı kolonları bulur.";
-    card.appendChild(description);
-
-    const selectors = [];
-
-    for (let i = 0; i < 4; i++) {
-        const label = document.createElement("label");
-        label.textContent = `${i + 1}. Liste`;
-        label.style.display = "block";
-        label.style.marginTop = "10px";
-
-        const select = document.createElement("select");
-        select.style.width = "100%";
-        select.style.boxSizing = "border-box";
-        select.style.padding = "10px";
-        select.style.marginTop = "5px";
-
-        const placeholder = document.createElement("option");
-        placeholder.value = "";
-        placeholder.textContent = "Liste seçin";
-        select.appendChild(placeholder);
-
-        groups.forEach(group => {
-            const option = document.createElement("option");
-            option.value = String(group.id);
-            option.textContent = group.name;
-            select.appendChild(option);
-        });
-
-        selectors.push(select);
-        card.append(label, select);
-    }
-
-    const compareButton = document.createElement("button");
-    compareButton.textContent = "100 Kolonu Karşılaştır";
-
-    const output = document.createElement("div");
-    output.style.marginTop = "15px";
-    output.style.whiteSpace = "pre-wrap";
-    output.style.overflowWrap = "anywhere";
-    output.style.lineHeight = "1.5";
-
-    function getBallAtPosition(group, columnIndex, position) {
-        const set = group.sets[columnIndex];
-
-        if (
-            !set ||
-            !Array.isArray(set.numbers) ||
-            !Array.isArray(set.jokers)
-        ) {
-            return null;
-        }
-
-        const mainCount = set.numbers.length;
-        const zeroBasedPosition = position - 1;
-
-        if (zeroBasedPosition < mainCount) {
-            const number = Number(set.numbers[zeroBasedPosition]);
-
-            if (!Number.isInteger(number)) {
-                return null;
-            }
-
-            return {
-                number,
-                isJoker: false
-            };
-        }
-
-        const jokerIndex = zeroBasedPosition - mainCount;
-
-        if (jokerIndex < set.jokers.length) {
-            const number = Number(set.jokers[jokerIndex]);
-
-            if (!Number.isInteger(number)) {
-                return null;
-            }
-
-            return {
-                number,
-                isJoker: true
-            };
-        }
-
-        return null;
-    }
-
-    function isBallBlue(group, ball) {
-        if (!ball) {
-            return false;
-        }
-
-        if (ball.isJoker) {
-            return Array.isArray(group.results?.joker) &&
-                group.results.joker.includes(ball.number);
-        }
-
-        return Array.isArray(group.results?.main) &&
-            group.results.main.includes(ball.number);
-    }
-
-    function formatColumnList(columns) {
-        return columns.length > 0
-            ? columns.join(", ")
-            : "Yok";
-    }
-
-    compareButton.addEventListener("click", async () => {
-        output.textContent = "";
-
-        const ids = selectors.map(select => select.value);
-
-        if (ids.some(id => !id)) {
-            alert("Lütfen dört listenin tamamını seçin.");
-            return;
-        }
-
-        if (new Set(ids).size !== 4) {
-            alert("Dört farklı kayıtlı liste seçmelisiniz.");
-            return;
-        }
-
-        compareButton.disabled = true;
-        compareButton.textContent = "Karşılaştırılıyor...";
-
-        try {
-            const selectedGroups = [];
-
-            for (const id of ids) {
-                const group = await getGroupById(id);
-
-                if (!group) {
-                    throw new Error(
-                        "Seçilen listelerden biri okunamadı. Kayıtlarınızı kontrol edip tekrar deneyin."
-                    );
-                }
-
-                if (group.sets.length < 100) {
-                    throw new Error(
-                        `"${group.name}" listesinde 100 kolon bulunmuyor.`
-                    );
-                }
-
-                if (
-                    !Array.isArray(group.results?.main) ||
-                    group.results.main.length !== group.perSet
-                ) {
-                    throw new Error(
-                        `"${group.name}" listesine ana sonuçlar eksik girilmiş. Önce bu listenin ana sonuçlarını kaydedin.`
-                    );
-                }
-
-                if (
-                    group.jokerPerSet > 0 &&
-                    (
-                        !Array.isArray(group.results?.joker) ||
-                        group.results.joker.length !== group.jokerPerSet
-                    )
-                ) {
-                    throw new Error(
-                        `"${group.name}" listesine joker sonuçları eksik girilmiş. Önce bu listenin joker sonuçlarını kaydedin.`
-                    );
-                }
-
-                for (let i = 0; i < 100; i++) {
-                    const set = group.sets[i];
-
-                    if (
-                        !set ||
-                        !Array.isArray(set.numbers) ||
-                        !Array.isArray(set.jokers)
-                    ) {
-                        throw new Error(
-                            `"${group.name}" listesinin ${i + 1}. kolonundaki balonlar okunamadı.`
-                        );
-                    }
-
-                    const totalBalls =
-                        set.numbers.length + set.jokers.length;
-
-                    if (totalBalls < 22) {
-                        throw new Error(
-                            `"${group.name}" listesinin ${i + 1}. kolonunda ${totalBalls} balon var. Karşılaştırma için her kolonda 22 balon bulunmalıdır.`
-                        );
-                    }
-
-                    for (let position = 1; position <= 22; position++) {
-                        const ball = getBallAtPosition(
-                            group,
-                            i,
-                            position
-                        );
-
-                        if (!ball) {
-                            throw new Error(
-                                `"${group.name}" listesinin ${i + 1}. kolonundaki ${position}. balon okunamadı.`
-                            );
-                        }
-                    }
-                }
-
-                selectedGroups.push(group);
-            }
-
-            const positionResults = [];
-
-            for (let position = 1; position <= 22; position++) {
-                const matchingColumns = [];
-
-                for (let columnIndex = 0; columnIndex < 100; columnIndex++) {
-                    const allFourNotBlue = selectedGroups.every(group => {
-                        const ball = getBallAtPosition(
-                            group,
-                            columnIndex,
-                            position
-                        );
-
-                        return ball !== null && !isBallBlue(group, ball);
-                    });
-
-                    if (allFourNotBlue) {
-                        matchingColumns.push(columnIndex + 1);
-                    }
-                }
-
-                const matchingCount = matchingColumns.length;
-
-                const columnSum = matchingColumns.reduce(
-                    (total, columnNumber) => total + columnNumber,
-                    0
-                );
-
-                const average =
-                    matchingCount > 0
-                        ? columnSum / matchingCount
-                        : null;
-
-                positionResults.push({
-                    position,
-                    matchingColumns,
-                    matchingCount,
-                    columnSum,
-                    average
-                });
-            }
-
-            const lines = [];
-
-            lines.push("DÖRT LİSTE KARŞILAŞTIRMA SONUÇLARI");
-            lines.push("Her balon sırası birbirinden bağımsız karşılaştırılmıştır.");
-            lines.push("Koşul: Aynı kolon numarasındaki dört listede de ilgili sıradaki balon mavi olmamalıdır.");
-            lines.push("");
-
-            lines.push("========================================");
-            lines.push("ORTALAMA SONUÇLARI ÖZETİ");
-            lines.push("========================================");
-
-            for (const result of positionResults) {
-                const averageText =
-                    result.average !== null
-                        ? result.average.toLocaleString("tr-TR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        })
-                        : "Hesaplanamadı";
-
-                lines.push(
-                    `${result.position}. Balon Sırası : ${averageText}`
-                );
-            }
-
-            lines.push("");
-            lines.push("========================================");
-            lines.push("AYRINTILI KARŞILAŞTIRMA SONUÇLARI");
-            lines.push("========================================");
-            lines.push("");
-
-            for (const result of positionResults) {
-                lines.push("========================================");
-                lines.push(`${result.position}. BALON SIRASI`);
-                lines.push("========================================");
-
-                lines.push(
-                    `Koşulu sağlayan toplam kolon sayısı: ${result.matchingCount}`
-                );
-
-                lines.push("Koşulu sağlayan kolon numaraları:");
-                lines.push(formatColumnList(result.matchingColumns));
-
-                lines.push(
-                    `Kolon numaralarının toplamı: ${result.columnSum}`
-                );
-
-                if (result.average !== null) {
-                    lines.push(
-                        `Ortalama hesaplama: ${result.columnSum} / ${result.matchingCount} = ${result.average.toLocaleString("tr-TR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        })}`
-                    );
-                } else {
-                    lines.push(
-                        "Ortalama hesaplama: Yapılamadı (koşulu sağlayan kolon yok)."
-                    );
-                }
-
-                lines.push("");
-            }
-
-            output.textContent = lines.join("\n");
-
-        } catch (error) {
-            alert(error.message || "Karşılaştırma yapılamadı.");
-        } finally {
-            compareButton.disabled = false;
-            compareButton.textContent = "100 Kolonu Karşılaştır";
-        }
-    });
-
-    card.append(compareButton, output);
-
-    if (groups.length < 4) {
-        const note = document.createElement("p");
-        note.textContent =
-            "Karşılaştırma için en az dört kayıtlı listeniz olmalı.";
-        card.appendChild(note);
-    }
-
-    return card;
 }
 
 async function renderViewGroup(group, reqId) {
@@ -2742,43 +2277,55 @@ async function renderViewGroup(group, reqId) {
     view.appendChild(container);
 }
 
-function createBallsUI(set, results = null) {
+function createBallsUI(set, results = null, orderNumber = null) {
 
     const row = document.createElement("div");
     row.className = "ball-row";
 
-    let order = 0;
-
-    const addBall = (number, isJoker = false) => {
-        const item = document.createElement("div");
-        item.className = "ball-item";
-
-        const orderLabel = document.createElement("span");
-        orderLabel.className = "ball-order";
-        orderLabel.textContent = String(++order);
-
+    set.numbers.forEach((n, index) => {
         const ball = document.createElement("div");
-        ball.className = isJoker ? "ball joker" : "ball selected";
 
-        if (
-            results &&
-            (
-                isJoker
-                    ? results.joker.includes(Number(number))
-                    : results.main.includes(Number(number))
-            )
-        ) {
+        ball.className = "ball selected";
+
+        if (results && results.main.includes(Number(n))) {
             ball.classList.add("result-selected");
         }
 
-        ball.textContent = number;
+        ball.textContent = n;
 
-        item.append(orderLabel, ball);
-        row.appendChild(item);
-    };
+        if (index === 0 && orderNumber !== null) {
 
-    set.numbers.forEach(number => addBall(number));
-    set.jokers.forEach(number => addBall(number, true));
+            const item = document.createElement("div");
+            item.className = "ball-item";
+
+            const order = document.createElement("div");
+            order.className = "ball-order";
+            order.textContent = orderNumber;
+
+            item.appendChild(order);
+            item.appendChild(ball);
+
+            row.appendChild(item);
+
+        } else {
+
+            row.appendChild(ball);
+
+        }
+    });
+
+    set.jokers.forEach(j => {
+        const ball = document.createElement("div");
+
+        ball.className = "ball joker";
+
+        if (results && results.joker.includes(Number(j))) {
+            ball.classList.add("result-selected");
+        }
+
+        ball.textContent = j;
+        row.appendChild(ball);
+    });
 
     return row;
 }
@@ -2808,8 +2355,6 @@ async function openResultPanel(
 
     const targetMax = max || group.max;
     const resDiv = getEl("resultNumbers");
-    const bulkTextarea = getEl("bulkResultNumbers");
-    const bulkStatus = getEl("bulk-result-status");
 
     if (!resDiv) return;
 
@@ -2829,14 +2374,6 @@ async function openResultPanel(
     };
 
     resDiv.innerHTML = "";
-
-    if (bulkTextarea) {
-        bulkTextarea.value = "";
-    }
-
-    if (bulkStatus) {
-        bulkStatus.textContent = "";
-    }
 
     const createRow = (title, limit, isJoker) => {
         const h = document.createElement("h4");
@@ -2958,27 +2495,20 @@ function toggleResult(el, id, val, isJoker) {
     if (index !== -1) {
         list.splice(index, 1);
         el.classList.remove("result-selected");
-    } else {
-        if (list.length >= limit) {
-            alert(
-                isJoker
-                    ? `En fazla ${limit} joker sayısı seçebilirsiniz!`
-                    : `En fazla ${limit} ana sayı seçebilirsiniz!`
-            );
-            return;
-        }
-
-        list.push(val);
-        el.classList.add("result-selected");
+        return;
     }
 
-    const status = getEl("bulk-result-status");
-
-    if (status) {
-        status.textContent =
-            `Ana sayı seçimi: ${panelDraft.main.length}/${panelSelectionLimits.main}. ` +
-            `Joker sayı seçimi: ${panelDraft.joker.length}/${panelSelectionLimits.joker}.`;
+    if (list.length >= limit) {
+        alert(
+            isJoker
+                ? `En fazla ${limit} joker sayısı seçebilirsiniz!`
+                : `En fazla ${limit} ana sayı seçebilirsiniz!`
+        );
+        return;
     }
+
+    list.push(val);
+    el.classList.add("result-selected");
 }
 
 async function deleteGroup(id) {
@@ -3022,17 +2552,6 @@ function closeResultPanel(forceBack = true) {
     panelDraftGroupId = null;
     panelSelectionLimits = null;
     panelBaseVersion = null;
-
-    const bulkTextarea = getEl("bulkResultNumbers");
-    const bulkStatus = getEl("bulk-result-status");
-
-    if (bulkTextarea) {
-        bulkTextarea.value = "";
-    }
-
-    if (bulkStatus) {
-        bulkStatus.textContent = "";
-    }
 
     if (forceBack && isPanelState) {
         const currentGroupId = String(currentState.groupId);
@@ -3139,17 +2658,6 @@ async function confirmResult() {
 
         toggleBodyScroll(false);
 
-        const bulkTextarea = getEl("bulkResultNumbers");
-        const bulkStatus = getEl("bulk-result-status");
-
-        if (bulkTextarea) {
-            bulkTextarea.value = "";
-        }
-
-        if (bulkStatus) {
-            bulkStatus.textContent = "";
-        }
-
         panelPreviousState = null;
 
         history.replaceState(
@@ -3198,24 +2706,13 @@ function cleanResult() {
         .forEach(ball => {
             ball.classList.remove("result-selected");
         });
-
-    const bulkTextarea = getEl("bulkResultNumbers");
-    const bulkStatus = getEl("bulk-result-status");
-
-    if (bulkTextarea) {
-        bulkTextarea.value = "";
-    }
-
-    if (bulkStatus) {
-        bulkStatus.textContent = "Tüm ana sayı ve joker seçimleri temizlendi.";
-    }
 }
 
 async function clearGeneratedSets() {
 
     if (
         isProcessing ||
-        !confirm("Üretilen tüm kolonlar temizlensin?")
+        !confirm("Üretilen tüm kolonlar temizlensin mi?")
     ) return;
 
     try {
