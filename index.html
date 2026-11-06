@@ -52,44 +52,44 @@
     #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.6); z-index: 4000; cursor: wait; }
     #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; box-sizing: border-box; }
 
-    .comparison-result-group{
-        border-top:1px solid #ddd;
-        padding-top:12px;
+    .four-list-scan-result{
         margin-top:12px;
-    }
-
-    .comparison-result-line{
-        display:flex;
-        flex-wrap:wrap;
-        align-items:center;
-        gap:8px;
-        margin:8px 0;
-        padding:8px;
+        padding:10px;
         background:#f2f6fb;
-        border-radius:6px;
+        border-radius:8px;
+        overflow-wrap:anywhere;
     }
 
-    .comparison-order-number{
-        min-width:32px;
-        padding:6px 4px;
-        text-align:center;
-        font-weight:bold;
-        color:#1976d2;
+    .four-list-scan-column{
+        margin-top:10px;
+        padding:10px;
         background:white;
         border:1px solid #ddd;
+        border-radius:7px;
+    }
+
+    .four-list-scan-match{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin-top:8px;
+    }
+
+    .four-list-scan-number{
+        min-width:30px;
+        padding:6px 8px;
         border-radius:5px;
+        background:#e3f2fd;
+        color:#1565c0;
+        text-align:center;
+        font-weight:bold;
+        box-sizing:border-box;
     }
 
-    .comparison-column-label{
-        width:100%;
-        font-size:12px;
-        color:#555;
-    }
-
-    .comparison-empty{
-        color:#666;
-        font-size:14px;
-        padding:10px 0;
+    .four-list-scan-empty{
+        color:#777;
+        font-size:13px;
+        margin-top:8px;
     }
 </style>
 </head>
@@ -2132,222 +2132,6 @@ async function saveGroup() {
     }
 }
 
-/* Dört kayıtlı listeyi adlarına göre bulur. */
-function findFourComparisonGroups(groups) {
-    const requiredNames = ["bir", "iki", "üç", "dört"];
-
-    const normalizeName = (name) =>
-        String(name || "")
-            .trim()
-            .toLocaleLowerCase("tr-TR");
-
-    return requiredNames.map(name =>
-        groups.find(group =>
-            normalizeName(group.name) === name
-        ) || null
-    );
-}
-
-/* Bir kolonda mavi balonların arasında tam dört gri balon arar. */
-function findExactFourGreyRuns(set, selectedNumbers) {
-    if (
-        !set ||
-        !Array.isArray(set.numbers) ||
-        !Array.isArray(selectedNumbers)
-    ) {
-        return [];
-    }
-
-    const numbers = set.numbers;
-    const selected = new Set(
-        selectedNumbers.map(Number)
-    );
-
-    const matches = [];
-
-    let index = 0;
-
-    while (index < numbers.length) {
-
-        if (!selected.has(Number(numbers[index]))) {
-            index++;
-            continue;
-        }
-
-        const firstBlueIndex = index;
-        let nextBlueIndex = index + 1;
-
-        while (
-            nextBlueIndex < numbers.length &&
-            !selected.has(Number(numbers[nextBlueIndex]))
-        ) {
-            nextBlueIndex++;
-        }
-
-        const greyCount =
-            nextBlueIndex - firstBlueIndex - 1;
-
-        if (
-            greyCount === 4 &&
-            nextBlueIndex < numbers.length &&
-            selected.has(Number(numbers[nextBlueIndex]))
-        ) {
-            matches.push([
-                firstBlueIndex + 2,
-                firstBlueIndex + 3,
-                firstBlueIndex + 4,
-                firstBlueIndex + 5
-            ]);
-        }
-
-        index = nextBlueIndex;
-    }
-
-    return matches;
-}
-
-/* Dört listenin 100 kolonunu tarar ve sonuçları ayrı bölümde gösterir. */
-function runFourListComparison(groups) {
-    const requiredGroups = findFourComparisonGroups(groups);
-
-    const missingNames = ["bir", "iki", "üç", "dört"]
-        .filter((name, index) => !requiredGroups[index]);
-
-    if (missingNames.length > 0) {
-        alert(
-            "Karşılaştırma için şu kayıtlı listeler bulunamadı: " +
-            missingNames.join(", ") +
-            ". Liste adlarını kontrol edin."
-        );
-        return;
-    }
-
-    const shortGroups = requiredGroups.filter(
-        group => group.sets.length < 100
-    );
-
-    if (shortGroups.length > 0) {
-        alert(
-            "Dört listenin de en az 100 kolonu olmalıdır. " +
-            "Eksik kolon bulunan listeler: " +
-            shortGroups.map(group => group.name).join(", ")
-        );
-        return;
-    }
-
-    const resultCard = document.createElement("div");
-    resultCard.className = "card";
-    resultCard.id = "four-list-comparison-results";
-
-    const title = document.createElement("b");
-    title.textContent = "Dört Liste Karşılaştırma Sonuçları";
-    resultCard.appendChild(title);
-
-    const explanation = document.createElement("p");
-    explanation.style.fontSize = "13px";
-    explanation.style.color = "#555";
-    explanation.textContent =
-        "Yalnızca iki mavi balonun arasında bulunan tam dört gri balonun sıra numaraları gösterilir. Joker balonları dahil değildir.";
-    resultCard.appendChild(explanation);
-
-    let totalMatches = 0;
-
-    requiredGroups.forEach(group => {
-        const groupSection = document.createElement("div");
-        groupSection.className = "comparison-result-group";
-
-        const groupTitle = document.createElement("b");
-        groupTitle.textContent = group.name;
-        groupSection.appendChild(groupTitle);
-
-        let groupMatchCount = 0;
-
-        for (let columnIndex = 0; columnIndex < 100; columnIndex++) {
-            const set = group.sets[columnIndex];
-
-            const matches = findExactFourGreyRuns(
-                set,
-                group.results.main
-            );
-
-            if (matches.length === 0) {
-                continue;
-            }
-
-            matches.forEach(match => {
-                groupMatchCount++;
-                totalMatches++;
-
-                const line = document.createElement("div");
-                line.className = "comparison-result-line";
-
-                const columnLabel = document.createElement("div");
-                columnLabel.className = "comparison-column-label";
-                columnLabel.textContent =
-                    (columnIndex + 1) + ". Kolon";
-                line.appendChild(columnLabel);
-
-                match.forEach(orderNumber => {
-                    const number = document.createElement("span");
-                    number.className = "comparison-order-number";
-                    number.textContent = orderNumber;
-                    line.appendChild(number);
-                });
-
-                groupSection.appendChild(line);
-            });
-        }
-
-        if (groupMatchCount === 0) {
-            const empty = document.createElement("div");
-            empty.className = "comparison-empty";
-            empty.textContent =
-                "İlk 100 kolonda uygun eşleşme bulunamadı.";
-            groupSection.appendChild(empty);
-        } else {
-            const count = document.createElement("div");
-            count.style.fontSize = "12px";
-            count.style.color = "#555";
-            count.style.marginTop = "8px";
-            count.textContent =
-                "Bulunan eşleşme sayısı: " + groupMatchCount;
-            groupSection.appendChild(count);
-        }
-
-        resultCard.appendChild(groupSection);
-    });
-
-    const total = document.createElement("p");
-    total.style.fontWeight = "bold";
-    total.style.marginTop = "15px";
-    total.textContent =
-        "Dört listedeki toplam eşleşme: " + totalMatches;
-    resultCard.appendChild(total);
-
-    const view = getEl("view-container");
-
-    if (!view) return;
-
-    const oldResult = getEl("four-list-comparison-results");
-
-    if (oldResult) {
-        oldResult.remove();
-    }
-
-    const container = view.querySelector(".container");
-
-    if (container) {
-        const comparisonButtonCard =
-            getEl("four-list-comparison-card");
-
-        if (comparisonButtonCard) {
-            comparisonButtonCard.after(resultCard);
-        } else {
-            container.appendChild(resultCard);
-        }
-    }
-}
-
 async function renderMySetsList(reqId) {
 
     const view = getEl("view-container");
@@ -2396,24 +2180,16 @@ async function renderMySetsList(reqId) {
                 Yedek Yükle (JSON İçe Aktar)
             </button>
         </div>
+        <div class="card">
+            <b>Dört Listeyi Otomatik Tara</b>
+            <p style="font-size:13px;color:#666;">
+                Bir, iki, üç ve dört adlı kayıtlı listelerin ilk 100 kolonu taranır.
+                İki mavi balon arasında art arda bulunan tam 4 gri balonun sıra numaraları gösterilir.
+            </p>
+            <button id="btn-four-list-scan">Dört Listeyi Tara</button>
+            <div id="four-list-scan-output"></div>
+        </div>
     `;
-
-    const comparisonCard = document.createElement("div");
-    comparisonCard.className = "card";
-    comparisonCard.id = "four-list-comparison-card";
-
-    comparisonCard.innerHTML = `
-        <b>Dört Listeyi Otomatik Karşılaştır</b>
-        <p style="font-size:13px;color:#555;">
-            “bir”, “iki”, “üç” ve “dört” adlı kayıtlı listelerin ilk 100 kolonu taranır.
-            İki mavi balon arasında tam dört gri balon bulunan sıra numaraları yan yana gösterilir.
-        </p>
-        <button id="btn-four-list-comparison">
-            100 Kolonu Karşılaştır
-        </button>
-    `;
-
-    container.appendChild(comparisonCard);
 
     if (groups.length === 0) {
         container.innerHTML += "<p>Henüz kayıtlı kolon yok.</p>";
@@ -2451,11 +2227,6 @@ async function renderMySetsList(reqId) {
 
     view.appendChild(container);
 
-    getEl("btn-four-list-comparison").addEventListener(
-        "click",
-        () => runFourListComparison(groups)
-    );
-
     getEl("btn-export-backup").addEventListener(
         "click",
         exportBackup
@@ -2465,6 +2236,222 @@ async function renderMySetsList(reqId) {
         "click",
         triggerImport
     );
+
+    getEl("btn-four-list-scan").addEventListener(
+        "click",
+        () => runFourListScan(groups)
+    );
+}
+
+function findFourGrayBallRuns(set, blueNumbers) {
+    if (!set || !Array.isArray(set.numbers)) {
+        return [];
+    }
+
+    const numbers = set.numbers;
+    const blueSet = new Set(
+        (Array.isArray(blueNumbers) ? blueNumbers : [])
+            .map(Number)
+    );
+
+    const matches = [];
+
+    for (let i = 0; i < numbers.length; i++) {
+
+        if (!blueSet.has(Number(numbers[i]))) {
+            continue;
+        }
+
+        const firstGrayIndex = i + 1;
+        const lastGrayIndex = i + 4;
+        const nextBlueIndex = i + 5;
+
+        if (nextBlueIndex >= numbers.length) {
+            continue;
+        }
+
+        let exactlyFourGray = true;
+
+        for (
+            let position = firstGrayIndex;
+            position <= lastGrayIndex;
+            position++
+        ) {
+            if (blueSet.has(Number(numbers[position]))) {
+                exactlyFourGray = false;
+                break;
+            }
+        }
+
+        if (!exactlyFourGray) {
+            continue;
+        }
+
+        if (!blueSet.has(Number(numbers[nextBlueIndex]))) {
+            continue;
+        }
+
+        matches.push([
+            firstGrayIndex + 1,
+            firstGrayIndex + 2,
+            firstGrayIndex + 3,
+            firstGrayIndex + 4
+        ]);
+
+        i = nextBlueIndex - 1;
+    }
+
+    return matches;
+}
+
+function runFourListScan(groups) {
+    const output = getEl("four-list-scan-output");
+
+    if (!output) return;
+
+    output.innerHTML = "";
+
+    const requiredNames = [
+        { name: "bir", label: "Bir" },
+        { name: "iki", label: "İki" },
+        { name: "üç", label: "Üç" },
+        { name: "dört", label: "Dört" }
+    ];
+
+    const normalizedGroups = groups.map(group => ({
+        group,
+        normalizedName: String(group.name || "")
+            .trim()
+            .toLocaleLowerCase("tr-TR")
+    }));
+
+    const selectedGroups = requiredNames.map(required => ({
+        ...required,
+        group: normalizedGroups.find(
+            item => item.normalizedName === required.name
+        )?.group || null
+    }));
+
+    const missingGroups = selectedGroups.filter(item => !item.group);
+
+    if (missingGroups.length > 0) {
+        const message = document.createElement("div");
+        message.className = "four-list-scan-result";
+        message.style.color = "#c62828";
+        message.textContent =
+            "Tarama yapılamadı. Şu isimlerde kayıtlı liste bulunamadı: " +
+            missingGroups.map(item => item.label).join(", ") +
+            ". Liste adları bir, iki, üç ve dört olmalıdır.";
+
+        output.appendChild(message);
+        return;
+    }
+
+    let totalMatches = 0;
+
+    selectedGroups.forEach(item => {
+        const group = item.group;
+        const resultCard = document.createElement("div");
+
+        resultCard.className = "four-list-scan-result";
+
+        const title = document.createElement("b");
+        title.textContent = item.label + " listesi";
+        resultCard.appendChild(title);
+
+        if (!Array.isArray(group.sets) || group.sets.length < 100) {
+            const warning = document.createElement("div");
+            warning.className = "four-list-scan-empty";
+            warning.textContent =
+                "Bu listede 100 kolon bulunmadığı için tarama yapılmadı. Mevcut kolon sayısı: " +
+                (Array.isArray(group.sets) ? group.sets.length : 0);
+
+            resultCard.appendChild(warning);
+            output.appendChild(resultCard);
+            return;
+        }
+
+        let groupMatchCount = 0;
+
+        for (let columnIndex = 0; columnIndex < 100; columnIndex++) {
+            const set = group.sets[columnIndex];
+
+            const matches = findFourGrayBallRuns(
+                set,
+                group.results?.main
+            );
+
+            if (matches.length === 0) {
+                continue;
+            }
+
+            groupMatchCount += matches.length;
+            totalMatches += matches.length;
+
+            const columnResult = document.createElement("div");
+            columnResult.className = "four-list-scan-column";
+
+            const columnTitle = document.createElement("b");
+            columnTitle.textContent =
+                (columnIndex + 1) + ". Kolon";
+
+            columnResult.appendChild(columnTitle);
+
+            matches.forEach((match, matchIndex) => {
+                const matchRow = document.createElement("div");
+                matchRow.className = "four-list-scan-match";
+
+                const matchLabel = document.createElement("span");
+                matchLabel.style.width = "100%";
+                matchLabel.style.fontSize = "12px";
+                matchLabel.style.color = "#666";
+                matchLabel.textContent =
+                    (matchIndex + 1) + ". eşleşme";
+
+                matchRow.appendChild(matchLabel);
+
+                match.forEach(positionNumber => {
+                    const number = document.createElement("span");
+                    number.className = "four-list-scan-number";
+                    number.textContent = positionNumber;
+
+                    matchRow.appendChild(number);
+                });
+
+                columnResult.appendChild(matchRow);
+            });
+
+            resultCard.appendChild(columnResult);
+        }
+
+        if (groupMatchCount === 0) {
+            const empty = document.createElement("div");
+            empty.className = "four-list-scan-empty";
+            empty.textContent =
+                "İlk 100 kolonda koşula uyan eşleşme bulunamadı.";
+
+            resultCard.appendChild(empty);
+        } else {
+            const count = document.createElement("div");
+            count.className = "four-list-scan-empty";
+            count.textContent =
+                "Bulunan eşleşme sayısı: " + groupMatchCount;
+
+            resultCard.appendChild(count);
+        }
+
+        output.appendChild(resultCard);
+    });
+
+    const summary = document.createElement("div");
+    summary.className = "four-list-scan-result";
+
+    const summaryText = document.createElement("b");
+    summaryText.textContent =
+        "Dört listenin toplam eşleşme sayısı: " + totalMatches;
+
+    summary.appendChild(summaryText);
+    output.appendChild(summary);
 }
 
 async function renderViewGroup(group, reqId) {
