@@ -51,6 +51,37 @@
     @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
     #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.6); z-index: 4000; cursor: wait; }
     #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; box-sizing: border-box; }
+
+    .ball-display-wrapper{
+        width:100%;
+    }
+
+    .ball-gap-groups{
+        display:flex;
+        flex-direction:column;
+        align-items:flex-start;
+        gap:5px;
+        margin-top:10px;
+    }
+
+    .ball-gap-group{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        align-items:center;
+    }
+
+    .ball-gap-number{
+        min-width:38px;
+        text-align:center;
+        box-sizing:border-box;
+        padding:4px 2px;
+        border-radius:4px;
+        background:#f0f0f0;
+        color:#d32f2f;
+        font-size:14px;
+        font-weight:bold;
+    }
 </style>
 </head>
 <body>
@@ -1084,7 +1115,6 @@ async function atomicSave(item, options = {}) {
     });
 }
 
-/* Yeni: Grup kaydı ve taslak silme tek atomik işlemde yapılır. */
 async function atomicSaveGroupAndDeleteDraft(item, draftId) {
     return withLock(async () => {
 
@@ -1746,11 +1776,6 @@ async function renderGeneratePage() {
     let dSets;
     let dInputs;
 
-    /*
-     * Taslak okuma hatası ile taslağın gerçekten bulunmaması
-     * birbirinden ayrılır. Okuma başarısızsa generatedSets
-     * değiştirilmez ve mevcut veri boşaltılmaz.
-     */
     try {
         dSets = await getDraft("tempSets");
 
@@ -2076,11 +2101,6 @@ async function saveGroup() {
         setLoading(true);
         isProcessing = true;
 
-        /*
-         * Grup kaydı ve tempSets taslağının silinmesi aynı
-         * IndexedDB transaction'ında tamamlanır.
-         * İkisi birlikte başarılı olur veya ikisi de geri alınır.
-         */
         await atomicSaveGroupAndDeleteDraft(group, "tempSets");
 
         generatedSets = [];
@@ -2111,11 +2131,6 @@ async function renderMySetsList(reqId) {
 
     let groups;
 
-    /*
-     * Veritabanı okuma hatası boş liste olarak yorumlanmaz.
-     * Gerçekten hiç kayıt yoksa boş liste mesajı gösterilir;
-     * okuma başarısızsa ayrı hata mesajı gösterilir.
-     */
     try {
         groups = await getAllGroups();
     } catch(e) {
@@ -2282,6 +2297,9 @@ async function renderViewGroup(group, reqId) {
 
 function createBallsUI(set, results = null, columnNumber = null) {
 
+    const wrapper = document.createElement("div");
+    wrapper.className = "ball-display-wrapper";
+
     const row = document.createElement("div");
     row.className = "ball-row";
 
@@ -2335,7 +2353,63 @@ function createBallsUI(set, results = null, columnNumber = null) {
         row.appendChild(item);
     });
 
-    return row;
+    wrapper.appendChild(row);
+
+    if (
+        results &&
+        Array.isArray(results.main) &&
+        results.main.length > 0 &&
+        Array.isArray(set.numbers)
+    ) {
+        const gapGroups = document.createElement("div");
+        gapGroups.className = "ball-gap-groups";
+
+        let currentGap = [];
+        let foundFirstBlue = false;
+        let hasGapGroup = false;
+
+        set.numbers.forEach((number, index) => {
+
+            const isBlue =
+                results.main.includes(Number(number));
+
+            if (isBlue) {
+
+                if (foundFirstBlue && currentGap.length === 4) {
+
+                    const groupLine = document.createElement("div");
+                    groupLine.className = "ball-gap-group";
+
+                    currentGap.forEach(orderNumber => {
+
+                        const numberElement =
+                            document.createElement("span");
+
+                        numberElement.className = "ball-gap-number";
+                        numberElement.textContent = orderNumber;
+
+                        groupLine.appendChild(numberElement);
+                    });
+
+                    gapGroups.appendChild(groupLine);
+                    hasGapGroup = true;
+                }
+
+                currentGap = [];
+                foundFirstBlue = true;
+
+            } else if (foundFirstBlue) {
+
+                currentGap.push(index + 1);
+            }
+        });
+
+        if (hasGapGroup) {
+            wrapper.appendChild(gapGroups);
+        }
+    }
+
+    return wrapper;
 }
 
 async function openResultPanel(
