@@ -51,6 +51,31 @@
     @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
     #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.6); z-index: 4000; cursor: wait; }
     #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; box-sizing: border-box; }
+
+    .four-gap-card{
+        background:white;
+        padding:15px;
+        border-radius:10px;
+        margin-bottom:15px;
+        box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .four-gap-row{
+        display:flex;
+        flex-wrap:wrap;
+        gap:12px;
+        margin-top:12px;
+        padding:10px 0;
+        border-bottom:1px solid #eee;
+    }
+
+    .four-gap-number{
+        color:#f44336;
+        font-size:20px;
+        font-weight:bold;
+        min-width:25px;
+        text-align:center;
+    }
 </style>
 </head>
 <body>
@@ -2189,6 +2214,62 @@ async function renderMySetsList(reqId) {
     );
 }
 
+function createFourGapAnalysis(group) {
+    const card = document.createElement("div");
+    card.className = "four-gap-card";
+
+    const title = document.createElement("b");
+    title.textContent = "Dört Mavi Olmayan Balonun Kolon Numaraları";
+    card.appendChild(title);
+
+    const matchingGroups = [];
+    let pendingColumns = [];
+    let started = false;
+
+    group.sets.forEach((set, index) => {
+        if (!set.numbers || set.numbers.length === 0) return;
+
+        const firstBallNumber = Number(set.numbers[0]);
+        const isBlue = group.results.main.includes(firstBallNumber);
+        const columnNumber = index + 1;
+
+        if (isBlue) {
+            if (started && pendingColumns.length === 4) {
+                matchingGroups.push([...pendingColumns]);
+            }
+
+            pendingColumns = [];
+            started = true;
+
+        } else if (started) {
+            pendingColumns.push(columnNumber);
+        }
+    });
+
+    if (matchingGroups.length === 0) {
+        const message = document.createElement("p");
+        message.textContent = "İki mavi balon arasında tam olarak dört mavi olmayan balon bulunamadı.";
+        card.appendChild(message);
+        return card;
+    }
+
+    matchingGroups.forEach(numbers => {
+        const row = document.createElement("div");
+        row.className = "four-gap-row";
+
+        numbers.forEach(number => {
+            const span = document.createElement("span");
+            span.className = "four-gap-number";
+            span.textContent = number;
+            row.appendChild(span);
+        });
+
+        card.appendChild(row);
+    });
+
+    return card;
+}
+
 async function renderViewGroup(group, reqId) {
 
     const view = getEl("view-container");
@@ -2241,6 +2322,10 @@ async function renderViewGroup(group, reqId) {
 
     resCard.appendChild(openBtn);
     container.append(resCard);
+
+    container.appendChild(
+        createFourGapAnalysis(group)
+    );
 
     group.sets.forEach((set, i) => {
         const setCard = document.createElement("div");
