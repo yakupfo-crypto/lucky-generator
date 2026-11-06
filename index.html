@@ -76,6 +76,31 @@
         min-width:25px;
         text-align:center;
     }
+
+    .four-list-analysis-title{
+        color:#1976d2;
+        font-size:17px;
+        font-weight:bold;
+        margin:0 0 12px 0;
+    }
+
+    .four-list-analysis-group{
+        border-top:1px solid #eee;
+        padding-top:12px;
+        margin-top:12px;
+    }
+
+    .four-list-analysis-name{
+        color:#1976d2;
+        font-weight:bold;
+        margin-bottom:8px;
+    }
+
+    .four-list-analysis-status{
+        color:#666;
+        font-size:13px;
+        margin-top:6px;
+    }
 </style>
 </head>
 <body>
@@ -2167,8 +2192,21 @@ async function renderMySetsList(reqId) {
         </div>
     `;
 
+    /*
+       YENİ BÖLÜM:
+       Dört adet 100 kolonlu kayıtlı listeyi bulur.
+       Liste adları: bir, iki, üç, dört.
+       Her listenin mevcut dört mavi olmayan balon analizini
+       ayrı ayrı yapıp sonuçları tek bölümde gösterir.
+    */
+    container.appendChild(
+        createFourListsGapAnalysis(groups)
+    );
+
     if (groups.length === 0) {
-        container.innerHTML += "<p>Henüz kayıtlı kolon yok.</p>";
+        const emptyMessage = document.createElement("p");
+        emptyMessage.textContent = "Henüz kayıtlı kolon yok.";
+        container.appendChild(emptyMessage);
 
     } else {
         groups.forEach(group => {
@@ -2214,17 +2252,19 @@ async function renderMySetsList(reqId) {
     );
 }
 
-function createFourGapAnalysis(group) {
-    const card = document.createElement("div");
-    card.className = "four-gap-card";
-
-    const title = document.createElement("b");
-    title.textContent = "Dört Mavi Olmayan Balonun Kolon Numaraları";
-    card.appendChild(title);
-
+/*
+   Mevcut dört mavi olmayan kolon bulma kuralı.
+   Bu fonksiyon, tek liste analizinde de dört liste analizinde de
+   aynı hesaplamanın kullanılmasını sağlar.
+*/
+function getFourGapMatches(group) {
     const matchingGroups = [];
     let pendingColumns = [];
     let started = false;
+
+    if (!group || !Array.isArray(group.sets)) {
+        return matchingGroups;
+    }
 
     group.sets.forEach((set, index) => {
         if (!set.numbers || set.numbers.length === 0) return;
@@ -2246,6 +2286,23 @@ function createFourGapAnalysis(group) {
         }
     });
 
+    return matchingGroups;
+}
+
+/*
+   Tek kayıtlı listenin mevcut analiz kartı.
+   Eski davranış korunmuştur.
+*/
+function createFourGapAnalysis(group) {
+    const card = document.createElement("div");
+    card.className = "four-gap-card";
+
+    const title = document.createElement("b");
+    title.textContent = "Dört Mavi Olmayan Balonun Kolon Numaraları";
+    card.appendChild(title);
+
+    const matchingGroups = getFourGapMatches(group);
+
     if (matchingGroups.length === 0) {
         const message = document.createElement("p");
         message.textContent = "İki mavi balon arasında tam olarak dört mavi olmayan balon bulunamadı.";
@@ -2265,6 +2322,110 @@ function createFourGapAnalysis(group) {
         });
 
         card.appendChild(row);
+    });
+
+    return card;
+}
+
+/*
+   YENİ FONKSİYON:
+   Kayıtlı listeler arasından bir, iki, üç ve dört isimli
+   100 kolonlu listeleri bulur ve sonuçlarını bir araya getirir.
+*/
+function createFourListsGapAnalysis(groups) {
+    const card = document.createElement("div");
+    card.className = "four-gap-card";
+
+    const title = document.createElement("div");
+    title.className = "four-list-analysis-title";
+    title.textContent =
+        "Dört Kayıtlı Listenin Dört Mavi Olmayan Balon Sonuçları";
+
+    card.appendChild(title);
+
+    const requiredNames = ["bir", "iki", "üç", "dört"];
+
+    requiredNames.forEach(requiredName => {
+
+        const section = document.createElement("div");
+        section.className = "four-list-analysis-group";
+
+        const nameTitle = document.createElement("div");
+        nameTitle.className = "four-list-analysis-name";
+        nameTitle.textContent =
+            requiredName.charAt(0).toLocaleUpperCase("tr-TR") +
+            requiredName.slice(1) +
+            " Listesi";
+
+        section.appendChild(nameTitle);
+
+        const group = groups.find(item =>
+            String(item.name || "")
+                .trim()
+                .toLocaleLowerCase("tr-TR") === requiredName
+        );
+
+        if (!group) {
+            const message = document.createElement("p");
+            message.className = "four-list-analysis-status";
+            message.textContent =
+                "Bu isimde kayıtlı liste bulunamadı.";
+
+            section.appendChild(message);
+            card.appendChild(section);
+            return;
+        }
+
+        if (group.sets.length !== 100) {
+            const message = document.createElement("p");
+            message.className = "four-list-analysis-status";
+            message.textContent =
+                `Bu listenin ${group.sets.length} kolonu var. Analize yalnızca tam 100 kolonlu listeler alınır.`;
+
+            section.appendChild(message);
+            card.appendChild(section);
+            return;
+        }
+
+        const matchingGroups = getFourGapMatches(group);
+
+        const countMessage = document.createElement("div");
+        countMessage.className = "four-list-analysis-status";
+        countMessage.textContent =
+            `100 kolon tarandı. Bulunan dört mavi olmayan kolon grubu: ${matchingGroups.length}`;
+
+        section.appendChild(countMessage);
+
+        if (matchingGroups.length === 0) {
+            const message = document.createElement("p");
+            message.className = "four-list-analysis-status";
+            message.textContent =
+                "İki mavi balon arasında tam olarak dört mavi olmayan balon bulunamadı.";
+
+            section.appendChild(message);
+
+        } else {
+            matchingGroups.forEach((numbers, index) => {
+                const row = document.createElement("div");
+                row.className = "four-gap-row";
+
+                const rowLabel = document.createElement("span");
+                rowLabel.className = "four-list-analysis-status";
+                rowLabel.textContent = `${index + 1}. Grup:`;
+                row.appendChild(rowLabel);
+
+                numbers.forEach(number => {
+                    const span = document.createElement("span");
+                    span.className = "four-gap-number";
+                    span.textContent = number;
+                    row.appendChild(span);
+                });
+
+                section.appendChild(row);
+            });
+        }
+
+        card.appendChild(section);
     });
 
     return card;
