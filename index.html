@@ -2180,40 +2180,64 @@ async function renderMySetsList(reqId) {
 }
 
 function findFourNonBlueRuns(group) {
-    const matchingGroups = [];
-    let pendingColumns = [];
-    let started = false;
+    const allBallResults = [];
 
     if(!group || !Array.isArray(group.sets)) {
-        return matchingGroups;
+        return allBallResults;
     }
 
-    group.sets.forEach((set,index) => {
-        if(!set.numbers || set.numbers.length === 0) {
-            return;
-        }
+    let maxBallCount = 0;
 
-        const firstBallNumber = Number(set.numbers[0]);
-        const isBlue =
-            Array.isArray(group.results?.main) &&
-            group.results.main.includes(firstBallNumber);
-
-        const columnNumber = index + 1;
-
-        if(isBlue) {
-            if(started && pendingColumns.length === 4) {
-                matchingGroups.push([...pendingColumns]);
-            }
-
-            pendingColumns = [];
-            started = true;
-
-        } else if(started) {
-            pendingColumns.push(columnNumber);
+    group.sets.forEach(set => {
+        if(Array.isArray(set.numbers)) {
+            maxBallCount = Math.max(
+                maxBallCount,
+                set.numbers.length
+            );
         }
     });
 
-    return matchingGroups;
+    for(let ballIndex = 0; ballIndex < maxBallCount; ballIndex++) {
+        const matchingGroups = [];
+        let pendingColumns = [];
+        let started = false;
+
+        group.sets.forEach((set,index) => {
+            if(
+                !Array.isArray(set.numbers) ||
+                ballIndex >= set.numbers.length
+            ) {
+                return;
+            }
+
+            const ballNumber = Number(set.numbers[ballIndex]);
+
+            const isBlue =
+                Array.isArray(group.results?.main) &&
+                group.results.main.includes(ballNumber);
+
+            const columnNumber = index + 1;
+
+            if(isBlue) {
+                if(started && pendingColumns.length === 4) {
+                    matchingGroups.push([...pendingColumns]);
+                }
+
+                pendingColumns = [];
+                started = true;
+
+            } else if(started) {
+                pendingColumns.push(columnNumber);
+            }
+        });
+
+        allBallResults.push({
+            ballPosition:ballIndex + 1,
+            matches:matchingGroups
+        });
+    }
+
+    return allBallResults;
 }
 
 function createFourGapSelectionCard(groups) {
@@ -2226,7 +2250,7 @@ function createFourGapSelectionCard(groups) {
 
     const description = document.createElement("p");
     description.textContent =
-        "Karşılaştırmak istediğin dört kayıtlı listeyi seç. Her liste kendi içinde ayrı ayrı taranır.";
+        "Karşılaştırmak istediğin dört kayıtlı listeyi seç. Her liste kendi içindeki bütün balon sıralarında ayrı ayrı taranır.";
     card.appendChild(description);
 
     const count = document.createElement("div");
@@ -2284,6 +2308,8 @@ function createFourGapSelectionCard(groups) {
             } else {
                 selectedFourGapGroupIds.delete(id);
             }
+
+            fourGapAnalysisResults = null;
 
             count.textContent =
                 `Seçilen liste: ${selectedFourGapGroupIds.size} / 4`;
@@ -2397,7 +2423,7 @@ function renderFourGapAnalysisResults(results) {
 
     const explanation = document.createElement("p");
     explanation.textContent =
-        "Her kayıtlı listenin sonuçları aşağıda birbirinden ayrı gösterilir.";
+        "Her listenin her balon sırası kendi içinde ayrı ayrı taranır. Her balon sırasının bulunan kolon numaraları kendi bölümünde gösterilir.";
     card.appendChild(explanation);
 
     results.forEach((result,index) => {
@@ -2412,24 +2438,43 @@ function renderFourGapAnalysisResults(results) {
             const message = document.createElement("p");
             message.className = "four-gap-empty";
             message.textContent =
-                "İki mavi kolon arasında tam olarak dört mavi olmayan kolon bulunamadı.";
+                "Bu listede karşılaştırılacak balon bulunamadı.";
 
             card.appendChild(message);
             return;
         }
 
-        result.matches.forEach(numbers => {
-            const row = document.createElement("div");
-            row.className = "four-gap-row";
+        result.matches.forEach(ballResult => {
+            const ballTitle = document.createElement("div");
+            ballTitle.className = "four-gap-list-title";
+            ballTitle.textContent =
+                `${ballResult.ballPosition}. Balon`;
 
-            numbers.forEach(number => {
-                const span = document.createElement("span");
-                span.className = "four-gap-number";
-                span.textContent = number;
-                row.appendChild(span);
+            card.appendChild(ballTitle);
+
+            if(!ballResult.matches || ballResult.matches.length === 0) {
+                const message = document.createElement("p");
+                message.className = "four-gap-empty";
+                message.textContent =
+                    "İki mavi kolon arasında tam olarak dört mavi olmayan kolon bulunamadı.";
+
+                card.appendChild(message);
+                return;
+            }
+
+            ballResult.matches.forEach(numbers => {
+                const row = document.createElement("div");
+                row.className = "four-gap-row";
+
+                numbers.forEach(number => {
+                    const span = document.createElement("span");
+                    span.className = "four-gap-number";
+                    span.textContent = number;
+                    row.appendChild(span);
+                });
+
+                card.appendChild(row);
             });
-
-            card.appendChild(row);
         });
     });
 
