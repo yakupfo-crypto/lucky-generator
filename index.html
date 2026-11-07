@@ -2179,41 +2179,73 @@ async function renderMySetsList(reqId) {
     );
 }
 
+/* DÜZENLENDİ: Her ana balon sırası ayrı ayrı taranır. */
 function findFourNonBlueRuns(group) {
-    const matchingGroups = [];
-    let pendingColumns = [];
-    let started = false;
+    const matchingRows = [];
 
     if(!group || !Array.isArray(group.sets)) {
-        return matchingGroups;
+        return matchingRows;
     }
 
-    group.sets.forEach((set,index) => {
-        if(!set.numbers || set.numbers.length === 0) {
-            return;
-        }
+    const sets = group.sets.slice(0,100);
 
-        const firstBallNumber = Number(set.numbers[0]);
-        const isBlue =
-            Array.isArray(group.results?.main) &&
-            group.results.main.includes(firstBallNumber);
+    let maxBallOrder = 0;
 
-        const columnNumber = index + 1;
-
-        if(isBlue) {
-            if(started && pendingColumns.length === 4) {
-                matchingGroups.push([...pendingColumns]);
-            }
-
-            pendingColumns = [];
-            started = true;
-
-        } else if(started) {
-            pendingColumns.push(columnNumber);
+    sets.forEach(set => {
+        if(Array.isArray(set.numbers)) {
+            maxBallOrder = Math.max(
+                maxBallOrder,
+                set.numbers.length
+            );
         }
     });
 
-    return matchingGroups;
+    for(let ballIndex = 0; ballIndex < maxBallOrder; ballIndex++) {
+        const matchingGroups = [];
+
+        let pendingColumns = [];
+        let started = false;
+
+        sets.forEach((set,index) => {
+            if(
+                !Array.isArray(set.numbers) ||
+                ballIndex >= set.numbers.length
+            ) {
+                pendingColumns = [];
+                started = false;
+                return;
+            }
+
+            const ballNumber = Number(set.numbers[ballIndex]);
+
+            const isBlue =
+                Array.isArray(group.results?.main) &&
+                group.results.main.includes(ballNumber);
+
+            const columnNumber = index + 1;
+
+            if(isBlue) {
+                if(started && pendingColumns.length === 4) {
+                    matchingGroups.push([...pendingColumns]);
+                }
+
+                pendingColumns = [];
+                started = true;
+
+            } else if(started) {
+                pendingColumns.push(columnNumber);
+            }
+        });
+
+        if(matchingGroups.length > 0) {
+            matchingRows.push({
+                ballOrder:ballIndex + 1,
+                matches:matchingGroups
+            });
+        }
+    }
+
+    return matchingRows;
 }
 
 function createFourGapSelectionCard(groups) {
@@ -2386,6 +2418,7 @@ async function runFourSelectedListsAnalysis() {
     }
 }
 
+/* DÜZENLENDİ: Sonuçlar balon sırasına göre alt alta gösterilir. */
 function renderFourGapAnalysisResults(results) {
     const card = document.createElement("div");
     card.className = "four-gap-card four-gap-results";
@@ -2397,7 +2430,7 @@ function renderFourGapAnalysisResults(results) {
 
     const explanation = document.createElement("p");
     explanation.textContent =
-        "Her kayıtlı listenin sonuçları aşağıda birbirinden ayrı gösterilir.";
+        "Her listenin 1–100 arasındaki kolonlarında, bütün ana balon sıraları ayrı ayrı kontrol edilir. İki mavi balon arasında tam dört mavi olmayan kolon bulunan eşleşmeler gösterilir.";
     card.appendChild(explanation);
 
     results.forEach((result,index) => {
@@ -2412,24 +2445,33 @@ function renderFourGapAnalysisResults(results) {
             const message = document.createElement("p");
             message.className = "four-gap-empty";
             message.textContent =
-                "İki mavi kolon arasında tam olarak dört mavi olmayan kolon bulunamadı.";
+                "Hiçbir balon sırasında iki mavi balon arasında tam dört mavi olmayan kolon bulunamadı.";
 
             card.appendChild(message);
             return;
         }
 
-        result.matches.forEach(numbers => {
-            const row = document.createElement("div");
-            row.className = "four-gap-row";
+        result.matches.forEach(rowResult => {
+            const orderTitle = document.createElement("div");
+            orderTitle.className = "four-gap-list-title";
+            orderTitle.textContent =
+                `${rowResult.ballOrder}. Balon Sırası`;
 
-            numbers.forEach(number => {
-                const span = document.createElement("span");
-                span.className = "four-gap-number";
-                span.textContent = number;
-                row.appendChild(span);
+            card.appendChild(orderTitle);
+
+            rowResult.matches.forEach(numbers => {
+                const row = document.createElement("div");
+                row.className = "four-gap-row";
+
+                numbers.forEach(number => {
+                    const span = document.createElement("span");
+                    span.className = "four-gap-number";
+                    span.textContent = number;
+                    row.appendChild(span);
+                });
+
+                card.appendChild(row);
             });
-
-            card.appendChild(row);
         });
     });
 
