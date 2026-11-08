@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -36,14 +37,14 @@
         box-sizing:border-box;
     }
 
-    .ball-position{
+    .ball-index{
         width:38px;
-        min-height:16px;
-        margin-bottom:3px;
+        min-height:14px;
+        margin-bottom:2px;
         font-size:11px;
         font-weight:bold;
         color:#888;
-        line-height:16px;
+        line-height:14px;
         text-align:center;
         box-sizing:border-box;
     }
@@ -1494,6 +1495,23 @@ function normalizeDraftInputs(data) {
     };
 }
 
+async function requestPersistentStorage() {
+    if(
+        navigator.storage &&
+        navigator.storage.persist
+    ) {
+        try {
+            const isPersisted = await navigator.storage.persisted();
+
+            if(!isPersisted) {
+                await navigator.storage.persist();
+            }
+        } catch(e) {
+            ErrorHandler.report("Persistent Storage Error",e);
+        }
+    }
+}
+
 window.onload = async () => {
 
     if(!CryptoEngine.isSecure) {
@@ -2513,11 +2531,11 @@ function createBallsUI(set,results = null,columnNumber = null) {
     const row = document.createElement("div");
     row.className = "ball-row";
 
-    let positionNumber = 0;
+    let sequenceNumber = 0;
 
     set.numbers.forEach((n,index) => {
 
-        positionNumber++;
+        sequenceNumber++;
 
         const item = document.createElement("div");
         item.className = "ball-item";
@@ -2531,11 +2549,11 @@ function createBallsUI(set,results = null,columnNumber = null) {
 
         item.appendChild(order);
 
-        const position = document.createElement("div");
-        position.className = "ball-position";
-        position.textContent = positionNumber;
+        const ballIndex = document.createElement("div");
+        ballIndex.className = "ball-index";
+        ballIndex.textContent = sequenceNumber;
 
-        item.appendChild(position);
+        item.appendChild(ballIndex);
 
         const ball = document.createElement("div");
         ball.className = "ball selected";
@@ -2552,7 +2570,7 @@ function createBallsUI(set,results = null,columnNumber = null) {
 
     set.jokers.forEach(j => {
 
-        positionNumber++;
+        sequenceNumber++;
 
         const item = document.createElement("div");
         item.className = "ball-item";
@@ -2562,11 +2580,11 @@ function createBallsUI(set,results = null,columnNumber = null) {
 
         item.appendChild(order);
 
-        const position = document.createElement("div");
-        position.className = "ball-position";
-        position.textContent = positionNumber;
+        const ballIndex = document.createElement("div");
+        ballIndex.className = "ball-index";
+        ballIndex.textContent = sequenceNumber;
 
-        item.appendChild(position);
+        item.appendChild(ballIndex);
 
         const ball = document.createElement("div");
         ball.className = "ball joker";
