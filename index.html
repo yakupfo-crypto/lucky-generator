@@ -147,13 +147,6 @@
         overflow-wrap:anywhere;
     }
 
-    .four-gap-row-title{
-        color:#1976d2;
-        font-size:14px;
-        font-weight:bold;
-        margin:12px 0 5px;
-    }
-
     .four-gap-empty{
         color:#666;
         font-size:14px;
@@ -1501,6 +1494,23 @@ function normalizeDraftInputs(data) {
     };
 }
 
+async function requestPersistentStorage() {
+    if(
+        navigator.storage &&
+        navigator.storage.persist
+    ) {
+        try {
+            const isPersisted = await navigator.storage.persisted();
+
+            if(!isPersisted) {
+                await navigator.storage.persist();
+            }
+        } catch(e) {
+            ErrorHandler.report("Persistent Storage Error",e);
+        }
+    }
+}
+
 window.onload = async () => {
 
     if(!CryptoEngine.isSecure) {
@@ -2182,13 +2192,16 @@ async function renderMySetsList(reqId) {
 }
 
 /*
- * Her gri sıra kendi içinde ayrı incelenir.
- * rowIndex 0: gri 1 numaralı ilk ana balon.
- * rowIndex 1: gri 2 numaralı ikinci ana balon.
- * Bir sıranın sonuçları diğer sıranın sonuçlarına karıştırılmaz.
- * İlk 100 kolon taranır.
+ * Her kolonun seçilen ana balon sırası ayrı ayrı incelenir.
+ * rowIndex 0: gri 1 numaralı balon.
+ * rowIndex 1: gri 2 numaralı balon.
+ *
+ * Her sıra kendi içinde 1-100. kolonlar arasında taranır.
+ * İki mavi balon arasında tam dört mavi olmayan balon varsa
+ * bu dört kolonun kırmızı kolon sıra numaraları kaydedilir.
+ * Birinci ve ikinci sıra hiçbir zaman birbirine karıştırılmaz.
  */
-function findFourNonBlueRunsForRow(group,rowIndex) {
+function findFourNonBlueRuns(group,rowIndex = 0) {
     const matchingGroups = [];
 
     if(
@@ -2197,6 +2210,10 @@ function findFourNonBlueRunsForRow(group,rowIndex) {
         !group.results ||
         !Array.isArray(group.results.main)
     ) {
+        return matchingGroups;
+    }
+
+    if(rowIndex !== 0 && rowIndex !== 1) {
         return matchingGroups;
     }
 
@@ -2257,16 +2274,6 @@ function findFourNonBlueRunsForRow(group,rowIndex) {
     return matchingGroups;
 }
 
-/* Gri 1: yalnızca ilk ana balonun sırası. */
-function findFourNonBlueRuns(group) {
-    return findFourNonBlueRunsForRow(group,0);
-}
-
-/* Gri 2: yalnızca ikinci ana balonun sırası. */
-function findFourNonBlueSecondRowRuns(group) {
-    return findFourNonBlueRunsForRow(group,1);
-}
-
 function createFourGapSelectionCard(groups) {
     const card = document.createElement("div");
     card.className = "four-gap-select-card";
@@ -2277,7 +2284,7 @@ function createFourGapSelectionCard(groups) {
 
     const description = document.createElement("p");
     description.textContent =
-        "Karşılaştırmak istediğin dört kayıtlı listeyi seç. Her listede gri 1 ve gri 2 numaralı ana balonlar, kendi sıraları karıştırılmadan 1. kolondan 100. kolona kadar ayrı ayrı taranır.";
+        "Karşılaştırmak istediğin dört kayıtlı listeyi seç. Her listede gri 1 numaralı ilk balon ve gri 2 numaralı ikinci balon, birbirinden bağımsız olarak 1. kolondan 100. kolona kadar ayrı ayrı taranır.";
     card.appendChild(description);
 
     const count = document.createElement("div");
@@ -2335,8 +2342,6 @@ function createFourGapSelectionCard(groups) {
             } else {
                 selectedFourGapGroupIds.delete(id);
             }
-
-            fourGapAnalysisResults = null;
 
             count.textContent =
                 `Seçilen liste: ${selectedFourGapGroupIds.size} / 4`;
@@ -2406,8 +2411,13 @@ async function runFourSelectedListsAnalysis() {
         fourGapAnalysisResults = selectedGroups.map(group => ({
             id:String(group.id),
             name:group.name,
-            matches:findFourNonBlueRuns(group),
-            secondRowMatches:findFourNonBlueSecondRowRuns(group)
+
+            // Gri 1 numaralı ilk balonun sonuçları.
+            matchesFirstRow:findFourNonBlueRuns(group,0),
+
+            // Gri 2 numaralı ikinci balonun sonuçları.
+            // İlk sıradan tamamen bağımsız hesaplanır.
+            matchesSecondRow:findFourNonBlueRuns(group,1)
         }));
 
         const output = renderFourGapAnalysisResults(
@@ -2451,7 +2461,7 @@ function renderFourGapAnalysisResults(results) {
 
     const explanation = document.createElement("p");
     explanation.textContent =
-        "Her listede gri 1 ve gri 2 numaralı ana balonlar ayrı ayrı incelenir. Gri 1 yalnızca diğer gri 1 balonlarıyla, gri 2 yalnızca diğer gri 2 balonlarıyla karşılaştırılır. Her sıra için 1. kolondan 100. kolona kadar tarama yapılır. İki mavi balon arasında tam dört mavi olmayan balon bulunursa bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her yeni eşleşme ayrı bir satırda gösterilir.";
+        "Her listede gri 1 numaralı ilk balon ve gri 2 numaralı ikinci balon birbirinden bağımsız incelenir. Her sıra için tarama 1. kolondan 100. kolona kadar yapılır. İki mavi balon arasında tam dört mavi olmayan balon bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her yeni eşleşme ayrı bir satırda gösterilir.";
     card.appendChild(explanation);
 
     results.forEach((result,index) => {
@@ -2462,23 +2472,27 @@ function renderFourGapAnalysisResults(results) {
 
         card.appendChild(listTitle);
 
-        /* Gri 1 - Birinci ana balonun sonuçları */
+        // Gri 1 numaralı ilk balonun sonuç bölümü.
         const firstRowTitle = document.createElement("div");
-        firstRowTitle.className = "four-gap-row-title";
+        firstRowTitle.className = "four-gap-list-title";
         firstRowTitle.textContent =
-            "Gri 1 - Birinci Balonun İncelemesi";
+            "Gri 1 Numaralı Balonun Eşleşmeleri";
+
         card.appendChild(firstRowTitle);
 
-        if(!result.matches || result.matches.length === 0) {
+        if(
+            !result.matchesFirstRow ||
+            result.matchesFirstRow.length === 0
+        ) {
             const message = document.createElement("p");
             message.className = "four-gap-empty";
             message.textContent =
-                "İlk 100 kolon içinde gri 1 sırasında iki mavi balon arasında tam olarak dört mavi olmayan balon bulunamadı.";
+                "İlk 100 kolonda gri 1 numaralı balon sırasında iki mavi balon arasında tam dört mavi olmayan balon bulunamadı.";
 
             card.appendChild(message);
 
         } else {
-            result.matches.forEach(numbers => {
+            result.matchesFirstRow.forEach(numbers => {
                 const row = document.createElement("div");
                 row.className = "four-gap-row";
 
@@ -2493,23 +2507,28 @@ function renderFourGapAnalysisResults(results) {
             });
         }
 
-        /* Gri 2 - İkinci ana balonun sonuçları */
+        // Gri 2 numaralı ikinci balonun sonuç bölümü.
+        // Bu bölümde yalnızca numbers[1] sırası incelenmiştir.
         const secondRowTitle = document.createElement("div");
-        secondRowTitle.className = "four-gap-row-title";
+        secondRowTitle.className = "four-gap-list-title";
         secondRowTitle.textContent =
-            "Gri 2 - İkinci Balonun İncelemesi";
+            "Gri 2 Numaralı Balonun Eşleşmeleri";
+
         card.appendChild(secondRowTitle);
 
-        if(!result.secondRowMatches || result.secondRowMatches.length === 0) {
+        if(
+            !result.matchesSecondRow ||
+            result.matchesSecondRow.length === 0
+        ) {
             const message = document.createElement("p");
             message.className = "four-gap-empty";
             message.textContent =
-                "İlk 100 kolon içinde gri 2 sırasında iki mavi balon arasında tam olarak dört mavi olmayan balon bulunamadı.";
+                "İlk 100 kolonda gri 2 numaralı balon sırasında iki mavi balon arasında tam dört mavi olmayan balon bulunamadı.";
 
             card.appendChild(message);
 
         } else {
-            result.secondRowMatches.forEach(numbers => {
+            result.matchesSecondRow.forEach(numbers => {
                 const row = document.createElement("div");
                 row.className = "four-gap-row";
 
