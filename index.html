@@ -147,6 +147,13 @@
         overflow-wrap:anywhere;
     }
 
+    .four-gap-row-title{
+        color:#555;
+        font-size:14px;
+        font-weight:bold;
+        margin-top:14px;
+    }
+
     .four-gap-empty{
         color:#666;
         font-size:14px;
@@ -2191,14 +2198,18 @@ async function renderMySetsList(reqId) {
     );
 }
 
-/* GÜNCELLENDİ:
-   Her kolonun yalnızca ilk ana balonu, yani gri 1 numaralı sıra incelenir.
-   İlk 100 kolon taranır.
-   İki mavi kolon arasında tam dört mavi olmayan kolon varsa
-   bu dört kolonun kırmızı sıra numaraları bir grup olarak döndürülür.
+/*
+Her kayıtlı listede bütün ana sayı sıraları ayrı ayrı incelenir.
+1. sıra yalnızca diğer listelerin 1. sırasıyla,
+2. sıra yalnızca diğer listelerin 2. sırasıyla karşılaştırılır.
+Bu işlem listedeki mevcut bütün sıra numaraları için tekrarlanır.
+
+Her sıra için ilk 100 kolon taranır.
+İki mavi balon arasında tam dört mavi olmayan balon varsa
+bu dört kolonun kırmızı sıra numaraları bir grup olarak döndürülür.
 */
 function findFourNonBlueRuns(group) {
-    const matchingGroups = [];
+    const rowResults = [];
 
     if(
         !group ||
@@ -2206,7 +2217,7 @@ function findFourNonBlueRuns(group) {
         !group.results ||
         !Array.isArray(group.results.main)
     ) {
-        return matchingGroups;
+        return rowResults;
     }
 
     const resultNumbers = new Set(
@@ -2218,60 +2229,106 @@ function findFourNonBlueRuns(group) {
         100
     );
 
-    let pendingColumns = [];
-    let previousBlue = false;
+    /*
+    Listedeki en uzun ana sayı dizisi bulunur.
+    Böylece yalnızca ilk sıra değil, mevcut diğer sıralar da taranır.
+    */
+    let totalRows = 0;
 
     for(let index = 0; index < totalColumns; index++) {
         const set = group.sets[index];
 
-        if(
-            !set ||
-            !Array.isArray(set.numbers) ||
-            set.numbers.length === 0
-        ) {
-            pendingColumns = [];
-            previousBlue = false;
-            continue;
-        }
-
-        // Sadece gri renkli 1 numaralı ilk balon incelenir.
-        const firstBallNumber = Number(set.numbers[0]);
-
-        if(!Number.isFinite(firstBallNumber)) {
-            pendingColumns = [];
-            previousBlue = false;
-            continue;
-        }
-
-        const isBlue = resultNumbers.has(firstBallNumber);
-
-        // Kırmızı kolon sıra numarası 1'den başlar.
-        const columnNumber = index + 1;
-
-        if(isBlue) {
-
-            // Önceki mavi kolon ile bu mavi kolon arasında
-            // tam dört mavi olmayan kolon varsa eşleşmeyi kaydet.
-            if(
-                previousBlue &&
-                pendingColumns.length === 4
-            ) {
-                matchingGroups.push([...pendingColumns]);
-            }
-
-            // Yeni mavi kolon, sonraki aralığın başlangıcı olur.
-            pendingColumns = [];
-            previousBlue = true;
-
-        } else if(previousBlue) {
-
-            // İlk mavi kolon görüldükten sonraki mavi olmayan
-            // kolonların kırmızı kolon numaralarını biriktir.
-            pendingColumns.push(columnNumber);
+        if(set && Array.isArray(set.numbers)) {
+            totalRows = Math.max(
+                totalRows,
+                set.numbers.length
+            );
         }
     }
 
-    return matchingGroups;
+    /*
+    Her sıra kendi içinde bağımsız olarak taranır.
+    Bir sıradaki mavi/mavi olmayan durumları başka sıraya taşınmaz.
+    */
+    for(let rowIndex = 0; rowIndex < totalRows; rowIndex++) {
+
+        const matchingGroups = [];
+
+        let pendingColumns = [];
+        let previousBlue = false;
+
+        for(let columnIndex = 0; columnIndex < totalColumns; columnIndex++) {
+
+            const set = group.sets[columnIndex];
+
+            /*
+            İlgili kolonda bu sıra numarasına ait balon yoksa
+            mevcut aralık kesilir. Başka kolonla birleştirilmez.
+            */
+            if(
+                !set ||
+                !Array.isArray(set.numbers) ||
+                rowIndex >= set.numbers.length
+            ) {
+                pendingColumns = [];
+                previousBlue = false;
+                continue;
+            }
+
+            const ballNumber = Number(set.numbers[rowIndex]);
+
+            if(!Number.isFinite(ballNumber)) {
+                pendingColumns = [];
+                previousBlue = false;
+                continue;
+            }
+
+            const isBlue = resultNumbers.has(ballNumber);
+
+            /*
+            Kırmızı kolon sıra numarası 1'den başlar.
+            */
+            const columnNumber = columnIndex + 1;
+
+            if(isBlue) {
+
+                /*
+                Önceki mavi balon ile bu mavi balon arasında
+                tam dört mavi olmayan balon varsa eşleşme kaydedilir.
+                */
+                if(
+                    previousBlue &&
+                    pendingColumns.length === 4
+                ) {
+                    matchingGroups.push([...pendingColumns]);
+                }
+
+                /*
+                Yeni mavi balon, sonraki aralığın başlangıcıdır.
+                */
+                pendingColumns = [];
+                previousBlue = true;
+
+            } else if(previousBlue) {
+
+                /*
+                İlk mavi balondan sonraki mavi olmayan kolonların
+                kırmızı kolon numaraları biriktirilir.
+                */
+                pendingColumns.push(columnNumber);
+            }
+        }
+
+        /*
+        Her sıra kendi sonuçlarını ayrı bir nesne olarak saklar.
+        */
+        rowResults.push({
+            rowNumber:rowIndex + 1,
+            matches:matchingGroups
+        });
+    }
+
+    return rowResults;
 }
 
 function createFourGapSelectionCard(groups) {
@@ -2284,7 +2341,7 @@ function createFourGapSelectionCard(groups) {
 
     const description = document.createElement("p");
     description.textContent =
-        "Karşılaştırmak istediğin dört kayıtlı listeyi seç. Her listede yalnızca gri 1 numaralı ilk sıra balonu, 1. kolondan 100. kolona kadar ayrı ayrı taranır.";
+        "Karşılaştırmak istediğin dört kayıtlı listeyi seç. Her listede bütün gri sıra numaralı balonlar kendi sıralarında, 1. kolondan 100. kolona kadar ayrı ayrı taranır.";
     card.appendChild(description);
 
     const count = document.createElement("div");
@@ -2343,10 +2400,22 @@ function createFourGapSelectionCard(groups) {
                 selectedFourGapGroupIds.delete(id);
             }
 
+            /*
+            Liste seçimi değiştiğinde önceki karşılaştırma sonucu
+            artık güncel olmayacağından temizlenir.
+            */
+            fourGapAnalysisResults = null;
+
             count.textContent =
                 `Seçilen liste: ${selectedFourGapGroupIds.size} / 4`;
 
             updateFourGapCheckboxStates(listContainer);
+
+            const oldOutput = getEl("four-gap-analysis-output");
+
+            if(oldOutput) {
+                oldOutput.remove();
+            }
         });
     });
 
@@ -2408,6 +2477,10 @@ async function runFourSelectedListsAnalysis() {
             selectedGroups.push(group);
         }
 
+        /*
+        Dört seçilmiş liste ayrı ayrı analiz edilir.
+        Her listenin her sıra numarası kendi içinde taranır.
+        */
         fourGapAnalysisResults = selectedGroups.map(group => ({
             id:String(group.id),
             name:group.name,
@@ -2455,7 +2528,7 @@ function renderFourGapAnalysisResults(results) {
 
     const explanation = document.createElement("p");
     explanation.textContent =
-        "Her listede yalnızca gri renkli 1 numaralı ilk sıra balonu incelenir. Tarama 1. kolondan 100. kolona kadar yapılır. İki mavi ilk sıra balonu arasında tam dört mavi olmayan ilk sıra balonu bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her yeni eşleşme ayrı bir satırda, önceki satırın altında gösterilir.";
+        "Her listede bütün gri sıra numaralı balonlar kendi sıralarında ayrı ayrı incelenir. Örneğin 1. sıra yalnızca diğer kolonların 1. sırasıyla, 2. sıra yalnızca diğer kolonların 2. sırasıyla karşılaştırılır. Her sıra için 1. kolondan 100. kolona kadar tarama yapılır. İki mavi balon arasında tam dört mavi olmayan balon bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her eşleşme ayrı satırda gösterilir.";
     card.appendChild(explanation);
 
     results.forEach((result,index) => {
@@ -2470,24 +2543,50 @@ function renderFourGapAnalysisResults(results) {
             const message = document.createElement("p");
             message.className = "four-gap-empty";
             message.textContent =
-                "İlk 100 kolon içinde iki mavi ilk sıra balonu arasında tam olarak dört mavi olmayan ilk sıra balonu bulunamadı.";
+                "İncelenecek sıra numaralı balon bulunamadı.";
 
             card.appendChild(message);
             return;
         }
 
-        result.matches.forEach(numbers => {
-            const row = document.createElement("div");
-            row.className = "four-gap-row";
+        /*
+        Her sıra numarasının sonuçları ayrı bir bölümde gösterilir.
+        Böylece farklı sıra numaralarının eşleşmeleri karışmaz.
+        */
+        result.matches.forEach(rowResult => {
+            const rowTitle = document.createElement("div");
+            rowTitle.className = "four-gap-row-title";
+            rowTitle.textContent =
+                `${rowResult.rowNumber}. Sıra`;
 
-            numbers.forEach(number => {
-                const span = document.createElement("span");
-                span.className = "four-gap-number";
-                span.textContent = number;
-                row.appendChild(span);
+            card.appendChild(rowTitle);
+
+            if(
+                !rowResult.matches ||
+                rowResult.matches.length === 0
+            ) {
+                const message = document.createElement("p");
+                message.className = "four-gap-empty";
+                message.textContent =
+                    "Bu sırada tam dört mavi olmayan balon içeren eşleşme bulunamadı.";
+
+                card.appendChild(message);
+                return;
+            }
+
+            rowResult.matches.forEach(numbers => {
+                const row = document.createElement("div");
+                row.className = "four-gap-row";
+
+                numbers.forEach(number => {
+                    const span = document.createElement("span");
+                    span.className = "four-gap-number";
+                    span.textContent = number;
+                    row.appendChild(span);
+                });
+
+                card.appendChild(row);
             });
-
-            card.appendChild(row);
         });
     });
 
