@@ -30,7 +30,7 @@
         margin-bottom:3px;
         font-size:12px;
         font-weight:bold;
-        color:#f44336;
+        color:#808080;
         line-height:16px;
         text-align:center;
         box-sizing:border-box;
@@ -2526,9 +2526,7 @@ function createBallsUI(set,results = null,columnNumber = null) {
         const order = document.createElement("div");
         order.className = "ball-order";
 
-        if(columnNumber !== null) {
-            order.textContent = columnNumber;
-        }
+        order.textContent = index + 1;
 
         item.appendChild(order);
 
