@@ -74,8 +74,8 @@
 
     .four-gap-row{
         display:flex;
-        flex-wrap:wrap;
-        gap:12px;
+        flex-wrap:nowrap;
+        gap:0;
         margin-top:12px;
         padding:10px 0;
         border-bottom:1px solid #eee;
@@ -85,8 +85,10 @@
         color:#f44336;
         font-size:20px;
         font-weight:bold;
-        min-width:25px;
-        text-align:center;
+        min-width:0;
+        text-align:left;
+        white-space:nowrap;
+        letter-spacing:0;
     }
 
     .four-gap-select-card{
@@ -2554,13 +2556,11 @@ function renderFourGapAnalysisResults(results) {
             const row = document.createElement("div");
             row.className = "four-gap-row";
 
-            numbers.forEach(number => {
-                const span = document.createElement("span");
-                span.className = "four-gap-number";
-                span.textContent = number;
-                row.appendChild(span);
-            });
+            const span = document.createElement("span");
+            span.className = "four-gap-number";
+            span.textContent = numbers.join("");
 
+            row.appendChild(span);
             card.appendChild(row);
         });
     });
