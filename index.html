@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -153,6 +154,41 @@
         color:#666;
         font-size:14px;
         margin:10px 0;
+    }
+
+    .four-gap-calculation{
+        margin-top:12px;
+        padding:12px;
+        background:#f5f7fa;
+        border-radius:8px;
+        overflow-wrap:anywhere;
+    }
+
+    .four-gap-calculation-text{
+        font-family:monospace;
+        line-height:1.8;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+    }
+
+    .four-gap-average{
+        margin-top:10px;
+        padding:12px;
+        background:#e3f2fd;
+        border-radius:8px;
+    }
+
+    .four-gap-average-title{
+        font-weight:bold;
+        color:#1976d2;
+        margin-bottom:6px;
+    }
+
+    .four-gap-average-value{
+        font-size:22px;
+        font-weight:bold;
+        color:#d32f2f;
+        overflow-wrap:anywhere;
     }
 </style>
 </head>
@@ -2514,6 +2550,47 @@ async function runFourSelectedListsAnalysis() {
     }
 }
 
+/* Her eşleşmenin bitiştirilmiş kolon numarasını sayıya çevirir,
+   toplar ve eşleşme satırı sayısına böler. */
+function calculateFourGapAverage(matches) {
+    if(!Array.isArray(matches) || matches.length === 0) {
+        return null;
+    }
+
+    const values = matches.map(numbers => {
+        if(!Array.isArray(numbers) || numbers.length !== 4) {
+            throw new Error("Hesaplama için geçersiz kolon numarası dizisi bulundu.");
+        }
+
+        const joinedValue = numbers.join("");
+
+        if(!/^\d+$/.test(joinedValue)) {
+            throw new Error("Hesaplama için geçersiz sayı dizisi bulundu.");
+        }
+
+        const value = Number(joinedValue);
+
+        if(!Number.isSafeInteger(value)) {
+            throw new Error("Hesaplanacak sayı güvenli sayı sınırını aşıyor.");
+        }
+
+        return value;
+    });
+
+    const total = values.reduce((sum,value) => sum + value,0);
+
+    if(!Number.isSafeInteger(total)) {
+        throw new Error("Toplam değer güvenli sayı sınırını aşıyor.");
+    }
+
+    return {
+        values,
+        total,
+        count:values.length,
+        average:total / values.length
+    };
+}
+
 function renderFourGapAnalysisResults(results) {
     const card = document.createElement("div");
     card.className = "four-gap-card four-gap-results";
@@ -2531,7 +2608,7 @@ function renderFourGapAnalysisResults(results) {
 
     const explanation = document.createElement("p");
     explanation.textContent =
-        `Her listede yalnızca gri renkli ${rowNumber} numaralı ana balon incelenir. Tarama 1. kolondan 100. kolona kadar yapılır. Dört listede de aynı sıra numarası kendi satırında değerlendirilir; farklı sıra numaraları birbirine karıştırılmaz. İki mavi ${rowNumber} sıra numaralı balon arasında tam dört mavi olmayan ${rowNumber} sıra numaralı balon bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her yeni eşleşme ayrı bir satırda, önceki satırın altında gösterilir.`;
+        `Her listede yalnızca gri renkli ${rowNumber} numaralı ana balon incelenir. Tarama 1. kolondan 100. kolona kadar yapılır. İki mavi balon arasında tam dört mavi olmayan balon bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her eşleşme ayrı satırda gösterilir. Her listenin kendi satırları toplanır ve kendi satır sayısına bölünür. Listelerin hesaplamaları birbirine karıştırılmaz.`;
     card.appendChild(explanation);
 
     results.forEach((result,index) => {
@@ -2546,7 +2623,7 @@ function renderFourGapAnalysisResults(results) {
             const message = document.createElement("p");
             message.className = "four-gap-empty";
             message.textContent =
-                `İlk 100 kolon içinde iki mavi ${rowNumber} sıra numaralı balon arasında tam olarak dört mavi olmayan ${rowNumber} sıra numaralı balon bulunamadı.`;
+                `İlk 100 kolon içinde iki mavi ${rowNumber} sıra numaralı balon arasında tam olarak dört mavi olmayan ${rowNumber} sıra numaralı balon bulunamadı. Bu liste için ortalama hesaplanmadı.`;
 
             card.appendChild(message);
             return;
@@ -2563,6 +2640,58 @@ function renderFourGapAnalysisResults(results) {
             row.appendChild(span);
             card.appendChild(row);
         });
+
+        const calculation = calculateFourGapAverage(result.matches);
+
+        if(!calculation) return;
+
+        const calculationBox = document.createElement("div");
+        calculationBox.className = "four-gap-calculation";
+
+        const calculationTitle = document.createElement("div");
+        calculationTitle.className = "four-gap-list-title";
+        calculationTitle.textContent = "Hesaplama:";
+        calculationBox.appendChild(calculationTitle);
+
+        const calculationText = document.createElement("div");
+        calculationText.className = "four-gap-calculation-text";
+
+        calculationText.textContent =
+            calculation.values.join(" + ") +
+            " = " +
+            calculation.total;
+
+        calculationBox.appendChild(calculationText);
+
+        const divisionText = document.createElement("div");
+        divisionText.className = "four-gap-calculation-text";
+
+        divisionText.textContent =
+            `${calculation.total} / ${calculation.count} = ${calculation.average.toLocaleString("tr-TR",{
+                maximumFractionDigits:6
+            })}`;
+
+        calculationBox.appendChild(divisionText);
+
+        const averageBox = document.createElement("div");
+        averageBox.className = "four-gap-average";
+
+        const averageTitle = document.createElement("div");
+        averageTitle.className = "four-gap-average-title";
+        averageTitle.textContent =
+            `Ortalama (${calculation.count} satıra bölündü):`;
+
+        const averageValue = document.createElement("div");
+        averageValue.className = "four-gap-average-value";
+        averageValue.textContent =
+            calculation.average.toLocaleString("tr-TR",{
+                maximumFractionDigits:6
+            });
+
+        averageBox.append(averageTitle,averageValue);
+        calculationBox.appendChild(averageBox);
+
+        card.appendChild(calculationBox);
     });
 
     return card;
