@@ -156,38 +156,34 @@
         margin:10px 0;
     }
 
-    .four-gap-summary{
-        background:#f2f6fb;
-        border-radius:8px;
-        padding:12px;
-        margin:15px 0 20px;
-        overflow-wrap:anywhere;
+    .four-gap-average-card{
+        background:#eaf3ff;
+        border:1px solid #90caf9;
+        border-radius:10px;
+        padding:15px;
+        margin-bottom:18px;
     }
 
-    .four-gap-summary-title{
+    .four-gap-average-title{
         color:#1976d2;
+        font-size:17px;
         font-weight:bold;
-        margin-bottom:10px;
+        margin-bottom:12px;
     }
 
-    .four-gap-summary-line{
-        margin:8px 0;
-        line-height:1.5;
-        overflow-wrap:anywhere;
-    }
-
-    .four-gap-summary-value{
+    .four-gap-average-value{
         color:#d32f2f;
+        font-size:25px;
         font-weight:bold;
-        font-size:20px;
+        overflow-wrap:anywhere;
+        margin:12px 0;
     }
 
-    .four-gap-calculation{
+    .four-gap-average-detail{
         font-family:monospace;
         font-size:14px;
-        line-height:1.7;
+        line-height:1.8;
         overflow-wrap:anywhere;
-        word-break:break-word;
     }
 </style>
 </head>
@@ -2512,42 +2508,68 @@ async function runFourSelectedListsAnalysis() {
             selectedGroups.push(group);
         }
 
-        fourGapAnalysisResults = selectedGroups.map(group => ({
+        const results = selectedGroups.map(group => ({
             id:String(group.id),
             name:group.name,
             rowNumber,
             matches:findFourNonBlueRuns(group,rowNumber)
         }));
 
-        const allMatchingRows =
-            fourGapAnalysisResults.flatMap(result =>
-                result.matches || []
-            );
+        const allSequences = [];
 
-        const allColumnNumbers =
-            allMatchingRows.flatMap(numbers =>
-                numbers.map(Number)
-            );
+        results.forEach(result => {
+            result.matches.forEach(sequence => {
+                const joinedNumber = sequence.join("");
 
-        const totalSum = allColumnNumbers.reduce(
-            (sum,number) => sum + number,
-            0
-        );
+                if(!/^\d+$/.test(joinedNumber)) {
+                    return;
+                }
 
-        const numberCount = allColumnNumbers.length;
+                allSequences.push({
+                    listName:result.name,
+                    sequence:joinedNumber,
+                    value:BigInt(joinedNumber)
+                });
+            });
+        });
 
-        const average =
-            numberCount > 0
-                ? totalSum / numberCount
-                : null;
+        let total = 0n;
 
-        fourGapAnalysisResults.summary = {
-            totalSum,
-            numberCount,
-            average,
-            calculation:allMatchingRows.map(numbers =>
-                [...numbers]
-            )
+        allSequences.forEach(item => {
+            total += item.value;
+        });
+
+        const count = allSequences.length;
+
+        let average = null;
+
+        if(count > 0) {
+            const divisor = BigInt(count);
+            const scale = 1000000n;
+
+            const scaled =
+                (total * scale + divisor / 2n) / divisor;
+
+            const whole = scaled / scale;
+
+            const fraction =
+                (scaled % scale)
+                    .toString()
+                    .padStart(6,"0")
+                    .replace(/0+$/,"");
+
+            average = fraction
+                ? `${whole}.${fraction}`
+                : whole.toString();
+        }
+
+        fourGapAnalysisResults = {
+            rowNumber,
+            results,
+            allSequences,
+            total:total.toString(),
+            count,
+            average
         };
 
         const output = renderFourGapAnalysisResults(
@@ -2580,15 +2602,77 @@ async function runFourSelectedListsAnalysis() {
     }
 }
 
-function renderFourGapAnalysisResults(results) {
+function renderFourGapAnalysisResults(data) {
     const card = document.createElement("div");
     card.className = "four-gap-card four-gap-results";
     card.id = "four-gap-analysis-output";
 
-    const rowNumber =
-        results.length > 0
-            ? results[0].rowNumber
-            : 1;
+    const rowNumber = data.rowNumber || 1;
+
+    const averageCard = document.createElement("div");
+    averageCard.className = "four-gap-average-card";
+
+    const averageTitle = document.createElement("div");
+    averageTitle.className = "four-gap-average-title";
+    averageTitle.textContent =
+        "Dört Listenin Birleşik Hesaplama Sonucu";
+
+    averageCard.appendChild(averageTitle);
+
+    const countInfo = document.createElement("div");
+    countInfo.textContent =
+        `Bulunan bitiştirilmiş sayı dizisi adedi: ${data.count}`;
+
+    averageCard.appendChild(countInfo);
+
+    const totalInfo = document.createElement("div");
+    totalInfo.className = "four-gap-average-value";
+    totalInfo.textContent =
+        `Toplam: ${data.total}`;
+
+    averageCard.appendChild(totalInfo);
+
+    const averageInfo = document.createElement("div");
+    averageInfo.className = "four-gap-average-value";
+    averageInfo.textContent =
+        data.average === null
+            ? "Ortalama hesaplanamadı"
+            : `Ortalama: ${data.average}`;
+
+    averageCard.appendChild(averageInfo);
+
+    const calculationInfo = document.createElement("div");
+    calculationInfo.className = "four-gap-average-detail";
+
+    calculationInfo.textContent =
+        data.count > 0
+            ? `${data.total} ÷ ${data.count} = ${data.average}`
+            : "Hesaplama için eşleşen sayı dizisi bulunamadı.";
+
+    averageCard.appendChild(calculationInfo);
+
+    if(data.allSequences && data.allSequences.length > 0) {
+        const sequenceTitle = document.createElement("div");
+        sequenceTitle.className = "four-gap-average-detail";
+        sequenceTitle.style.marginTop = "12px";
+        sequenceTitle.style.fontWeight = "bold";
+        sequenceTitle.textContent =
+            "Toplama dahil edilen sayı dizileri:";
+
+        averageCard.appendChild(sequenceTitle);
+
+        const sequenceList = document.createElement("div");
+        sequenceList.className = "four-gap-average-detail";
+
+        sequenceList.textContent =
+            data.allSequences
+                .map(item => item.sequence)
+                .join(" + ");
+
+        averageCard.appendChild(sequenceList);
+    }
+
+    card.appendChild(averageCard);
 
     const title = document.createElement("b");
     title.textContent =
@@ -2597,97 +2681,10 @@ function renderFourGapAnalysisResults(results) {
 
     const explanation = document.createElement("p");
     explanation.textContent =
-        `Her listede yalnızca gri renkli ${rowNumber} numaralı ana balon incelenir. Tarama 1. kolondan 100. kolona kadar yapılır. Dört listede de aynı sıra numarası kendi satırında değerlendirilir; farklı sıra numaraları birbirine karıştırılmaz. İki mavi ${rowNumber} sıra numaralı balon arasında tam dört mavi olmayan ${rowNumber} sıra numaralı balon bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Eşleşmelerin tamamındaki kolon numaraları birlikte toplanır ve toplam sayı adedine bölünerek tek bir genel ortalama hesaplanır.`;
+        `Her listede yalnızca gri renkli ${rowNumber} numaralı ana balon incelenir. Tarama 1. kolondan 100. kolona kadar yapılır. Dört listede de aynı sıra numarası kendi satırında değerlendirilir; farklı sıra numaraları birbirine karıştırılmaz. İki mavi ${rowNumber} sıra numaralı balon arasında tam dört mavi olmayan ${rowNumber} sıra numaralı balon bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her yeni eşleşme ayrı bir satırda, önceki satırın altında gösterilir.`;
     card.appendChild(explanation);
 
-    const summary = results.summary || {
-        totalSum:0,
-        numberCount:0,
-        average:null,
-        calculation:[]
-    };
-
-    const summaryCard = document.createElement("div");
-    summaryCard.className = "four-gap-summary";
-
-    const summaryTitle = document.createElement("div");
-    summaryTitle.className = "four-gap-summary-title";
-    summaryTitle.textContent =
-        "Dört Listenin Birleştirilmiş Genel Ortalama Hesabı";
-    summaryCard.appendChild(summaryTitle);
-
-    const calculationLabel = document.createElement("div");
-    calculationLabel.className = "four-gap-summary-line";
-    calculationLabel.textContent =
-        "Hesaplamaya katılan eşleşme satırları:";
-    summaryCard.appendChild(calculationLabel);
-
-    const calculation = document.createElement("div");
-    calculation.className = "four-gap-calculation";
-
-    if(summary.calculation && summary.calculation.length > 0) {
-        calculation.textContent =
-            summary.calculation
-                .map(numbers => numbers.join(""))
-                .join(" + ");
-    } else {
-        calculation.textContent =
-            "Hesaplamaya katılan eşleşme bulunamadı.";
-    }
-
-    summaryCard.appendChild(calculation);
-
-    const totalLine = document.createElement("div");
-    totalLine.className = "four-gap-summary-line";
-    totalLine.textContent =
-        `Bütün kolon numaralarının toplamı: ${summary.totalSum}`;
-    summaryCard.appendChild(totalLine);
-
-    const countLine = document.createElement("div");
-    countLine.className = "four-gap-summary-line";
-    countLine.textContent =
-        `Toplam kolon numarası adedi: ${summary.numberCount}`;
-    summaryCard.appendChild(countLine);
-
-    const averageLine = document.createElement("div");
-    averageLine.className = "four-gap-summary-line";
-
-    if(
-        summary.numberCount > 0 &&
-        Number.isFinite(summary.average)
-    ) {
-        const averageLabel = document.createElement("span");
-        averageLabel.textContent = "Genel ortalama: ";
-
-        const averageValue = document.createElement("span");
-        averageValue.className = "four-gap-summary-value";
-        averageValue.textContent =
-            summary.average.toLocaleString("tr-TR",{
-                maximumFractionDigits:6
-            });
-
-        averageLine.append(averageLabel,averageValue);
-
-        const formula = document.createElement("div");
-        formula.className = "four-gap-summary-line";
-        formula.textContent =
-            `${summary.totalSum} ÷ ${summary.numberCount} = ` +
-            summary.average.toLocaleString("tr-TR",{
-                maximumFractionDigits:6
-            });
-
-        summaryCard.appendChild(averageLine);
-        summaryCard.appendChild(formula);
-
-    } else {
-        averageLine.textContent =
-            "Genel ortalama: Hesaplanamadı. Dört listede hesaplamaya uygun eşleşme bulunamadı.";
-        summaryCard.appendChild(averageLine);
-    }
-
-    card.appendChild(summaryCard);
-
-    results.forEach((result,index) => {
+    data.results.forEach((result,index) => {
         const listTitle = document.createElement("div");
         listTitle.className = "four-gap-list-title";
         listTitle.textContent =
