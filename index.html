@@ -2274,7 +2274,8 @@ function findFourNonBlueRuns(group,rowNumber) {
         }
 
         const isBlue = resultNumbers.has(selectedBallNumber);
-        const columnNumber = index + 1;
+
+        const columnNumber = index + 100;
 
         if(isBlue) {
 
@@ -2813,7 +2814,7 @@ function createBallsUI(set,results = null,columnNumber = null) {
         order.className = "ball-order";
 
         if(columnNumber !== null) {
-            order.textContent = columnNumber;
+            order.textContent = columnNumber + 99;
         }
 
         item.appendChild(order);
