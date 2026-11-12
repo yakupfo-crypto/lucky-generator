@@ -289,7 +289,7 @@ const GENERATION_LIMITS = {
     per:100,
     jokerMax:1000,
     jokerPer:100,
-    count:100
+    count:1000
 };
 
 let generatedSets = [];
@@ -2244,7 +2244,7 @@ function findFourNonBlueRuns(group,rowNumber) {
 
     const totalColumns = Math.min(
         group.sets.length,
-        100
+        1000
     );
 
     let pendingColumns = [];
@@ -2308,7 +2308,7 @@ function createFourGapSelectionCard(groups) {
 
     const description = document.createElement("p");
     description.textContent =
-        "Karşılaştırmak istediğin dört kayıtlı listeyi seç. Girilen gri balon sıra numarası, seçilen dört listede yalnızca kendi sırasındaki ana balonlarla karşılaştırılır. İlk 100 kolon taranır; farklı sıra numaraları birbirine karıştırılmaz.";
+        "Karşılaştırmak istediğin dört kayıtlı listeyi seç. Girilen gri balon sıra numarası, seçilen dört listede yalnızca kendi sırasındaki ana balonlarla karşılaştırılır. İlk 1000 kolon taranır; farklı sıra numaraları birbirine karıştırılmaz.";
     card.appendChild(description);
 
     const count = document.createElement("div");
@@ -2482,7 +2482,7 @@ async function runFourSelectedListsAnalysis() {
 
             const totalColumns = Math.min(
                 group.sets.length,
-                100
+                1000
             );
 
             if(totalColumns === 0) {
@@ -2682,7 +2682,7 @@ function renderFourGapAnalysisResults(data) {
 
     const explanation = document.createElement("p");
     explanation.textContent =
-        `Her listede yalnızca gri renkli ${rowNumber} numaralı ana balon incelenir. Tarama 1. kolondan 100. kolona kadar yapılır. Dört listede de aynı sıra numarası kendi satırında değerlendirilir; farklı sıra numaraları birbirine karıştırılmaz. İki mavi ${rowNumber} sıra numaralı balon arasında tam dört mavi olmayan ${rowNumber} sıra numaralı balon bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her yeni eşleşme ayrı bir satırda, önceki satırın altında gösterilir.`;
+        `Her listede yalnızca gri renkli ${rowNumber} numaralı ana balon incelenir. Tarama 1. kolondan 1000. kolona kadar yapılır. Dört listede de aynı sıra numarası kendi satırında değerlendirilir; farklı sıra numaraları birbirine karıştırılmaz. İki mavi ${rowNumber} sıra numaralı balon arasında tam dört mavi olmayan ${rowNumber} sıra numaralı balon bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her yeni eşleşme ayrı bir satırda, önceki satırın altında gösterilir.`;
     card.appendChild(explanation);
 
     data.results.forEach((result,index) => {
@@ -2697,7 +2697,7 @@ function renderFourGapAnalysisResults(data) {
             const message = document.createElement("p");
             message.className = "four-gap-empty";
             message.textContent =
-                `İlk 100 kolon içinde iki mavi ${rowNumber} sıra numaralı balon arasında tam olarak dört mavi olmayan ${rowNumber} sıra numaralı balon bulunamadı.`;
+                `İlk 1000 kolon içinde iki mavi ${rowNumber} sıra numaralı balon arasında tam olarak dört mavi olmayan ${rowNumber} sıra numaralı balon bulunamadı.`;
 
             card.appendChild(message);
             return;
