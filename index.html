@@ -184,60 +184,6 @@
         line-height:1.8;
         overflow-wrap:anywhere;
     }
-
-    .four-gap-digit-display{
-        margin-top:15px;
-        padding:12px;
-        background:#fff;
-        border:1px solid #90caf9;
-        border-radius:8px;
-        overflow-x:auto;
-    }
-
-    .four-gap-digit-header,
-    .four-gap-digit-line{
-        display:flex;
-        align-items:center;
-        gap:5px;
-        width:max-content;
-        min-width:100%;
-        font-family:monospace;
-    }
-
-    .four-gap-digit-header{
-        margin-bottom:5px;
-        color:#1976d2;
-        font-size:15px;
-        font-weight:bold;
-    }
-
-    .four-gap-digit-group{
-        width:3ch;
-        min-width:3ch;
-        text-align:center;
-    }
-
-    .four-gap-digit-separator{
-        width:1ch;
-        text-align:center;
-    }
-
-    .four-gap-digit-line{
-        color:#d32f2f;
-        font-size:21px;
-        font-weight:bold;
-        white-space:nowrap;
-    }
-
-    .four-gap-digit-decimal{
-        margin-left:2px;
-    }
-
-    .four-gap-digit-note{
-        margin-top:8px;
-        color:#666;
-        font-size:12px;
-    }
 </style>
 </head>
 <body>
@@ -2596,44 +2542,24 @@ async function runFourSelectedListsAnalysis() {
         const count = allSequences.length;
 
         let average = null;
-        let divisionRepeating = false;
 
         if(count > 0) {
             const divisor = BigInt(count);
-            const whole = total / divisor;
-            let remainder = total % divisor;
+            const scale = 1000000n;
 
-            let fraction = "";
-            const seenRemainders = new Set();
+            const scaled =
+                (total * scale + divisor / 2n) / divisor;
 
-            const maxDecimalPlaces = 100;
+            const whole = scaled / scale;
 
-            while(
-                remainder !== 0n &&
-                fraction.length < maxDecimalPlaces
-            ) {
-                if(seenRemainders.has(remainder.toString())) {
-                    divisionRepeating = true;
-                    break;
-                }
+            const fraction =
+                (scaled % scale)
+                    .toString()
+                    .padStart(6,"0")
+                    .replace(/0+$/,"");
 
-                seenRemainders.add(remainder.toString());
-
-                remainder *= 10n;
-
-                const digit = remainder / divisor;
-
-                fraction += digit.toString();
-
-                remainder %= divisor;
-            }
-
-            if(remainder !== 0n) {
-                divisionRepeating = true;
-            }
-
-            average = fraction.length > 0
-                ? `${whole}.${fraction}${divisionRepeating ? "…" : ""}`
+            average = fraction
+                ? `${whole}.${fraction}`
                 : whole.toString();
         }
 
@@ -2643,8 +2569,7 @@ async function runFourSelectedListsAnalysis() {
             allSequences,
             total:total.toString(),
             count,
-            average,
-            divisionRepeating
+            average
         };
 
         const output = renderFourGapAnalysisResults(
@@ -2719,95 +2644,91 @@ function renderFourGapAnalysisResults(data) {
     const calculationInfo = document.createElement("div");
     calculationInfo.className = "four-gap-average-detail";
 
-    calculationInfo.textContent =
-        data.count > 0
-            ? `${data.total} ÷ ${data.count} = ${data.average}`
-            : "Hesaplama için eşleşen sayı dizisi bulunamadı.";
+    if(data.count > 0 && data.average !== null) {
+        const equation = document.createElement("div");
+        equation.textContent =
+            `${data.total} ÷ ${data.count} =`;
+
+        calculationInfo.appendChild(equation);
+
+        const averageText = String(data.average);
+        const decimalIndex = averageText.indexOf(".");
+
+        const integerPart =
+            decimalIndex === -1
+                ? averageText
+                : averageText.slice(0,decimalIndex);
+
+        const decimalPart =
+            decimalIndex === -1
+                ? ""
+                : averageText.slice(decimalIndex);
+
+        const firstTwelveDigits = integerPart.slice(0,12);
+        const remainingDigits = integerPart.slice(12);
+
+        const groups = firstTwelveDigits.match(/.{1,3}/g) || [];
+
+        if(groups.length > 0) {
+            const numberRow = document.createElement("div");
+            numberRow.style.display = "grid";
+            numberRow.style.gridTemplateColumns =
+                `repeat(${groups.length}, 4ch)`;
+            numberRow.style.width = "max-content";
+            numberRow.style.maxWidth = "100%";
+            numberRow.style.textAlign = "center";
+            numberRow.style.fontWeight = "bold";
+            numberRow.style.marginTop = "5px";
+
+            groups.forEach((group,index) => {
+                const numberLabel = document.createElement("span");
+                numberLabel.textContent = index + 1;
+                numberRow.appendChild(numberLabel);
+            });
+
+            const resultRow = document.createElement("div");
+            resultRow.style.display = "grid";
+            resultRow.style.gridTemplateColumns =
+                `repeat(${groups.length}, 4ch)`;
+            resultRow.style.width = "max-content";
+            resultRow.style.maxWidth = "100%";
+            resultRow.style.whiteSpace = "nowrap";
+            resultRow.style.fontWeight = "bold";
+            resultRow.style.color = "#d32f2f";
+            resultRow.style.fontSize = "16px";
+
+            groups.forEach((group,index) => {
+                const groupSpan = document.createElement("span");
+
+                groupSpan.textContent =
+                    index < groups.length - 1
+                        ? group + "-"
+                        : group;
+
+                resultRow.appendChild(groupSpan);
+            });
+
+            calculationInfo.appendChild(numberRow);
+            calculationInfo.appendChild(resultRow);
+        }
+
+        if(remainingDigits || decimalPart) {
+            const remainingText = document.createElement("div");
+            remainingText.style.fontWeight = "bold";
+            remainingText.style.color = "#d32f2f";
+            remainingText.style.fontSize = "16px";
+            remainingText.textContent =
+                remainingDigits + decimalPart;
+
+            calculationInfo.appendChild(remainingText);
+        }
+
+    } else {
+        calculationInfo.textContent =
+            "Hesaplama için eşleşen sayı dizisi bulunamadı.";
+    }
 
     averageCard.appendChild(calculationInfo);
-
-    if(data.count > 0 && data.average !== null) {
-
-        const display = document.createElement("div");
-        display.className = "four-gap-digit-display";
-
-        const integerPart = data.average.split(".")[0];
-
-        const digitGroups = [];
-
-        for(let i = 0; i < integerPart.length; i += 3) {
-            digitGroups.push(integerPart.substring(i,i + 3));
-        }
-
-        const header = document.createElement("div");
-        header.className = "four-gap-digit-header";
-
-        digitGroups.forEach((group,index) => {
-
-            const number = document.createElement("span");
-            number.className = "four-gap-digit-group";
-
-            number.textContent = index < 4
-                ? String(index + 1)
-                : "";
-
-            header.appendChild(number);
-
-            if(index < digitGroups.length - 1) {
-                const separator = document.createElement("span");
-                separator.className = "four-gap-digit-separator";
-                header.appendChild(separator);
-            }
-        });
-
-        const numberLine = document.createElement("div");
-        numberLine.className = "four-gap-digit-line";
-
-        digitGroups.forEach((group,index) => {
-
-            const digit = document.createElement("span");
-            digit.className = "four-gap-digit-group";
-            digit.textContent = group;
-
-            numberLine.appendChild(digit);
-
-            if(index < digitGroups.length - 1) {
-                const separator = document.createElement("span");
-                separator.className = "four-gap-digit-separator";
-                separator.textContent = "-";
-
-                numberLine.appendChild(separator);
-            }
-        });
-
-        const decimalPart = data.average.includes(".")
-            ? data.average.substring(data.average.indexOf("."))
-            : "";
-
-        if(decimalPart) {
-            const decimal = document.createElement("span");
-            decimal.className = "four-gap-digit-decimal";
-            decimal.textContent = decimalPart;
-
-            numberLine.appendChild(decimal);
-        }
-
-        display.appendChild(header);
-        display.appendChild(numberLine);
-
-        const note = document.createElement("div");
-        note.className = "four-gap-digit-note";
-
-        note.textContent =
-            "Üstteki 1, 2, 3 ve 4 numaraları tam kısmın ilk 12 basamağını üçerli gruplar halinde gösterir." +
-            (data.divisionRepeating
-                ? " Ondalık bölüm devam etmektedir; üç nokta devam eden basamakları belirtir."
-                : "");
-
-        display.appendChild(note);
-
-        averageCard.appendChild(display);
-    }
 
     if(data.allSequences && data.allSequences.length > 0) {
         const sequenceTitle = document.createElement("div");
