@@ -186,61 +186,53 @@
         overflow-wrap:anywhere;
     }
 
-    .four-gap-division-numbered{
+    .four-gap-division-result{
         display:inline-flex;
-        flex-wrap:nowrap;
-        align-items:flex-end;
-        vertical-align:middle;
-        white-space:nowrap;
-        gap:0;
-        max-width:100%;
-        overflow-x:auto;
+        flex-direction:column;
         font-family:monospace;
-        font-size:16px;
+        font-size:18px;
         font-weight:bold;
-        line-height:1.5;
+        white-space:nowrap;
+        margin-top:8px;
+        max-width:100%;
+    }
+
+    .four-gap-division-labels,
+    .four-gap-division-number{
+        display:flex;
+        align-items:center;
+        flex-wrap:nowrap;
     }
 
     .four-gap-division-group{
-        display:inline-flex;
-        flex-direction:column;
-        align-items:center;
-        justify-content:flex-end;
-        flex-shrink:0;
+        display:inline-block;
+        flex:0 0 3ch;
+        width:3ch;
+        text-align:center;
+        box-sizing:border-box;
     }
 
     .four-gap-division-label{
         color:#f44336;
-        font-size:12px;
-        font-weight:bold;
-        line-height:16px;
-        text-align:center;
-    }
-
-    .four-gap-division-digits{
-        color:#333;
-        white-space:nowrap;
+        font-size:13px;
+        line-height:18px;
     }
 
     .four-gap-division-separator{
-        color:#333;
-        padding:0 2px;
-        align-self:flex-end;
-        flex-shrink:0;
+        display:inline-block;
+        flex:0 0 1ch;
+        width:1ch;
+        text-align:center;
+    }
+
+    .four-gap-division-label-spacer{
+        visibility:hidden;
     }
 
     .four-gap-division-decimal{
-        color:#333;
+        display:inline-block;
+        flex:0 0 auto;
         white-space:nowrap;
-        align-self:flex-end;
-        flex-shrink:0;
-    }
-
-    .four-gap-division-extra{
-        color:#333;
-        white-space:nowrap;
-        align-self:flex-end;
-        flex-shrink:0;
     }
 </style>
 </head>
@@ -1584,6 +1576,23 @@ function normalizeDraftInputs(data) {
     };
 }
 
+async function requestPersistentStorage() {
+    if(
+        navigator.storage &&
+        navigator.storage.persist
+    ) {
+        try {
+            const isPersisted = await navigator.storage.persisted();
+
+            if(!isPersisted) {
+                await navigator.storage.persist();
+            }
+        } catch(e) {
+            ErrorHandler.report("Persistent Storage Error",e);
+        }
+    }
+}
+
 window.onload = async () => {
 
     if(!CryptoEngine.isSecure) {
@@ -2643,65 +2652,73 @@ async function runFourSelectedListsAnalysis() {
     }
 }
 
-/* Bölme sonucunun ilk 12 tam sayı basamağını
-   üçerli gruplara ayırarak üstten numaralandırır. */
+/* Bölme sonucunu üçlü gruplara ayırır ve ilk dört grubun
+   üzerine 1, 2, 3, 4 numaralarını yerleştirir. */
 function createNumberedDivisionResult(value) {
-    const wrapper = document.createElement("span");
-    wrapper.className = "four-gap-division-numbered";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "four-gap-division-result";
 
     const parts = String(value).split(".");
-    const integerPart = parts[0] || "0";
+    const integerPart = parts[0];
 
     const decimalPart = parts.length > 1
         ? "." + parts.slice(1).join(".")
         : "";
 
-    const firstTwelveDigits = integerPart.slice(0,12);
-    const remainingDigits = integerPart.slice(12);
+    const groups = integerPart.match(/.{1,3}/g) || [];
 
-    const groups = firstTwelveDigits.match(/.{1,3}/g) || [];
+    const labels = document.createElement("div");
+    labels.className = "four-gap-division-labels";
 
-    groups.forEach((digits,index) => {
-        const group = document.createElement("span");
-        group.className = "four-gap-division-group";
+    const numberRow = document.createElement("div");
+    numberRow.className = "four-gap-division-number";
+
+    groups.forEach((group,index) => {
 
         const label = document.createElement("span");
-        label.className = "four-gap-division-label";
-        label.textContent = index + 1;
+        label.className =
+            "four-gap-division-group four-gap-division-label";
 
-        group.appendChild(label);
+        label.textContent = index < 4
+            ? index + 1
+            : "";
+
+        labels.appendChild(label);
 
         const number = document.createElement("span");
-        number.className = "four-gap-division-digits";
-        number.textContent = digits;
+        number.className = "four-gap-division-group";
+        number.textContent = group;
 
-        group.appendChild(number);
-        wrapper.appendChild(group);
+        numberRow.appendChild(number);
 
         if(index < groups.length - 1) {
+
+            const labelSpacer = document.createElement("span");
+            labelSpacer.className =
+                "four-gap-division-separator four-gap-division-label-spacer";
+            labelSpacer.textContent = "-";
+
+            labels.appendChild(labelSpacer);
+
             const separator = document.createElement("span");
             separator.className = "four-gap-division-separator";
             separator.textContent = "-";
 
-            wrapper.appendChild(separator);
+            numberRow.appendChild(separator);
         }
     });
-
-    if(remainingDigits) {
-        const extra = document.createElement("span");
-        extra.className = "four-gap-division-extra";
-        extra.textContent = remainingDigits;
-
-        wrapper.appendChild(extra);
-    }
 
     if(decimalPart) {
         const decimal = document.createElement("span");
         decimal.className = "four-gap-division-decimal";
         decimal.textContent = decimalPart;
 
-        wrapper.appendChild(decimal);
+        numberRow.appendChild(decimal);
     }
+
+    wrapper.appendChild(labels);
+    wrapper.appendChild(numberRow);
 
     return wrapper;
 }
@@ -2748,17 +2765,17 @@ function renderFourGapAnalysisResults(data) {
     const calculationInfo = document.createElement("div");
     calculationInfo.className = "four-gap-average-detail";
 
-    if(data.count > 0 && data.average !== null) {
-        calculationInfo.appendChild(
-            document.createTextNode(
-                `${data.total} ÷ ${data.count} = `
-            )
-        );
+    if(data.count > 0) {
+
+        calculationInfo.textContent =
+            `${data.total} ÷ ${data.count} =`;
 
         calculationInfo.appendChild(
             createNumberedDivisionResult(data.average)
         );
+
     } else {
+
         calculationInfo.textContent =
             "Hesaplama için eşleşen sayı dizisi bulunamadı.";
     }
