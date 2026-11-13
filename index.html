@@ -185,65 +185,71 @@
         overflow-wrap:anywhere;
     }
 
-    .division-digits-card{
-        margin-top:15px;
-        padding:12px;
+    /* Bölme sonucunun ilk 12 rakamını üçlü gruplar halinde gösterir. */
+    .four-gap-division-card{
         background:#fff;
         border:1px solid #90caf9;
-        border-radius:8px;
+        border-radius:10px;
+        padding:12px;
+        margin-top:15px;
         overflow-x:auto;
     }
 
-    .division-digits-title{
+    .four-gap-division-title{
         color:#1976d2;
-        font-size:14px;
+        font-size:15px;
         font-weight:bold;
         margin-bottom:12px;
     }
 
-    .division-digits-row{
+    .four-gap-division-groups{
         display:flex;
         align-items:flex-end;
-        justify-content:flex-start;
-        gap:5px;
-        white-space:nowrap;
+        flex-wrap:nowrap;
+        gap:0;
+        width:max-content;
+        min-width:100%;
         font-family:monospace;
     }
 
-    .division-digit-group{
+    .four-gap-division-group{
         display:flex;
         flex-direction:column;
         align-items:center;
-        min-width:0;
+        justify-content:flex-end;
+        min-width:48px;
     }
 
-    .division-digit-order{
-        color:#f44336;
-        font-size:15px;
+    .four-gap-division-order{
+        color:#1976d2;
+        font-size:13px;
         font-weight:bold;
-        line-height:20px;
         text-align:center;
+        margin-bottom:5px;
+        width:100%;
     }
 
-    .division-digit-value{
-        color:#222;
-        font-size:21px;
+    .four-gap-division-number{
+        color:#d32f2f;
+        font-size:22px;
         font-weight:bold;
-        line-height:28px;
+        text-align:center;
+        white-space:nowrap;
     }
 
-    .division-digit-separator{
-        color:#222;
-        font-size:21px;
+    .four-gap-division-separator{
+        color:#333;
+        font-size:22px;
         font-weight:bold;
-        line-height:28px;
+        padding:0 2px 1px;
     }
 
-    .division-digit-decimal{
-        color:#222;
-        font-size:21px;
+    .four-gap-division-decimal{
+        color:#d32f2f;
+        font-size:22px;
         font-weight:bold;
-        line-height:28px;
+        white-space:nowrap;
+        padding-bottom:1px;
     }
 </style>
 </head>
@@ -2663,70 +2669,91 @@ async function runFourSelectedListsAnalysis() {
     }
 }
 
-/* Bölme sonucunun ilk 12 tam sayı basamağını üçerli gruplara ayırır. */
-function renderFirstTwelveDivisionDigits(value) {
-
-    if(value === null || value === undefined) {
-        return null;
-    }
-
-    const match = String(value).match(/^(\d+)(\.\d+)?$/);
-
-    if(!match) {
-        return null;
-    }
-
-    const integerPart = match[1].slice(0,12);
-    const decimalPart = match[2] || "";
-
+/*
+ * Bölme sonucunun tam sayı kısmındaki ilk 12 rakamı alır.
+ * Rakamları üçlü gruplara ayırır ve grupların üzerine
+ * 1, 2, 3, 4 etiketlerini yerleştirir.
+ * Ondalık kısmı da son grubun sağına ekler.
+ */
+function renderDivisionFirst12Digits(divisionResult) {
     const card = document.createElement("div");
-    card.className = "division-digits-card";
+    card.className = "four-gap-division-card";
 
     const title = document.createElement("div");
-    title.className = "division-digits-title";
-    title.textContent = "Bölme Sonucunun İlk 12 Basamağı";
+    title.className = "four-gap-division-title";
+    title.textContent = "Bölme Sonucunun İlk 12 Rakamı";
 
     card.appendChild(title);
 
-    const row = document.createElement("div");
-    row.className = "division-digits-row";
+    if(
+        divisionResult === null ||
+        divisionResult === undefined ||
+        String(divisionResult).trim() === ""
+    ) {
+        const empty = document.createElement("div");
+        empty.className = "four-gap-empty";
+        empty.textContent = "Gösterilecek bölme sonucu bulunamadı.";
+        card.appendChild(empty);
+        return card;
+    }
 
-    const groups = integerPart.match(/.{1,3}/g) || [];
+    const resultText = String(divisionResult).trim();
 
-    groups.forEach((group,index) => {
+    const decimalParts = resultText.split(".");
+    const integerPart = decimalParts[0].replace(/\D/g,"");
+    const decimalPart =
+        decimalParts.length > 1
+            ? decimalParts.slice(1).join(".").replace(/\D/g,"")
+            : "";
 
-        const groupContainer = document.createElement("div");
-        groupContainer.className = "division-digit-group";
+    const first12Digits = integerPart.slice(0,12);
+
+    if(first12Digits.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "four-gap-empty";
+        empty.textContent = "Bölme sonucunda gösterilecek rakam bulunamadı.";
+        card.appendChild(empty);
+        return card;
+    }
+
+    const groupsContainer = document.createElement("div");
+    groupsContainer.className = "four-gap-division-groups";
+
+    const digitGroups = first12Digits.match(/\d{1,3}/g) || [];
+
+    digitGroups.forEach((group,index) => {
+        const groupElement = document.createElement("div");
+        groupElement.className = "four-gap-division-group";
 
         const order = document.createElement("div");
-        order.className = "division-digit-order";
+        order.className = "four-gap-division-order";
         order.textContent = index + 1;
 
-        const digits = document.createElement("div");
-        digits.className = "division-digit-value";
-        digits.textContent = group;
+        const number = document.createElement("div");
+        number.className = "four-gap-division-number";
+        number.textContent = group;
 
-        groupContainer.append(order,digits);
-        row.appendChild(groupContainer);
+        groupElement.append(order,number);
+        groupsContainer.appendChild(groupElement);
 
-        if(index < groups.length - 1) {
-            const separator = document.createElement("span");
-            separator.className = "division-digit-separator";
+        if(index < digitGroups.length - 1) {
+            const separator = document.createElement("div");
+            separator.className = "four-gap-division-separator";
             separator.textContent = "-";
 
-            row.appendChild(separator);
+            groupsContainer.appendChild(separator);
         }
     });
 
-    if(decimalPart) {
-        const decimal = document.createElement("span");
-        decimal.className = "division-digit-decimal";
-        decimal.textContent = decimalPart;
+    if(decimalPart.length > 0) {
+        const decimal = document.createElement("div");
+        decimal.className = "four-gap-division-decimal";
+        decimal.textContent = "." + decimalPart;
 
-        row.appendChild(decimal);
+        groupsContainer.appendChild(decimal);
     }
 
-    card.appendChild(row);
+    card.appendChild(groupsContainer);
 
     return card;
 }
@@ -2780,11 +2807,11 @@ function renderFourGapAnalysisResults(data) {
 
     averageCard.appendChild(calculationInfo);
 
-    const divisionDigits =
-        renderFirstTwelveDivisionDigits(data.average);
-
-    if(divisionDigits) {
-        averageCard.appendChild(divisionDigits);
+    /* Yeni bölüm: Son bölme sonucunun ilk 12 rakamını gösterir. */
+    if(data.average !== null) {
+        averageCard.appendChild(
+            renderDivisionFirst12Digits(data.average)
+        );
     }
 
     if(data.allSequences && data.allSequences.length > 0) {
