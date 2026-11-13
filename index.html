@@ -185,6 +185,71 @@
         line-height:1.8;
         overflow-wrap:anywhere;
     }
+
+    .division-digit-display{
+        margin-top:16px;
+        padding:12px 8px;
+        background:#fff;
+        border:1px solid #90caf9;
+        border-radius:8px;
+        overflow:hidden;
+    }
+
+    .division-digit-title{
+        color:#1976d2;
+        font-weight:bold;
+        font-size:15px;
+        margin-bottom:12px;
+    }
+
+    .division-digit-groups{
+        display:flex;
+        align-items:flex-end;
+        width:100%;
+        gap:0;
+    }
+
+    .division-digit-group{
+        flex:1;
+        min-width:0;
+        text-align:center;
+    }
+
+    .division-digit-order{
+        color:#f44336;
+        font-size:15px;
+        font-weight:bold;
+        margin-bottom:5px;
+    }
+
+    .division-digit-value{
+        color:#222;
+        font-family:monospace;
+        font-size:clamp(13px,4.5vw,19px);
+        font-weight:bold;
+        white-space:nowrap;
+    }
+
+    .division-digit-separator{
+        flex-shrink:0;
+        align-self:flex-end;
+        color:#222;
+        font-weight:bold;
+        font-family:monospace;
+        font-size:clamp(13px,4.5vw,19px);
+        padding-bottom:0;
+    }
+
+    .division-digit-decimal{
+        flex-shrink:0;
+        color:#222;
+        font-family:monospace;
+        font-size:clamp(13px,4.5vw,19px);
+        font-weight:bold;
+        white-space:nowrap;
+        padding-left:5px;
+        padding-bottom:0;
+    }
 </style>
 </head>
 <body>
@@ -2603,6 +2668,83 @@ async function runFourSelectedListsAnalysis() {
     }
 }
 
+/* Yeni gösterim: ortalamanın tam sayı kısmındaki ilk 12 rakamı
+   üçlü gruplara ayırır ve her grubun üzerine sıra numarası ekler. */
+function createDivisionDigitDisplay(average) {
+
+    const card = document.createElement("div");
+    card.className = "division-digit-display";
+
+    const title = document.createElement("div");
+    title.className = "division-digit-title";
+    title.textContent =
+        "Son Bölme İşleminin İlk 12 Basamağı";
+
+    card.appendChild(title);
+
+    if(
+        average === null ||
+        average === undefined ||
+        average === ""
+    ) {
+        return card;
+    }
+
+    const parts = String(average).split(".");
+
+    const integerPart = parts[0].replace(/\D/g,"");
+    const decimalPart = parts.length > 1
+        ? "." + parts[1]
+        : "";
+
+    const first12Digits = integerPart.slice(0,12);
+
+    if(!first12Digits) {
+        return card;
+    }
+
+    const groups = first12Digits.match(/.{1,3}/g) || [];
+
+    const groupContainer = document.createElement("div");
+    groupContainer.className = "division-digit-groups";
+
+    groups.forEach((group,index) => {
+
+        const groupElement = document.createElement("div");
+        groupElement.className = "division-digit-group";
+
+        const order = document.createElement("div");
+        order.className = "division-digit-order";
+        order.textContent = index + 1;
+
+        const value = document.createElement("div");
+        value.className = "division-digit-value";
+        value.textContent = group;
+
+        groupElement.append(order,value);
+        groupContainer.appendChild(groupElement);
+
+        if(index < groups.length - 1) {
+            const separator = document.createElement("span");
+            separator.className = "division-digit-separator";
+            separator.textContent = "-";
+            groupContainer.appendChild(separator);
+        }
+    });
+
+    if(decimalPart) {
+        const decimal = document.createElement("div");
+        decimal.className = "division-digit-decimal";
+        decimal.textContent = decimalPart;
+
+        groupContainer.appendChild(decimal);
+    }
+
+    card.appendChild(groupContainer);
+
+    return card;
+}
+
 function renderFourGapAnalysisResults(data) {
     const card = document.createElement("div");
     card.className = "four-gap-card four-gap-results";
@@ -2651,6 +2793,11 @@ function renderFourGapAnalysisResults(data) {
             : "Hesaplama için eşleşen sayı dizisi bulunamadı.";
 
     averageCard.appendChild(calculationInfo);
+
+    /* Yeni basamak gösterimi, bölme işlemi açıklamasının hemen altında. */
+    averageCard.appendChild(
+        createDivisionDigitDisplay(data.average)
+    );
 
     if(data.allSequences && data.allSequences.length > 0) {
         const sequenceTitle = document.createElement("div");
