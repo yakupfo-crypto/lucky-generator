@@ -250,95 +250,71 @@
         padding-top:1.4em;
     }
 
-    .transfer-list-card{
-        background:white;
-        padding:15px;
-        border-radius:10px;
-        margin-bottom:15px;
-        box-shadow:0 2px 6px rgba(0,0,0,0.1);
-    }
-
-    .transfer-list-card select{
+    .fifth-gap-select{
+        display:block;
         width:100%;
         box-sizing:border-box;
-        padding:10px;
-        margin:8px 0;
+        padding:11px;
+        margin:8px 0 10px;
         border:1px solid #ccc;
         border-radius:6px;
-        background:white;
+        background:#fff;
         font-size:15px;
     }
 
-    .division-transfer-display{
+    .fifth-gap-description{
+        color:#666;
+        font-size:13px;
+        line-height:1.6;
+        margin:5px 0 12px;
+    }
+
+    .division-transfer-group{
         display:flex;
         flex-direction:column;
         align-items:center;
-        justify-content:flex-start;
-        margin-top:5px;
-        padding-top:4px;
-        border-top:1px dashed #ddd;
+        flex-shrink:0;
         min-width:38px;
+        margin-top:5px;
     }
 
-    .division-transfer-label{
-        color:#666;
-        font-size:9px;
-        font-weight:normal;
-        line-height:12px;
-        white-space:nowrap;
-    }
-
-    .division-transfer-index{
+    .division-transferred-ball{
         width:38px;
-        min-height:14px;
-        margin:2px 0;
-        font-size:11px;
-        font-weight:bold;
-        color:#888;
-        line-height:14px;
-        text-align:center;
-        box-sizing:border-box;
-    }
-
-    .division-transfer-ball{
-        width:30px;
-        height:30px;
+        height:38px;
         border-radius:50%;
         display:flex;
         align-items:center;
         justify-content:center;
-        font-weight:700;
-        font-size:14px;
+        font-size:16px;
+        font-weight:bold;
         background:#f0f0f0;
         color:#333;
         border:1px solid #ddd;
         box-sizing:border-box;
     }
 
-    .division-transfer-ball.result-selected{
-        background:#1976d2!important;
-        color:white!important;
+    .division-transferred-ball.result-selected{
+        background:#1976d2;
+        color:#fff;
         border:none;
     }
 
-    .division-transfer-empty{
-        color:#999;
-        font-size:9px;
-        font-weight:normal;
-        line-height:12px;
+    .division-transferred-status{
+        color:#666;
+        font-size:10px;
         text-align:center;
         white-space:normal;
-        max-width:48px;
+        line-height:1.3;
+        margin-top:3px;
+        max-width:70px;
     }
 
-    .division-transfer-status{
+    .division-transfer-label{
+        color:#1976d2;
         font-size:11px;
-        color:#666;
-        font-weight:normal;
+        font-weight:bold;
         text-align:center;
         margin-top:3px;
-        white-space:normal;
-        max-width:55px;
     }
 </style>
 </head>
@@ -462,10 +438,8 @@ let panelSelectionLimits = null;
 let panelBaseVersion = null;
 
 let selectedFourGapGroupIds = new Set();
+let selectedFifthGapGroupId = "";
 let fourGapAnalysisResults = null;
-
-/* Dört listeden bağımsız seçilen beşinci listenin kimliği. */
-let selectedTransferGroupId = "";
 
 function escapeHTML(str) {
     if(!str) return "";
@@ -2298,21 +2272,24 @@ async function renderMySetsList(reqId) {
 
     const existingIds = new Set(groups.map(group => String(group.id)));
     const previousSelectionSize = selectedFourGapGroupIds.size;
+    const previousFifthSelection = selectedFifthGapGroupId;
 
     selectedFourGapGroupIds = new Set(
         [...selectedFourGapGroupIds]
             .filter(id => existingIds.has(String(id)))
     );
 
-    if(selectedFourGapGroupIds.size !== previousSelectionSize) {
-        fourGapAnalysisResults = null;
+    if(
+        selectedFifthGapGroupId &&
+        !existingIds.has(String(selectedFifthGapGroupId))
+    ) {
+        selectedFifthGapGroupId = "";
     }
 
     if(
-        selectedTransferGroupId &&
-        !existingIds.has(String(selectedTransferGroupId))
+        selectedFourGapGroupIds.size !== previousSelectionSize ||
+        selectedFifthGapGroupId !== previousFifthSelection
     ) {
-        selectedTransferGroupId = "";
         fourGapAnalysisResults = null;
     }
 
@@ -2371,9 +2348,6 @@ async function renderMySetsList(reqId) {
 
     container.appendChild(createFourGapSelectionCard(groups));
 
-    /* Beşinci liste seçimi dört listeden bağımsız tutulur. */
-    container.appendChild(createTransferListSelectionCard(groups));
-
     if(fourGapAnalysisResults) {
         container.appendChild(
             renderFourGapAnalysisResults(fourGapAnalysisResults)
@@ -2391,90 +2365,6 @@ async function renderMySetsList(reqId) {
         "click",
         triggerImport
     );
-}
-
-/* Dört karşılaştırma listesinden ayrı beşinci liste seçme alanı. */
-function createTransferListSelectionCard(groups) {
-    const card = document.createElement("div");
-    card.className = "transfer-list-card";
-
-    const title = document.createElement("b");
-    title.textContent = "Bölme Sonucu İçin Bağımsız Beşinci Liste";
-    card.appendChild(title);
-
-    const description = document.createElement("p");
-    description.textContent =
-        "Buradan dört karşılaştırma listesinden farklı bir kayıtlı liste seç. Bölme sonucundaki ilk dört kırmızı kolon numarası bu listede aranır. Eşleşen kolonun, yukarıda girdiğin gri balon sıra numarasındaki balonu ilgili üçlü grubun altında gösterilir.";
-    card.appendChild(description);
-
-    const label = document.createElement("label");
-    label.textContent = "Beşinci liste:";
-    label.style.display = "block";
-    label.style.fontWeight = "bold";
-    card.appendChild(label);
-
-    const select = document.createElement("select");
-    select.id = "transfer-list-select";
-
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "Beşinci listeyi seç";
-    select.appendChild(placeholder);
-
-    const availableGroups = groups.filter(group =>
-        !selectedFourGapGroupIds.has(String(group.id))
-    );
-
-    availableGroups.forEach(group => {
-        const option = document.createElement("option");
-        option.value = String(group.id);
-        option.textContent =
-            `${group.name} (${group.sets.length} kolon)`;
-        select.appendChild(option);
-    });
-
-    if(
-        selectedTransferGroupId &&
-        availableGroups.some(
-            group => String(group.id) === String(selectedTransferGroupId)
-        )
-    ) {
-        select.value = String(selectedTransferGroupId);
-    } else {
-        selectedTransferGroupId = "";
-        select.value = "";
-    }
-
-    select.addEventListener("change",async () => {
-        selectedTransferGroupId = String(select.value || "");
-
-        if(fourGapAnalysisResults) {
-            try {
-                await runFourSelectedListsAnalysis();
-            } catch(e) {
-                ErrorHandler.report("Transfer List Update Error",e);
-            }
-        }
-    });
-
-    card.appendChild(select);
-
-    const note = document.createElement("small");
-    note.style.display = "block";
-    note.style.color = "#666";
-    note.textContent =
-        "Bu seçim, dört liste seçiminden bağımsızdır. Seçilen beşinci liste dört karşılaştırma listesinden biri olamaz.";
-    card.appendChild(note);
-
-    if(availableGroups.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "four-gap-empty";
-        empty.textContent =
-            "Beşinci liste seçebilmek için dört karşılaştırma listesinden farklı en az bir kayıtlı liste bulunmalıdır.";
-        card.appendChild(empty);
-    }
-
-    return card;
 }
 
 function findFourNonBlueRuns(group,rowNumber) {
@@ -2551,6 +2441,16 @@ function findFourNonBlueRuns(group,rowNumber) {
     return matchingGroups;
 }
 
+function clearFourGapAnalysisOutput() {
+    fourGapAnalysisResults = null;
+
+    const oldOutput = getEl("four-gap-analysis-output");
+
+    if(oldOutput) {
+        oldOutput.remove();
+    }
+}
+
 function createFourGapSelectionCard(groups) {
     const card = document.createElement("div");
     card.className = "four-gap-select-card";
@@ -2608,6 +2508,12 @@ function createFourGapSelectionCard(groups) {
             const id = String(group.id);
 
             if(checkbox.checked) {
+                if(id === String(selectedFifthGapGroupId)) {
+                    checkbox.checked = false;
+                    alert("Beşinci liste olarak seçilen liste, dört karşılaştırma listesine eklenemez.");
+                    return;
+                }
+
                 if(selectedFourGapGroupIds.size >= 4) {
                     checkbox.checked = false;
                     alert("En fazla dört liste seçebilirsin.");
@@ -2623,52 +2529,68 @@ function createFourGapSelectionCard(groups) {
             count.textContent =
                 `Seçilen liste: ${selectedFourGapGroupIds.size} / 4`;
 
-            fourGapAnalysisResults = null;
+            clearFourGapAnalysisOutput();
 
-            const oldOutput = getEl("four-gap-analysis-output");
-            if(oldOutput) oldOutput.remove();
-
-            updateFourGapCheckboxStates(listContainer);
-
-            /* Beşinci listenin dört listeden bağımsız kalmasını sağlar. */
-            const transferSelect = getEl("transfer-list-select");
-
-            if(transferSelect) {
-                const currentTransferId = selectedTransferGroupId;
-
-                while(transferSelect.options.length > 1) {
-                    transferSelect.remove(1);
-                }
-
-                groups
-                    .filter(item =>
-                        !selectedFourGapGroupIds.has(String(item.id))
-                    )
-                    .forEach(item => {
-                        const option = document.createElement("option");
-                        option.value = String(item.id);
-                        option.textContent =
-                            `${item.name} (${item.sets.length} kolon)`;
-                        transferSelect.appendChild(option);
-                    });
-
-                if(
-                    currentTransferId &&
-                    !selectedFourGapGroupIds.has(String(currentTransferId)) &&
-                    groups.some(item =>
-                        String(item.id) === String(currentTransferId)
-                    )
-                ) {
-                    transferSelect.value = currentTransferId;
-                } else {
-                    selectedTransferGroupId = "";
-                    transferSelect.value = "";
-                }
-            }
+            updateFourGapCheckboxStates(card);
         });
     });
 
     card.appendChild(listContainer);
+
+    const fifthTitle = document.createElement("b");
+    fifthTitle.textContent = "Beşinci Listeyi Seç";
+    fifthTitle.style.marginTop = "20px";
+    card.appendChild(fifthTitle);
+
+    const fifthDescription = document.createElement("p");
+    fifthDescription.className = "fifth-gap-description";
+    fifthDescription.textContent =
+        "Bölme sonucundaki ilk dört üç haneli sayı, bu listede kırmızı kolon numarası olarak aranır. Beşinci liste, yukarıda seçilen dört listeden farklı olmalıdır.";
+    card.appendChild(fifthDescription);
+
+    const fifthSelect = document.createElement("select");
+    fifthSelect.id = "fifth-gap-group-select";
+    fifthSelect.className = "fifth-gap-select";
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Beşinci listeyi seç";
+    fifthSelect.appendChild(placeholder);
+
+    groups.forEach(group => {
+        const option = document.createElement("option");
+        option.value = String(group.id);
+        option.textContent =
+            `${group.name} (${group.sets.length} kolon)`;
+
+        option.disabled =
+            selectedFourGapGroupIds.has(String(group.id));
+
+        fifthSelect.appendChild(option);
+    });
+
+    fifthSelect.value = selectedFifthGapGroupId;
+
+    fifthSelect.addEventListener("change",() => {
+        const newId = String(fifthSelect.value || "");
+
+        if(
+            newId &&
+            selectedFourGapGroupIds.has(newId)
+        ) {
+            alert("Beşinci liste, karşılaştırmada seçilen dört listeden farklı olmalıdır.");
+            fifthSelect.value = selectedFifthGapGroupId;
+            return;
+        }
+
+        selectedFifthGapGroupId = newId;
+
+        clearFourGapAnalysisOutput();
+
+        updateFourGapCheckboxStates(card);
+    });
+
+    card.appendChild(fifthSelect);
 
     const rowNumberLabel = document.createElement("label");
     rowNumberLabel.textContent =
@@ -2691,7 +2613,7 @@ function createFourGapSelectionCard(groups) {
 
     const inputDescription = document.createElement("small");
     inputDescription.textContent =
-        "Örneğin 2 girildiğinde her kolondaki gri 2 numaralı ana balon incelenir. Balonun üzerinde yazan gerçek sayı değil, gri sıra numarası kullanılır. Aynı sıra numarası beşinci listede de kullanılır.";
+        "Örneğin 2 girildiğinde her kolondaki gri 2 numaralı ana balon incelenir. Balonun üzerinde yazan gerçek sayı değil, gri sıra numarası kullanılır. Beşinci listede de aynı gri sıra numarasındaki balon alınır.";
     inputDescription.style.display = "block";
     inputDescription.style.color = "#666";
     inputDescription.style.marginBottom = "10px";
@@ -2706,7 +2628,7 @@ function createFourGapSelectionCard(groups) {
 
     card.appendChild(button);
 
-    updateFourGapCheckboxStates(listContainer);
+    updateFourGapCheckboxStates(card);
 
     return card;
 }
@@ -2717,66 +2639,100 @@ function updateFourGapCheckboxStates(container) {
     const selectedCount = selectedFourGapGroupIds.size;
 
     container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        const id = String(checkbox.value);
+
         checkbox.disabled =
-            selectedCount >= 4 &&
-            !checkbox.checked;
+            (
+                selectedCount >= 4 &&
+                !checkbox.checked
+            ) ||
+            (
+                id === String(selectedFifthGapGroupId) &&
+                !checkbox.checked
+            );
     });
+
+    const fifthSelect = container.querySelector("#fifth-gap-group-select");
+
+    if(fifthSelect) {
+        Array.from(fifthSelect.options).forEach(option => {
+            if(!option.value) return;
+
+            option.disabled =
+                selectedFourGapGroupIds.has(String(option.value));
+        });
+
+        fifthSelect.value = selectedFifthGapGroupId;
+    }
 }
 
-/*
-   Bölme sonucundaki kırmızı kolon numarasını beşinci listedeki
-   aynı kırmızı kolon numarasıyla eşleştirir.
-*/
-function findTransferBall(transferGroup,columnNumber,rowNumber) {
-    if(
-        !transferGroup ||
-        !Array.isArray(transferGroup.sets) ||
-        !Number.isInteger(columnNumber) ||
-        !Number.isInteger(rowNumber)
-    ) {
-        return null;
+/* Bölme sonucunun tam sayı kısmını, ekranda gösterilen sırayla gruplara ayırır. */
+function getDivisionIntegerGroups(value) {
+    if(value === null || value === undefined) {
+        return [];
     }
 
-    const setIndex = columnNumber - 100;
+    const integerPart = String(value).split(".")[0] || "0";
 
-    if(
-        setIndex < 0 ||
-        setIndex >= transferGroup.sets.length
-    ) {
-        return null;
+    return integerPart.match(/.{1,3}/g) || [];
+}
+
+/* Beşinci listedeki eşleşen kolonun aynı gri sıra numaralı ana balonunu oluşturur. */
+function createTransferredBallDisplay(match,rowNumber) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "division-transfer-group";
+
+    if(!match || !match.found) {
+        const status = document.createElement("span");
+        status.className = "division-transferred-status";
+        status.textContent = match?.message || "Eşleşme yok";
+
+        wrapper.appendChild(status);
+        return wrapper;
     }
 
-    const set = transferGroup.sets[setIndex];
+    const order = document.createElement("span");
+    order.className = "ball-order";
+    order.textContent = String(match.columnNumber);
 
-    if(
-        !set ||
-        !Array.isArray(set.numbers) ||
-        set.numbers.length < rowNumber
-    ) {
-        return null;
+    const index = document.createElement("span");
+    index.className = "ball-index";
+    index.textContent = String(rowNumber);
+
+    const ball = document.createElement("div");
+    ball.className = "division-transferred-ball";
+    ball.textContent = String(match.ballValue);
+
+    if(match.isResult) {
+        ball.classList.add("result-selected");
     }
 
-    const ballNumber = Number(set.numbers[rowNumber - 1]);
+    wrapper.append(order,index,ball);
 
-    if(!Number.isFinite(ballNumber)) {
-        return null;
-    }
+    const status = document.createElement("span");
+    status.className = "division-transferred-status";
+    status.textContent = match.isResult
+        ? "Mavi sonuç"
+        : "Mavi değil";
 
-    const blueNumbers = new Set(
-        (transferGroup.results?.main || []).map(Number)
-    );
+    wrapper.appendChild(status);
 
-    return {
-        columnNumber,
-        rowNumber,
-        ballNumber,
-        isBlue:blueNumbers.has(ballNumber)
-    };
+    return wrapper;
 }
 
 async function runFourSelectedListsAnalysis() {
     if(selectedFourGapGroupIds.size !== 4) {
         alert("Karşılaştırma için tam olarak dört liste seçmelisin.");
+        return;
+    }
+
+    if(!selectedFifthGapGroupId) {
+        alert("Lütfen dört karşılaştırma listesinden farklı bir beşinci liste seç.");
+        return;
+    }
+
+    if(selectedFourGapGroupIds.has(String(selectedFifthGapGroupId))) {
+        alert("Beşinci liste, seçilen dört listeden farklı olmalıdır.");
         return;
     }
 
@@ -2796,13 +2752,6 @@ async function runFourSelectedListsAnalysis() {
     ) {
         alert("Lütfen 1 ile 100 arasında geçerli bir gri balon sıra numarası gir.");
         rowNumberInput.focus();
-        return;
-    }
-
-    if(!selectedTransferGroupId) {
-        alert("Lütfen dört karşılaştırma listesinden bağımsız beşinci listeyi seç.");
-        const transferSelect = getEl("transfer-list-select");
-        if(transferSelect) transferSelect.focus();
         return;
     }
 
@@ -2856,22 +2805,33 @@ async function runFourSelectedListsAnalysis() {
             selectedGroups.push(group);
         }
 
-        const transferGroup = groupsById.get(
-            String(selectedTransferGroupId)
+        const fifthGroup = groupsById.get(
+            String(selectedFifthGapGroupId)
         );
 
-        if(!transferGroup) {
-            selectedTransferGroupId = "";
+        if(!fifthGroup) {
+            selectedFifthGapGroupId = "";
             throw new Error(
                 "Seçilen beşinci liste artık kayıtlı değil. Lütfen yeniden seç."
             );
         }
 
         if(
-            selectedFourGapGroupIds.has(String(transferGroup.id))
+            selectedFourGapGroupIds.has(String(fifthGroup.id))
         ) {
             throw new Error(
-                "Beşinci liste, dört karşılaştırma listesinden farklı olmalıdır."
+                "Beşinci liste dört karşılaştırma listesinden biriyle aynı olamaz."
+            );
+        }
+
+        const fifthTotalColumns = Math.min(
+            fifthGroup.sets.length,
+            1000
+        );
+
+        if(fifthTotalColumns === 0) {
+            throw new Error(
+                `"${fifthGroup.name}" beşinci listesinde kolon bulunamadı.`
             );
         }
 
@@ -2930,6 +2890,89 @@ async function runFourSelectedListsAnalysis() {
                 : whole.toString();
         }
 
+        /*
+           Ortalama sonucunun ilk dört grubu alınır.
+           Yalnızca tam üç basamaklı gruplar beşinci listede aranır.
+           Kolon numarası 100'den başladığı için dizi indeksi:
+           hedef kolon numarası - 100 şeklindedir.
+        */
+        const divisionGroups =
+            average !== null
+                ? getDivisionIntegerGroups(average)
+                : [];
+
+        const fifthMatches = divisionGroups
+            .slice(0,4)
+            .map(groupNumber => {
+
+                if(!/^\d{3}$/.test(groupNumber)) {
+                    return {
+                        targetNumber:groupNumber,
+                        found:false,
+                        message:"3 haneli değil"
+                    };
+                }
+
+                const targetColumnNumber = Number(groupNumber);
+
+                const targetIndex =
+                    targetColumnNumber - 100;
+
+                if(
+                    !Number.isSafeInteger(targetColumnNumber) ||
+                    targetColumnNumber < 100 ||
+                    targetColumnNumber >= 100 + fifthTotalColumns ||
+                    targetIndex < 0 ||
+                    targetIndex >= fifthTotalColumns
+                ) {
+                    return {
+                        targetNumber:groupNumber,
+                        found:false,
+                        message:"Kolon bulunamadı"
+                    };
+                }
+
+                const targetSet =
+                    fifthGroup.sets[targetIndex];
+
+                if(
+                    !targetSet ||
+                    !Array.isArray(targetSet.numbers) ||
+                    targetSet.numbers.length < rowNumber
+                ) {
+                    return {
+                        targetNumber:groupNumber,
+                        found:false,
+                        message:"Gri sıra bulunamadı"
+                    };
+                }
+
+                const ballValue = Number(
+                    targetSet.numbers[rowNumber - 1]
+                );
+
+                if(!Number.isFinite(ballValue)) {
+                    return {
+                        targetNumber:groupNumber,
+                        found:false,
+                        message:"Balon bulunamadı"
+                    };
+                }
+
+                const isResult =
+                    Array.isArray(fifthGroup.results?.main) &&
+                    fifthGroup.results.main.includes(ballValue);
+
+                return {
+                    targetNumber:groupNumber,
+                    columnNumber:targetColumnNumber,
+                    rowNumber,
+                    ballValue,
+                    isResult,
+                    found:true
+                };
+            });
+
         fourGapAnalysisResults = {
             rowNumber,
             results,
@@ -2937,12 +2980,9 @@ async function runFourSelectedListsAnalysis() {
             total:total.toString(),
             count,
             average,
-            transferGroup:{
-                id:String(transferGroup.id),
-                name:transferGroup.name,
-                sets:transferGroup.sets,
-                results:transferGroup.results
-            }
+            fifthGroupId:String(fifthGroup.id),
+            fifthGroupName:fifthGroup.name,
+            fifthMatches
         };
 
         const output = renderFourGapAnalysisResults(
@@ -2975,18 +3015,15 @@ async function runFourSelectedListsAnalysis() {
     }
 }
 
-/* Bölme sonucunu üçer basamaklı gruplar ve üst sıra numaralarıyla gösterir. */
-function createDivisionResultDisplay(
-    value,
-    transferGroup = null,
-    rowNumber = 1
-) {
+/* Bölme sonucunu gruplar, sıra numaraları ve beşinci listeden aktarılan balonlarla gösterir. */
+function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
     const wrapper = document.createElement("div");
     wrapper.className = "division-result-card";
 
     const title = document.createElement("div");
     title.className = "division-result-title";
-    title.textContent = "Son Bölme İşleminin Tam Sonucu";
+    title.textContent =
+        "Son Bölme İşleminin Tam Sonucu ve Beşinci Liste Eşleşmeleri";
     wrapper.appendChild(title);
 
     const line = document.createElement("div");
@@ -3020,60 +3057,12 @@ function createDivisionResultDisplay(
 
         groupElement.append(order,digits);
 
-        /*
-           İlk dört üçlü grubun kırmızı kolon numarası,
-           beşinci listedeki aynı kolon numarasıyla eşleştirilir.
-        */
         if(index < 4) {
-            const transferDisplay = document.createElement("div");
-            transferDisplay.className = "division-transfer-display";
+            const match = fifthMatches[index];
 
-            const transferLabel = document.createElement("div");
-            transferLabel.className = "division-transfer-label";
-            transferLabel.textContent = "Aktarılan balon";
-            transferDisplay.appendChild(transferLabel);
-
-            const columnNumber = Number(group);
-
-            const transferBall = findTransferBall(
-                transferGroup,
-                columnNumber,
-                rowNumber
+            groupElement.appendChild(
+                createTransferredBallDisplay(match,rowNumber)
             );
-
-            if(transferBall) {
-                const indexLabel = document.createElement("div");
-                indexLabel.className = "division-transfer-index";
-                indexLabel.textContent = transferBall.rowNumber;
-
-                const ball = document.createElement("div");
-                ball.className = "division-transfer-ball";
-
-                if(transferBall.isBlue) {
-                    ball.classList.add("result-selected");
-                }
-
-                ball.textContent = transferBall.ballNumber;
-
-                transferDisplay.append(indexLabel,ball);
-
-                const status = document.createElement("div");
-                status.className = "division-transfer-status";
-                status.textContent =
-                    transferBall.isBlue ? "Mavi" : "Gri";
-
-                transferDisplay.appendChild(status);
-
-            } else {
-                const empty = document.createElement("div");
-                empty.className = "division-transfer-empty";
-                empty.textContent =
-                    "Eşleşme yok";
-
-                transferDisplay.appendChild(empty);
-            }
-
-            groupElement.appendChild(transferDisplay);
         }
 
         line.appendChild(groupElement);
@@ -3111,15 +3100,11 @@ function createDivisionResultDisplay(
 
     wrapper.appendChild(line);
 
-    const transferInfo = document.createElement("div");
-    transferInfo.className = "four-gap-average-detail";
-    transferInfo.style.marginTop = "12px";
-    transferInfo.textContent =
-        transferGroup
-            ? `Beşinci liste: ${transferGroup.name}. Kırmızı kolon numaraları bu listedeki kolonlarla eşleştirildi. Gösterilen balon, ${rowNumber}. sıra numarasındaki ana balondur.`
-            : "Beşinci liste seçilmedi.";
-
-    wrapper.appendChild(transferInfo);
+    const note = document.createElement("p");
+    note.className = "fifth-gap-description";
+    note.textContent =
+        "Her sayının altındaki balon, beşinci listede o kırmızı kolon numarasına karşılık gelen kolondan ve girilen aynı gri sıra numarasından alınmıştır. Mavi balon, beşinci listede sonuç olarak işaretlenmiş balondur.";
+    wrapper.appendChild(note);
 
     return wrapper;
 }
@@ -3177,10 +3162,18 @@ function renderFourGapAnalysisResults(data) {
         averageCard.appendChild(
             createDivisionResultDisplay(
                 data.average,
-                data.transferGroup || null,
+                data.fifthMatches || [],
                 rowNumber
             )
         );
+
+        const fifthListInfo = document.createElement("div");
+        fifthListInfo.className = "four-gap-average-detail";
+        fifthListInfo.style.marginTop = "10px";
+        fifthListInfo.textContent =
+            `Beşinci liste: ${data.fifthGroupName || "Seçilmedi"}`;
+
+        averageCard.appendChild(fifthListInfo);
     }
 
     if(data.allSequences && data.allSequences.length > 0) {
@@ -3596,8 +3589,8 @@ async function deleteGroup(id) {
 
         selectedFourGapGroupIds.delete(String(id));
 
-        if(String(selectedTransferGroupId) === String(id)) {
-            selectedTransferGroupId = "";
+        if(String(selectedFifthGapGroupId) === String(id)) {
+            selectedFifthGapGroupId = "";
         }
 
         fourGapAnalysisResults = null;
