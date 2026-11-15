@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -316,6 +317,7 @@
         margin-top:3px;
     }
 
+    /* Son rakama göre tek ve çift sayı dizileri */
     .parity-result-card{
         background:white;
         padding:15px;
@@ -360,320 +362,6 @@
         color:#777;
         font-size:14px;
         margin:8px 0;
-    }
-
-    /* Mobil ekran uyumluluğu */
-    @media screen and (max-width:600px){
-
-        html,
-        body{
-            width:100%;
-            max-width:100%;
-            overflow-x:hidden;
-        }
-
-        body{
-            padding-bottom:85px;
-        }
-
-        header{
-            padding:18px 10px 22px;
-            font-size:20px;
-            box-sizing:border-box;
-        }
-
-        .container{
-            width:100%;
-            max-width:100%;
-            padding:12px;
-            box-sizing:border-box;
-        }
-
-        .card,
-        .four-gap-card,
-        .four-gap-select-card,
-        .four-gap-average-card,
-        .parity-result-card{
-            width:100%;
-            max-width:100%;
-            min-width:0;
-            padding:12px;
-            box-sizing:border-box;
-        }
-
-        input,
-        select,
-        button{
-            max-width:100%;
-            box-sizing:border-box;
-        }
-
-        input,
-        select{
-            font-size:16px;
-        }
-
-        button{
-            min-height:40px;
-        }
-
-        .ball-row{
-            display:flex;
-            flex-wrap:wrap;
-            justify-content:flex-start;
-            align-items:flex-start;
-            gap:6px;
-            width:100%;
-            max-width:100%;
-            min-width:0;
-            box-sizing:border-box;
-        }
-
-        .ball-item{
-            flex:0 0 auto;
-            min-width:0;
-        }
-
-        .ball,
-        .division-transferred-ball{
-            width:34px;
-            height:34px;
-            font-size:15px;
-            box-sizing:border-box;
-        }
-
-        .ball-order{
-            width:34px;
-            min-height:15px;
-            font-size:11px;
-            line-height:15px;
-        }
-
-        .ball-index{
-            width:34px;
-            min-height:13px;
-            font-size:10px;
-            line-height:13px;
-        }
-
-        .bottom-nav{
-            width:100%;
-            box-sizing:border-box;
-            padding:8px 0;
-        }
-
-        .bottom-nav button{
-            min-height:38px;
-            padding:8px 20px;
-        }
-
-        #resultPanel{
-            width:100%;
-            max-width:100%;
-            max-height:88vh;
-            max-height:88dvh;
-            padding:12px;
-            box-sizing:border-box;
-            overflow-x:hidden;
-            overflow-y:auto;
-            overscroll-behavior:contain;
-        }
-
-        #resultNumbers{
-            width:100%;
-            max-width:100%;
-            min-width:0;
-            overflow-x:hidden;
-        }
-
-        #resultNumbers .ball-row{
-            gap:5px;
-        }
-
-        .four-gap-row{
-            display:flex;
-            flex-wrap:wrap;
-            align-items:flex-start;
-            justify-content:flex-start;
-            gap:5px;
-            width:100%;
-            max-width:100%;
-            min-width:0;
-            white-space:normal;
-            overflow:visible;
-            box-sizing:border-box;
-        }
-
-        .four-gap-number{
-            display:block;
-            max-width:100%;
-            min-width:0;
-            font-size:clamp(16px,4.5vw,20px);
-            line-height:1.5;
-            white-space:normal;
-            overflow-wrap:anywhere;
-            word-break:break-word;
-            letter-spacing:normal;
-        }
-
-        .four-gap-select-row{
-            width:100%;
-            max-width:100%;
-            min-width:0;
-            box-sizing:border-box;
-        }
-
-        .four-gap-select-info{
-            min-width:0;
-            overflow-wrap:anywhere;
-            word-break:break-word;
-        }
-
-        .four-gap-average-value{
-            font-size:clamp(18px,5vw,25px);
-            overflow-wrap:anywhere;
-            word-break:break-word;
-        }
-
-        .four-gap-average-detail{
-            max-width:100%;
-            overflow-wrap:anywhere;
-            word-break:break-word;
-        }
-
-        .division-result-card{
-            width:100%;
-            max-width:100%;
-            min-width:0;
-            padding:10px 5px;
-            overflow:hidden;
-            box-sizing:border-box;
-        }
-
-        .division-result-line{
-            display:flex;
-            flex-wrap:wrap;
-            align-items:flex-start;
-            justify-content:flex-start;
-            width:100%;
-            max-width:100%;
-            min-width:0;
-            white-space:normal;
-            overflow-wrap:anywhere;
-            word-break:break-word;
-            overflow:visible;
-            letter-spacing:normal;
-            gap:3px 2px;
-            box-sizing:border-box;
-        }
-
-        .division-digit-group{
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            flex:0 1 auto;
-            min-width:0;
-            max-width:100%;
-        }
-
-        .division-digit-value{
-            max-width:100%;
-            overflow-wrap:anywhere;
-            word-break:break-all;
-        }
-
-        .division-digit-separator,
-        .division-decimal{
-            flex:0 1 auto;
-            min-width:0;
-            padding-top:1.4em;
-            overflow-wrap:anywhere;
-        }
-
-        .division-transfer-group{
-            flex:0 1 auto;
-            min-width:30px;
-            max-width:70px;
-        }
-
-        .division-transferred-ball{
-            width:32px;
-            height:32px;
-            font-size:14px;
-        }
-
-        .division-result-title{
-            overflow-wrap:anywhere;
-            word-break:break-word;
-        }
-
-        .parity-result-number{
-            max-width:100%;
-            overflow-wrap:anywhere;
-            word-break:break-word;
-            font-size:16px;
-        }
-
-        .parity-result-title{
-            font-size:16px;
-            overflow-wrap:anywhere;
-        }
-
-        .four-gap-list-title{
-            max-width:100%;
-            overflow-wrap:anywhere;
-            word-break:break-word;
-        }
-
-        .fifth-gap-description{
-            max-width:100%;
-            overflow-wrap:anywhere;
-            word-break:break-word;
-        }
-
-        #error-monitor{
-            left:5px;
-            right:5px;
-        }
-
-        .error-toast{
-            overflow-wrap:anywhere;
-            word-break:break-word;
-        }
-    }
-
-    /* Telefon yatay konumdayken sonuç panelinin kullanılabilir alanı */
-    @media screen and (max-width:900px) and (orientation:landscape) and (max-height:500px){
-
-        body{
-            padding-bottom:65px;
-        }
-
-        #resultPanel{
-            max-height:90vh;
-            max-height:90dvh;
-            overflow-y:auto;
-            padding:10px;
-        }
-
-        .bottom-nav{
-            padding:5px 0;
-        }
-
-        .bottom-nav button{
-            min-height:32px;
-            padding:5px 15px;
-        }
-
-        .container{
-            padding:10px;
-        }
-
-        .card,
-        .four-gap-card,
-        .four-gap-select-card{
-            padding:10px;
-        }
     }
 </style>
 </head>
@@ -3025,6 +2713,7 @@ function updateFourGapCheckboxStates(container) {
     }
 }
 
+/* Bölme sonucunun tam sayı kısmını, ekranda gösterilen sırayla gruplara ayırır. */
 function getDivisionIntegerGroups(value) {
     if(value === null || value === undefined) {
         return [];
@@ -3035,6 +2724,7 @@ function getDivisionIntegerGroups(value) {
     return integerPart.match(/.{1,3}/g) || [];
 }
 
+/* Beşinci listedeki eşleşen kolonun aynı gri sıra numaralı ana balonunu oluşturur. */
 function createTransferredBallDisplay(match,rowNumber) {
     const wrapper = document.createElement("div");
     wrapper.className = "division-transfer-group";
@@ -3247,6 +2937,12 @@ async function runFourSelectedListsAnalysis() {
                 : whole.toString();
         }
 
+        /*
+           Ortalama sonucunun ilk dört grubu alınır.
+           Yalnızca tam üç basamaklı gruplar beşinci listede aranır.
+           Kolon numarası 100'den başladığı için dizi indeksi:
+           hedef kolon numarası - 100 şeklindedir.
+        */
         const divisionGroups =
             average !== null
                 ? getDivisionIntegerGroups(average)
@@ -3366,6 +3062,7 @@ async function runFourSelectedListsAnalysis() {
     }
 }
 
+/* Bölme sonucunu gruplar, sıra numaraları ve beşinci listeden aktarılan balonlarla gösterir. */
 function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
     const wrapper = document.createElement("div");
     wrapper.className = "division-result-card";
@@ -3425,6 +3122,11 @@ function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
         line.appendChild(decimal);
     }
 
+    /*
+       Sonuç tek satırda kalır.
+       Karakter sayısına göre yazı boyutu otomatik küçültülür.
+       Böylece yatay kaydırma veya sonuç kesilmesi önlenir.
+    */
     const characterCount =
         result.length +
         Math.max(0,groups.length - 1);
@@ -3454,6 +3156,10 @@ function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
     return wrapper;
 }
 
+/*
+   Bulunan sayı dizilerini son rakamlarına göre tek ve çift
+   olarak ayırır. Her dizi yalnızca bir kez sınıflandırılır.
+*/
 function renderParityResults(allSequences) {
 
     const card = document.createElement("div");
@@ -3673,6 +3379,10 @@ function renderFourGapAnalysisResults(data) {
         });
     });
 
+    /*
+       Tek ve çift sayı dizilerini mevcut analiz sonuçlarının
+       en altına ekler. Mevcut analiz hesaplamalarını değiştirmez.
+    */
     card.appendChild(
         renderParityResults(data.allSequences || [])
     );
