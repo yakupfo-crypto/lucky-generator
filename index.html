@@ -316,6 +316,53 @@
         text-align:center;
         margin-top:3px;
     }
+
+    /* Son rakama göre tek ve çift sayı dizileri */
+    .parity-result-card{
+        background:white;
+        padding:15px;
+        border-radius:10px;
+        margin-top:18px;
+        box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .parity-result-title{
+        font-size:17px;
+        font-weight:bold;
+        margin:15px 0 8px;
+    }
+
+    .parity-result-title.odd{
+        color:#1976d2;
+    }
+
+    .parity-result-title.even{
+        color:#d32f2f;
+    }
+
+    .parity-result-count{
+        font-size:14px;
+        font-weight:bold;
+        margin-bottom:10px;
+        color:#555;
+    }
+
+    .parity-result-number{
+        font-family:monospace;
+        font-size:17px;
+        font-weight:bold;
+        line-height:1.8;
+        overflow-wrap:anywhere;
+        color:#222;
+        border-bottom:1px solid #eee;
+        padding:4px 0;
+    }
+
+    .parity-result-empty{
+        color:#777;
+        font-size:14px;
+        margin:8px 0;
+    }
 </style>
 </head>
 <body>
@@ -3109,6 +3156,98 @@ function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
     return wrapper;
 }
 
+/*
+   Bulunan sayı dizilerini son rakamlarına göre tek ve çift
+   olarak ayırır. Her dizi yalnızca bir kez sınıflandırılır.
+*/
+function renderParityResults(allSequences) {
+
+    const card = document.createElement("div");
+    card.className = "parity-result-card";
+
+    const title = document.createElement("b");
+    title.textContent = "Bulunan Sayıların Tek ve Çift Ayrımı";
+    card.appendChild(title);
+
+    const oddNumbers = [];
+    const evenNumbers = [];
+
+    (Array.isArray(allSequences) ? allSequences : []).forEach(item => {
+
+        const sequence = String(item.sequence);
+
+        if(!/^\d+$/.test(sequence)) {
+            return;
+        }
+
+        const lastDigit = Number(
+            sequence.charAt(sequence.length - 1)
+        );
+
+        if(lastDigit % 2 === 1) {
+            oddNumbers.push(sequence);
+        } else {
+            evenNumbers.push(sequence);
+        }
+    });
+
+    function createParitySection(heading,numbers,type) {
+
+        const sectionTitle = document.createElement("div");
+
+        sectionTitle.className =
+            "parity-result-title " + type;
+
+        sectionTitle.textContent = heading;
+
+        card.appendChild(sectionTitle);
+
+        const count = document.createElement("div");
+        count.className = "parity-result-count";
+
+        count.textContent =
+            `Toplam ${numbers.length} adet`;
+
+        card.appendChild(count);
+
+        if(numbers.length === 0) {
+
+            const empty = document.createElement("div");
+
+            empty.className = "parity-result-empty";
+            empty.textContent = "Bu grupta bulunan sayı yok.";
+
+            card.appendChild(empty);
+
+            return;
+        }
+
+        numbers.forEach(number => {
+
+            const row = document.createElement("div");
+
+            row.className = "parity-result-number";
+            row.textContent = number;
+
+            card.appendChild(row);
+        });
+    }
+
+    createParitySection(
+        "Son rakamına göre tekler",
+        oddNumbers,
+        "odd"
+    );
+
+    createParitySection(
+        "Son rakamına göre çiftler",
+        evenNumbers,
+        "even"
+    );
+
+    return card;
+}
+
 function renderFourGapAnalysisResults(data) {
     const card = document.createElement("div");
     card.className = "four-gap-card four-gap-results";
@@ -3239,6 +3378,14 @@ function renderFourGapAnalysisResults(data) {
             card.appendChild(row);
         });
     });
+
+    /*
+       Tek ve çift sayı dizilerini mevcut analiz sonuçlarının
+       en altına ekler. Mevcut analiz hesaplamalarını değiştirmez.
+    */
+    card.appendChild(
+        renderParityResults(data.allSequences || [])
+    );
 
     return card;
 }
