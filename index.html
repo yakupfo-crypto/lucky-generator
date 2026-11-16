@@ -3161,9 +3161,9 @@ function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
 }
 
 /*
-   Sayı dizilerini son rakamlarına göre tek ve çift olarak ayırır.
-   Tek ve çift gruplarının adet, toplam ve ortalamaları birbirinden
-   bağımsız hesaplanır. Büyük sayılarda hassasiyet için BigInt kullanılır.
+   Son rakama göre tek ve çift sayı dizilerini birbirinden bağımsız
+   hesaplar. Her grubun adedi, toplamı, ortalaması ve toplama işlemi
+   yalnızca o gruba ait sayı dizileri kullanılarak oluşturulur.
 */
 function renderParityResults(allSequences) {
 
@@ -3197,14 +3197,11 @@ function renderParityResults(allSequences) {
     });
 
     /*
-       Her grup için ayrı ayrı:
-       - sayı adedi
-       - sayıların toplamı
-       - sayıların ortalaması
-       - hesaba katılan sayı dizileri
-       hesaplanır.
+       Her tek/çift grubu için ayrı toplam ve ortalama hesaplanır.
+       BigInt kullanımı büyük sayı dizilerinde hassasiyet kaybını önler.
+       Ortalama 6 ondalık basamağa yuvarlanır.
     */
-    function calculateParityStatistics(numbers) {
+    function calculateParityStats(numbers) {
 
         let total = 0n;
 
@@ -3254,37 +3251,38 @@ function renderParityResults(allSequences) {
 
         card.appendChild(sectionTitle);
 
-        const statistics = calculateParityStatistics(numbers);
+        const stats = calculateParityStats(numbers);
 
         const count = document.createElement("div");
         count.className = "parity-result-count";
         count.textContent =
-            `Toplam adet: ${statistics.count}`;
+            `Toplam adet: ${stats.count}`;
 
         card.appendChild(count);
 
         const total = document.createElement("div");
-        total.className = "parity-result-count";
+        total.className = "parity-result-number";
         total.textContent =
-            `Toplam: ${statistics.total}`;
+            `Toplam: ${stats.total}`;
 
         card.appendChild(total);
 
         const average = document.createElement("div");
-        average.className = "parity-result-count";
+        average.className = "parity-result-number";
         average.textContent =
-            statistics.average === null
+            stats.average === null
                 ? "Ortalama: Hesaplanamadı"
-                : `Ortalama: ${statistics.average}`;
+                : `Ortalama: ${stats.average}`;
 
         card.appendChild(average);
 
-        const includedTitle = document.createElement("div");
-        includedTitle.className = "parity-result-count";
-        includedTitle.textContent =
-            "Hesaplamaya dahil edilen sayı dizileri:";
+        const calculationTitle = document.createElement("div");
+        calculationTitle.className = "parity-result-count";
+        calculationTitle.style.marginTop = "12px";
+        calculationTitle.textContent =
+            "Toplama işlemi:";
 
-        card.appendChild(includedTitle);
+        card.appendChild(calculationTitle);
 
         if(numbers.length === 0) {
 
@@ -3297,6 +3295,28 @@ function renderParityResults(allSequences) {
 
             return;
         }
+
+        const operation = document.createElement("div");
+        operation.className = "parity-result-number";
+        operation.textContent =
+            numbers.join(" + ") + " = " + stats.total;
+
+        card.appendChild(operation);
+
+        const averageCalculation = document.createElement("div");
+        averageCalculation.className = "parity-result-number";
+        averageCalculation.textContent =
+            `${stats.total} ÷ ${stats.count} = ${stats.average}`;
+
+        card.appendChild(averageCalculation);
+
+        const listTitle = document.createElement("div");
+        listTitle.className = "parity-result-count";
+        listTitle.style.marginTop = "12px";
+        listTitle.textContent =
+            "Gruba dahil edilen sayı dizileri:";
+
+        card.appendChild(listTitle);
 
         numbers.forEach(number => {
 
@@ -3456,8 +3476,8 @@ function renderFourGapAnalysisResults(data) {
     });
 
     /*
-       Tek ve çift sayı dizileri kendi içlerinde ayrı ayrı
-       adet, toplam ve ortalama hesaplanarak en altta gösterilir.
+       Tek ve çift sayı dizilerini kendi gruplarında ayrı ayrı
+       adet, toplam, ortalama ve işlem sonuçlarıyla gösterir.
     */
     card.appendChild(
         renderParityResults(data.allSequences || [])
