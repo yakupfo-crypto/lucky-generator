@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -322,7 +321,6 @@
         margin-top:3px;
     }
 
-    /* Son rakama göre tek ve çift sayı dizileri */
     .parity-result-card{
         background:white;
         padding:15px;
@@ -367,6 +365,19 @@
         color:#777;
         font-size:14px;
         margin:8px 0;
+    }
+
+    .parity-result-stat{
+        background:#f2f6fb;
+        border-radius:7px;
+        padding:10px;
+        margin:8px 0 12px;
+        line-height:1.8;
+        overflow-wrap:anywhere;
+    }
+
+    .parity-result-stat strong{
+        color:#1976d2;
     }
 </style>
 </head>
@@ -1711,23 +1722,6 @@ function normalizeDraftInputs(data) {
     };
 }
 
-async function requestPersistentStorage() {
-    if(
-        navigator.storage &&
-        navigator.storage.persist
-    ) {
-        try {
-            const isPersisted = await navigator.storage.persisted();
-
-            if(!isPersisted) {
-                await navigator.storage.persist();
-            }
-        } catch(e) {
-            ErrorHandler.report("Persistent Storage Error",e);
-        }
-    }
-}
-
 window.onload = async () => {
 
     if(!CryptoEngine.isSecure) {
@@ -2718,7 +2712,6 @@ function updateFourGapCheckboxStates(container) {
     }
 }
 
-/* Bölme sonucunun tam sayı kısmını, ekranda gösterilen sırayla gruplara ayırır. */
 function getDivisionIntegerGroups(value) {
     if(value === null || value === undefined) {
         return [];
@@ -2729,7 +2722,6 @@ function getDivisionIntegerGroups(value) {
     return integerPart.match(/.{1,3}/g) || [];
 }
 
-/* Beşinci listedeki eşleşen kolonun aynı gri sıra numaralı ana balonunu oluşturur. */
 function createTransferredBallDisplay(match,rowNumber) {
     const wrapper = document.createElement("div");
     wrapper.className = "division-transfer-group";
@@ -2942,12 +2934,6 @@ async function runFourSelectedListsAnalysis() {
                 : whole.toString();
         }
 
-        /*
-           Ortalama sonucunun ilk dört grubu alınır.
-           Yalnızca tam üç basamaklı gruplar beşinci listede aranır.
-           Kolon numarası 100'den başladığı için dizi indeksi:
-           hedef kolon numarası - 100 şeklindedir.
-        */
         const divisionGroups =
             average !== null
                 ? getDivisionIntegerGroups(average)
@@ -3067,7 +3053,6 @@ async function runFourSelectedListsAnalysis() {
     }
 }
 
-/* Bölme sonucunu gruplar, sıra numaraları ve beşinci listeden aktarılan balonlarla gösterir. */
 function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
     const wrapper = document.createElement("div");
     wrapper.className = "division-result-card";
@@ -3127,11 +3112,6 @@ function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
         line.appendChild(decimal);
     }
 
-    /*
-       Sonuç tek satırda kalır.
-       Karakter sayısına göre yazı boyutu otomatik küçültülür.
-       Böylece yatay kaydırma veya sonuç kesilmesi önlenir.
-    */
     const characterCount =
         result.length +
         Math.max(0,groups.length - 1);
@@ -3162,8 +3142,9 @@ function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
 }
 
 /*
-   Bulunan sayı dizilerini son rakamlarına göre tek ve çift
-   olarak ayırır. Her dizi yalnızca bir kez sınıflandırılır.
+   Tek ve çift dizileri birbirinden bağımsız hesaplanır.
+   Her grup için adet, toplam ve ortalama ayrı gösterilir.
+   Sayı dizileri de kendi gruplarının altında korunur.
 */
 function renderParityResults(allSequences) {
 
@@ -3196,6 +3177,44 @@ function renderParityResults(allSequences) {
         }
     });
 
+    function calculateStatistics(numbers) {
+        let total = 0n;
+
+        numbers.forEach(number => {
+            total += BigInt(number);
+        });
+
+        const count = numbers.length;
+
+        let average = null;
+
+        if(count > 0) {
+            const divisor = BigInt(count);
+            const scale = 1000000n;
+
+            const scaled =
+                (total * scale + divisor / 2n) / divisor;
+
+            const whole = scaled / scale;
+
+            const fraction =
+                (scaled % scale)
+                    .toString()
+                    .padStart(6,"0")
+                    .replace(/0+$/,"");
+
+            average = fraction
+                ? `${whole}.${fraction}`
+                : whole.toString();
+        }
+
+        return {
+            count,
+            total:total.toString(),
+            average
+        };
+    }
+
     function createParitySection(heading,numbers,type) {
 
         const sectionTitle = document.createElement("div");
@@ -3207,13 +3226,34 @@ function renderParityResults(allSequences) {
 
         card.appendChild(sectionTitle);
 
-        const count = document.createElement("div");
-        count.className = "parity-result-count";
+        const stats = calculateStatistics(numbers);
 
-        count.textContent =
-            `Toplam ${numbers.length} adet`;
+        const statsBox = document.createElement("div");
+        statsBox.className = "parity-result-stat";
 
-        card.appendChild(count);
+        const countLine = document.createElement("div");
+        countLine.innerHTML =
+            `<strong>Sayı adedi:</strong> ${stats.count}`;
+
+        const totalLine = document.createElement("div");
+        totalLine.innerHTML =
+            `<strong>Toplam:</strong> ${stats.total}`;
+
+        const averageLine = document.createElement("div");
+        averageLine.innerHTML =
+            `<strong>Ortalama:</strong> ${
+                stats.average === null
+                    ? "Hesaplanamadı"
+                    : stats.average
+            }`;
+
+        statsBox.append(
+            countLine,
+            totalLine,
+            averageLine
+        );
+
+        card.appendChild(statsBox);
 
         if(numbers.length === 0) {
 
@@ -3384,10 +3424,6 @@ function renderFourGapAnalysisResults(data) {
         });
     });
 
-    /*
-       Tek ve çift sayı dizilerini mevcut analiz sonuçlarının
-       en altına ekler. Mevcut analiz hesaplamalarını değiştirmez.
-    */
     card.appendChild(
         renderParityResults(data.allSequences || [])
     );
