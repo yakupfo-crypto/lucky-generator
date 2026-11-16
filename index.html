@@ -3161,9 +3161,9 @@ function createDivisionResultDisplay(value,fifthMatches = [],rowNumber = 1) {
 }
 
 /*
-   Son rakama göre tek ve çift sayı dizilerini birbirinden bağımsız
-   hesaplar. Her grubun adedi, toplamı, ortalaması ve toplama işlemi
-   yalnızca o gruba ait sayı dizileri kullanılarak oluşturulur.
+   Bulunan sayı dizilerini son rakamlarına göre tek ve çift
+   olarak ayırır. Her grup için adet, toplam ve ortalama
+   birbirinden bağımsız hesaplanır.
 */
 function renderParityResults(allSequences) {
 
@@ -3177,6 +3177,9 @@ function renderParityResults(allSequences) {
     const oddNumbers = [];
     const evenNumbers = [];
 
+    let oddTotal = 0n;
+    let evenTotal = 0n;
+
     (Array.isArray(allSequences) ? allSequences : []).forEach(item => {
 
         const sequence = String(item.sequence);
@@ -3185,62 +3188,46 @@ function renderParityResults(allSequences) {
             return;
         }
 
+        const sequenceValue = BigInt(sequence);
+
         const lastDigit = Number(
             sequence.charAt(sequence.length - 1)
         );
 
         if(lastDigit % 2 === 1) {
             oddNumbers.push(sequence);
+            oddTotal += sequenceValue;
         } else {
             evenNumbers.push(sequence);
+            evenTotal += sequenceValue;
         }
     });
 
-    /*
-       Her tek/çift grubu için ayrı toplam ve ortalama hesaplanır.
-       BigInt kullanımı büyük sayı dizilerinde hassasiyet kaybını önler.
-       Ortalama 6 ondalık basamağa yuvarlanır.
-    */
-    function calculateParityStats(numbers) {
-
-        let total = 0n;
-
-        numbers.forEach(number => {
-            total += BigInt(number);
-        });
-
-        const count = numbers.length;
-
-        let average = null;
-
-        if(count > 0) {
-            const divisor = BigInt(count);
-            const scale = 1000000n;
-
-            const scaled =
-                (total * scale + divisor / 2n) / divisor;
-
-            const whole = scaled / scale;
-
-            const fraction =
-                (scaled % scale)
-                    .toString()
-                    .padStart(6,"0")
-                    .replace(/0+$/,"");
-
-            average = fraction
-                ? `${whole}.${fraction}`
-                : whole.toString();
+    function calculateAverage(total,count) {
+        if(count === 0) {
+            return null;
         }
 
-        return {
-            count,
-            total:total.toString(),
-            average
-        };
+        const divisor = BigInt(count);
+        const scale = 1000000n;
+
+        const scaled =
+            (total * scale + divisor / 2n) / divisor;
+
+        const whole = scaled / scale;
+
+        const fraction =
+            (scaled % scale)
+                .toString()
+                .padStart(6,"0")
+                .replace(/0+$/,"");
+
+        return fraction
+            ? `${whole}.${fraction}`
+            : whole.toString();
     }
 
-    function createParitySection(heading,numbers,type) {
+    function createParitySection(heading,numbers,total,type) {
 
         const sectionTitle = document.createElement("div");
 
@@ -3251,38 +3238,45 @@ function renderParityResults(allSequences) {
 
         card.appendChild(sectionTitle);
 
-        const stats = calculateParityStats(numbers);
+        const count = numbers.length;
+        const average = calculateAverage(total,count);
 
-        const count = document.createElement("div");
-        count.className = "parity-result-count";
-        count.textContent =
-            `Toplam adet: ${stats.count}`;
+        const countInfo = document.createElement("div");
+        countInfo.className = "parity-result-count";
+        countInfo.textContent = `Toplam ${count} adet`;
 
-        card.appendChild(count);
+        card.appendChild(countInfo);
 
-        const total = document.createElement("div");
-        total.className = "parity-result-number";
-        total.textContent =
-            `Toplam: ${stats.total}`;
+        const totalInfo = document.createElement("div");
+        totalInfo.className = "parity-result-number";
+        totalInfo.textContent = `Toplam: ${total.toString()}`;
 
-        card.appendChild(total);
+        card.appendChild(totalInfo);
 
-        const average = document.createElement("div");
-        average.className = "parity-result-number";
-        average.textContent =
-            stats.average === null
+        const averageInfo = document.createElement("div");
+        averageInfo.className = "parity-result-number";
+        averageInfo.textContent =
+            average === null
                 ? "Ortalama: Hesaplanamadı"
-                : `Ortalama: ${stats.average}`;
+                : `Ortalama: ${average}`;
 
-        card.appendChild(average);
+        card.appendChild(averageInfo);
 
-        const calculationTitle = document.createElement("div");
-        calculationTitle.className = "parity-result-count";
-        calculationTitle.style.marginTop = "12px";
-        calculationTitle.textContent =
-            "Toplama işlemi:";
+        const calculationInfo = document.createElement("div");
+        calculationInfo.className = "parity-result-number";
+        calculationInfo.textContent =
+            count > 0
+                ? `${total.toString()} ÷ ${count} = ${average}`
+                : "Hesaplama için sayı bulunamadı.";
 
-        card.appendChild(calculationTitle);
+        card.appendChild(calculationInfo);
+
+        const listTitle = document.createElement("div");
+        listTitle.className = "parity-result-count";
+        listTitle.style.marginTop = "12px";
+        listTitle.textContent = "Toplamaya dahil edilen sayı dizileri:";
+
+        card.appendChild(listTitle);
 
         if(numbers.length === 0) {
 
@@ -3295,28 +3289,6 @@ function renderParityResults(allSequences) {
 
             return;
         }
-
-        const operation = document.createElement("div");
-        operation.className = "parity-result-number";
-        operation.textContent =
-            numbers.join(" + ") + " = " + stats.total;
-
-        card.appendChild(operation);
-
-        const averageCalculation = document.createElement("div");
-        averageCalculation.className = "parity-result-number";
-        averageCalculation.textContent =
-            `${stats.total} ÷ ${stats.count} = ${stats.average}`;
-
-        card.appendChild(averageCalculation);
-
-        const listTitle = document.createElement("div");
-        listTitle.className = "parity-result-count";
-        listTitle.style.marginTop = "12px";
-        listTitle.textContent =
-            "Gruba dahil edilen sayı dizileri:";
-
-        card.appendChild(listTitle);
 
         numbers.forEach(number => {
 
@@ -3332,12 +3304,14 @@ function renderParityResults(allSequences) {
     createParitySection(
         "Son rakamına göre tekler",
         oddNumbers,
+        oddTotal,
         "odd"
     );
 
     createParitySection(
         "Son rakamına göre çiftler",
         evenNumbers,
+        evenTotal,
         "even"
     );
 
@@ -3476,8 +3450,8 @@ function renderFourGapAnalysisResults(data) {
     });
 
     /*
-       Tek ve çift sayı dizilerini kendi gruplarında ayrı ayrı
-       adet, toplam, ortalama ve işlem sonuçlarıyla gösterir.
+       Tek ve çift sayı dizilerini mevcut analiz sonuçlarının
+       en altına ekler.
     */
     card.appendChild(
         renderParityResults(data.allSequences || [])
