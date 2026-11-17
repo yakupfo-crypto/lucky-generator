@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -321,7 +322,6 @@
         margin-top:3px;
     }
 
-    /* Son rakama göre tek ve çift sayı dizileri */
     .parity-result-card{
         background:white;
         padding:15px;
@@ -1115,7 +1115,7 @@ async function getAllGroups() {
             };
 
             req.onabort = () => {
-                fail(new Error("Kayıt okuma işlemi iptal edildi"));
+                fail(new Error("Kayıt okuma işlemi iptal edildi."));
             };
 
             tx.onerror = () => {
@@ -1708,6 +1708,23 @@ function normalizeDraftInputs(data) {
         jPer,
         count
     };
+}
+
+async function requestPersistentStorage() {
+    if(
+        navigator.storage &&
+        navigator.storage.persist
+    ) {
+        try {
+            const isPersisted = await navigator.storage.persisted();
+
+            if(!isPersisted) {
+                await navigator.storage.persist();
+            }
+        } catch(e) {
+            ErrorHandler.report("Persistent Storage Error",e);
+        }
+    }
 }
 
 window.onload = async () => {
@@ -2713,11 +2730,10 @@ function getDivisionIntegerGroups(value) {
 
 /*
    Verilen ortalamanın ilk dört üç haneli grubunu,
-   seçilen beşinci listede aynı gri sıra numarasıyla arar.
-   Genel ortalama, tek ortalaması ve çift ortalaması
-   bu ortak fonksiyonu ayrı ayrı kullanır.
+   beşinci listede aynı gri sıra numarası üzerinden arar.
+   Genel, tek ve çift ortalamaları için ayrı ayrı çalışır.
 */
-function findFifthListMatches(average,fifthGroup,rowNumber) {
+function findFifthMatchesForAverage(average,fifthGroup,rowNumber) {
     if(
         average === null ||
         average === undefined ||
@@ -2729,11 +2745,6 @@ function findFifthListMatches(average,fifthGroup,rowNumber) {
 
     const divisionGroups =
         getDivisionIntegerGroups(average);
-
-    const fifthTotalColumns = Math.min(
-        fifthGroup.sets.length,
-        1000
-    );
 
     return divisionGroups
         .slice(0,4)
@@ -2748,16 +2759,19 @@ function findFifthListMatches(average,fifthGroup,rowNumber) {
             }
 
             const targetColumnNumber = Number(groupNumber);
+            const targetIndex = targetColumnNumber - 100;
 
-            const targetIndex =
-                targetColumnNumber - 100;
+            const totalColumns = Math.min(
+                fifthGroup.sets.length,
+                1000
+            );
 
             if(
                 !Number.isSafeInteger(targetColumnNumber) ||
                 targetColumnNumber < 100 ||
-                targetColumnNumber >= 100 + fifthTotalColumns ||
+                targetColumnNumber >= 100 + totalColumns ||
                 targetIndex < 0 ||
-                targetIndex >= fifthTotalColumns
+                targetIndex >= totalColumns
             ) {
                 return {
                     targetNumber:groupNumber,
@@ -2766,8 +2780,7 @@ function findFifthListMatches(average,fifthGroup,rowNumber) {
                 };
             }
 
-            const targetSet =
-                fifthGroup.sets[targetIndex];
+            const targetSet = fifthGroup.sets[targetIndex];
 
             if(
                 !targetSet ||
@@ -3021,12 +3034,8 @@ async function runFourSelectedListsAnalysis() {
                 : whole.toString();
         }
 
-        /*
-           Genel ortalamanın ilk dört üç haneli grubu,
-           beşinci listede aynı gri sıra numarasıyla aranır.
-        */
         const fifthMatches =
-            findFifthListMatches(
+            findFifthMatchesForAverage(
                 average,
                 fifthGroup,
                 rowNumber
@@ -3041,7 +3050,7 @@ async function runFourSelectedListsAnalysis() {
             average,
             fifthGroupId:String(fifthGroup.id),
             fifthGroupName:fifthGroup.name,
-            fifthGroup:fifthGroup,
+            fifthGroupData:fifthGroup,
             fifthMatches
         };
 
@@ -3080,16 +3089,14 @@ function createDivisionResultDisplay(
     value,
     fifthMatches = [],
     rowNumber = 1,
-    customTitle = null
+    titleText = "Son Bölme İşleminin Tam Sonucu ve Beşinci Liste Eşleşmeleri"
 ) {
     const wrapper = document.createElement("div");
     wrapper.className = "division-result-card";
 
     const title = document.createElement("div");
     title.className = "division-result-title";
-    title.textContent =
-        customTitle ||
-        "Son Bölme İşleminin Tam Sonucu ve Beşinci Liste Eşleşmeleri";
+    title.textContent = titleText;
     wrapper.appendChild(title);
 
     const line = document.createElement("div");
@@ -3141,11 +3148,6 @@ function createDivisionResultDisplay(
         line.appendChild(decimal);
     }
 
-    /*
-       Sonuç tek satırda kalır.
-       Karakter sayısına göre yazı boyutu otomatik küçültülür.
-       Böylece yatay kaydırma veya sonuç kesilmesi önlenir.
-    */
     const characterCount =
         result.length +
         Math.max(0,groups.length - 1);
@@ -3176,19 +3178,12 @@ function createDivisionResultDisplay(
 }
 
 /*
-   Bulunan sayı dizilerini son rakamlarına göre tek ve çift
-   olarak ayırır. Her grup için adet, toplam ve ortalama
-   birbirinden bağımsız hesaplanır.
-
-   Her grubun ortalaması ayrıca bölünür ve ilk dört üç
-   haneli grup, aynı beşinci listede aynı gri sıra numarasıyla
-   aranır.
+   Son rakama göre tek ve çift sayı dizilerini ayırır.
+   Her grubun toplamı, adedi ve ortalaması ayrı hesaplanır.
+   Her grubun kendi ortalamasının ilk dört üç haneli grubu
+   beşinci listede bağımsız olarak aranır.
 */
-function renderParityResults(
-    allSequences,
-    fifthGroup = null,
-    rowNumber = 1
-) {
+function renderParityResults(allSequences,fifthGroup,rowNumber = 1) {
 
     const card = document.createElement("div");
     card.className = "parity-result-card";
@@ -3294,14 +3289,9 @@ function renderParityResults(
 
         card.appendChild(calculationInfo);
 
-        /*
-           Tek ve çift ortalamaları birbirinden bağımsız
-           olarak bölünür. Her ortalamanın ilk dört üç
-           haneli grubu beşinci listede ayrı ayrı aranır.
-        */
         if(average !== null) {
-            const parityFifthMatches =
-                findFifthListMatches(
+            const parityMatches =
+                findFifthMatchesForAverage(
                     average,
                     fifthGroup,
                     rowNumber
@@ -3310,21 +3300,11 @@ function renderParityResults(
             card.appendChild(
                 createDivisionResultDisplay(
                     average,
-                    parityFifthMatches,
+                    parityMatches,
                     rowNumber,
-                    type === "odd"
-                        ? "Tek Sayıların Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri"
-                        : "Çift Sayıların Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri"
+                    `${heading} Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`
                 )
             );
-
-        } else {
-            const noAverage = document.createElement("div");
-            noAverage.className = "parity-result-empty";
-            noAverage.textContent =
-                "Bu grupta ortalama olmadığı için bölme ve beşinci liste eşleşmesi yapılamadı.";
-
-            card.appendChild(noAverage);
         }
 
         const listTitle = document.createElement("div");
@@ -3428,8 +3408,7 @@ function renderFourGapAnalysisResults(data) {
             createDivisionResultDisplay(
                 data.average,
                 data.fifthMatches || [],
-                rowNumber,
-                "Genel Ortalamanın Bölme Sonucu ve Beşinci Liste Eşleşmeleri"
+                rowNumber
             )
         );
 
@@ -3507,14 +3486,15 @@ function renderFourGapAnalysisResults(data) {
     });
 
     /*
-       Tek ve çift sayı dizilerinin her biri kendi
-       ortalaması ve kendi beşinci liste eşleşmeleriyle
-       mevcut analiz sonuçlarının en altında gösterilir.
+       Tek ve çift sayı dizilerinin hesaplamaları,
+       genel ortalamadan ayrı olarak kendi içinde yapılır.
+       Her iki grup da aynı beşinci listeyi kullanır fakat
+       kendi ortalamalarının kolonlarını bağımsız arar.
     */
     card.appendChild(
         renderParityResults(
             data.allSequences || [],
-            data.fifthGroup || null,
+            data.fifthGroupData || null,
             rowNumber
         )
     );
