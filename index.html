@@ -1114,7 +1114,7 @@ async function getAllGroups() {
             };
 
             req.onabort = () => {
-                fail(new Error("Kayıt okuma işlemi iptal edildi"));
+                fail(new Error("Kayıt okuma işlemi iptal edildi."));
             };
 
             tx.onerror = () => {
@@ -2709,85 +2709,93 @@ function getDivisionIntegerGroups(value) {
     return integerPart.match(/.{1,3}/g) || [];
 }
 
-function findFifthListMatches(average,fifthGroup,rowNumber) {
+/* Verilen ortalama için beşinci listedeki eşleşmeleri bağımsız hesaplar. */
+function findFifthMatchesForAverage(
+    average,
+    fifthGroup,
+    rowNumber,
+    fifthTotalColumns
+) {
     if(
         average === null ||
         average === undefined ||
         !fifthGroup ||
-        !Array.isArray(fifthGroup.sets) ||
-        !Number.isInteger(rowNumber) ||
-        rowNumber < 1
+        !Array.isArray(fifthGroup.sets)
     ) {
         return [];
     }
 
-    const groups = getDivisionIntegerGroups(average);
+    const divisionGroups = getDivisionIntegerGroups(average);
 
-    return groups.slice(0,4).map(groupNumber => {
+    return divisionGroups
+        .slice(0,4)
+        .map(groupNumber => {
 
-        if(!/^\d{3}$/.test(groupNumber)) {
+            if(!/^\d{3}$/.test(groupNumber)) {
+                return {
+                    targetNumber:groupNumber,
+                    found:false,
+                    message:"3 haneli değil"
+                };
+            }
+
+            const targetColumnNumber = Number(groupNumber);
+
+            const targetIndex = targetColumnNumber - 100;
+
+            if(
+                !Number.isSafeInteger(targetColumnNumber) ||
+                targetColumnNumber < 100 ||
+                targetColumnNumber >= 100 + fifthTotalColumns ||
+                targetIndex < 0 ||
+                targetIndex >= fifthTotalColumns
+            ) {
+                return {
+                    targetNumber:groupNumber,
+                    found:false,
+                    message:"Kolon bulunamadı"
+                };
+            }
+
+            const targetSet = fifthGroup.sets[targetIndex];
+
+            if(
+                !targetSet ||
+                !Array.isArray(targetSet.numbers) ||
+                targetSet.numbers.length < rowNumber
+            ) {
+                return {
+                    targetNumber:groupNumber,
+                    found:false,
+                    message:"Gri sıra bulunamadı"
+                };
+            }
+
+            const ballValue = Number(
+                targetSet.numbers[rowNumber - 1]
+            );
+
+            if(!Number.isFinite(ballValue)) {
+                return {
+                    targetNumber:groupNumber,
+                    found:false,
+                    message:"Balon bulunamadı"
+                };
+            }
+
+            const isResult =
+                Array.isArray(fifthGroup.results?.main) &&
+                fifthGroup.results.main.includes(ballValue);
+
             return {
                 targetNumber:groupNumber,
-                found:false,
-                message:"3 haneli değil"
+                columnNumber:targetColumnNumber,
+                rowNumber,
+                ballValue,
+                isResult,
+                found:true
             };
-        }
-
-        const targetColumnNumber = Number(groupNumber);
-        const targetIndex = targetColumnNumber - 100;
-
-        if(
-            !Number.isSafeInteger(targetColumnNumber) ||
-            targetColumnNumber < 100 ||
-            targetIndex < 0 ||
-            targetIndex >= fifthGroup.sets.length
-        ) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"Kolon bulunamadı"
-            };
-        }
-
-        const targetSet = fifthGroup.sets[targetIndex];
-
-        if(
-            !targetSet ||
-            !Array.isArray(targetSet.numbers) ||
-            targetSet.numbers.length < rowNumber
-        ) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"Gri sıra bulunamadı"
-            };
-        }
-
-        const ballValue = Number(
-            targetSet.numbers[rowNumber - 1]
-        );
-
-        if(!Number.isFinite(ballValue)) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"Balon bulunamadı"
-            };
-        }
-
-        const isResult =
-            Array.isArray(fifthGroup.results?.main) &&
-            fifthGroup.results.main.includes(ballValue);
-
-        return {
-            targetNumber:groupNumber,
-            columnNumber:targetColumnNumber,
-            rowNumber,
-            ballValue,
-            isResult,
-            found:true
-        };
-    });
+        });
 }
 
 function createTransferredBallDisplay(match,rowNumber) {
@@ -3003,10 +3011,11 @@ async function runFourSelectedListsAnalysis() {
         }
 
         const fifthMatches =
-            findFifthListMatches(
+            findFifthMatchesForAverage(
                 average,
                 fifthGroup,
-                rowNumber
+                rowNumber,
+                fifthTotalColumns
             );
 
         fourGapAnalysisResults = {
@@ -3144,7 +3153,8 @@ function createDivisionResultDisplay(
     return wrapper;
 }
 
-function renderParityResults(allSequences,fifthGroup,rowNumber) {
+/* Tek ve çift dizileri birbirinden bağımsız hesaplar ve her ortalama için ayrı bölme sonucu üretir. */
+function renderParityResults(allSequences,context = {}) {
 
     const card = document.createElement("div");
     card.className = "parity-result-card";
@@ -3250,6 +3260,30 @@ function renderParityResults(allSequences,fifthGroup,rowNumber) {
 
         card.appendChild(calculationInfo);
 
+        if(average !== null && context.fifthGroup) {
+            const fifthTotalColumns = Math.min(
+                context.fifthGroup.sets.length,
+                1000
+            );
+
+            const parityFifthMatches =
+                findFifthMatchesForAverage(
+                    average,
+                    context.fifthGroup,
+                    context.rowNumber || 1,
+                    fifthTotalColumns
+                );
+
+            card.appendChild(
+                createDivisionResultDisplay(
+                    average,
+                    parityFifthMatches,
+                    context.rowNumber || 1,
+                    `${heading} - Son Bölme İşleminin Tam Sonucu ve Beşinci Liste Eşleşmeleri`
+                )
+            );
+        }
+
         const listTitle = document.createElement("div");
         listTitle.className = "parity-result-count";
         listTitle.style.marginTop = "12px";
@@ -3266,38 +3300,18 @@ function renderParityResults(allSequences,fifthGroup,rowNumber) {
 
             card.appendChild(empty);
 
-        } else {
-
-            numbers.forEach(number => {
-
-                const row = document.createElement("div");
-
-                row.className = "parity-result-number";
-                row.textContent = number;
-
-                card.appendChild(row);
-            });
+            return;
         }
 
-        if(average !== null && fifthGroup) {
-            const parityMatches =
-                findFifthListMatches(
-                    average,
-                    fifthGroup,
-                    rowNumber
-                );
+        numbers.forEach(number => {
 
-            card.appendChild(
-                createDivisionResultDisplay(
-                    average,
-                    parityMatches,
-                    rowNumber,
-                    type === "odd"
-                        ? "Tek Sayıların Ortalaması ve Beşinci Liste Eşleşmeleri"
-                        : "Çift Sayıların Ortalaması ve Beşinci Liste Eşleşmeleri"
-                )
-            );
-        }
+            const row = document.createElement("div");
+
+            row.className = "parity-result-number";
+            row.textContent = number;
+
+            card.appendChild(row);
+        });
     }
 
     createParitySection(
@@ -3451,8 +3465,10 @@ function renderFourGapAnalysisResults(data) {
     card.appendChild(
         renderParityResults(
             data.allSequences || [],
-            data.fifthGroup || null,
-            rowNumber
+            {
+                fifthGroup:data.fifthGroup,
+                rowNumber:data.rowNumber
+            }
         )
     );
 
