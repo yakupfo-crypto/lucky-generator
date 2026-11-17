@@ -1115,7 +1115,7 @@ async function getAllGroups() {
             };
 
             req.onabort = () => {
-                fail(new Error("Kayıt okuma işlemi iptal edildi."));
+                fail(new Error("Kayıt okuma işlemi iptal edildi"));
             };
 
             tx.onerror = () => {
@@ -1708,23 +1708,6 @@ function normalizeDraftInputs(data) {
         jPer,
         count
     };
-}
-
-async function requestPersistentStorage() {
-    if(
-        navigator.storage &&
-        navigator.storage.persist
-    ) {
-        try {
-            const isPersisted = await navigator.storage.persisted();
-
-            if(!isPersisted) {
-                await navigator.storage.persist();
-            }
-        } catch(e) {
-            ErrorHandler.report("Persistent Storage Error",e);
-        }
-    }
 }
 
 window.onload = async () => {
@@ -2729,8 +2712,10 @@ function getDivisionIntegerGroups(value) {
 }
 
 /*
-   Verilen ortalamanın ilk dört üç haneli grubunu beşinci listede arar.
-   Her eşleşmede aynı gri sıra numarasındaki ana balon alınır.
+   Verilen ortalamanın ilk dört üç haneli grubunu,
+   seçilen beşinci listede aynı gri sıra numarasıyla arar.
+   Genel ortalama, tek ortalaması ve çift ortalaması
+   bu ortak fonksiyonu ayrı ayrı kullanır.
 */
 function findFifthListMatches(average,fifthGroup,rowNumber) {
     if(
@@ -2742,74 +2727,85 @@ function findFifthListMatches(average,fifthGroup,rowNumber) {
         return [];
     }
 
-    const groups = getDivisionIntegerGroups(average);
+    const divisionGroups =
+        getDivisionIntegerGroups(average);
 
-    return groups.slice(0,4).map(groupNumber => {
+    const fifthTotalColumns = Math.min(
+        fifthGroup.sets.length,
+        1000
+    );
 
-        if(!/^\d{3}$/.test(groupNumber)) {
+    return divisionGroups
+        .slice(0,4)
+        .map(groupNumber => {
+
+            if(!/^\d{3}$/.test(groupNumber)) {
+                return {
+                    targetNumber:groupNumber,
+                    found:false,
+                    message:"3 haneli değil"
+                };
+            }
+
+            const targetColumnNumber = Number(groupNumber);
+
+            const targetIndex =
+                targetColumnNumber - 100;
+
+            if(
+                !Number.isSafeInteger(targetColumnNumber) ||
+                targetColumnNumber < 100 ||
+                targetColumnNumber >= 100 + fifthTotalColumns ||
+                targetIndex < 0 ||
+                targetIndex >= fifthTotalColumns
+            ) {
+                return {
+                    targetNumber:groupNumber,
+                    found:false,
+                    message:"Kolon bulunamadı"
+                };
+            }
+
+            const targetSet =
+                fifthGroup.sets[targetIndex];
+
+            if(
+                !targetSet ||
+                !Array.isArray(targetSet.numbers) ||
+                targetSet.numbers.length < rowNumber
+            ) {
+                return {
+                    targetNumber:groupNumber,
+                    found:false,
+                    message:"Gri sıra bulunamadı"
+                };
+            }
+
+            const ballValue = Number(
+                targetSet.numbers[rowNumber - 1]
+            );
+
+            if(!Number.isFinite(ballValue)) {
+                return {
+                    targetNumber:groupNumber,
+                    found:false,
+                    message:"Balon bulunamadı"
+                };
+            }
+
+            const isResult =
+                Array.isArray(fifthGroup.results?.main) &&
+                fifthGroup.results.main.includes(ballValue);
+
             return {
                 targetNumber:groupNumber,
-                found:false,
-                message:"3 haneli değil"
+                columnNumber:targetColumnNumber,
+                rowNumber,
+                ballValue,
+                isResult,
+                found:true
             };
-        }
-
-        const targetColumnNumber = Number(groupNumber);
-        const targetIndex = targetColumnNumber - 100;
-        const totalColumns = Math.min(fifthGroup.sets.length,1000);
-
-        if(
-            !Number.isSafeInteger(targetColumnNumber) ||
-            targetColumnNumber < 100 ||
-            targetIndex < 0 ||
-            targetIndex >= totalColumns
-        ) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"Kolon bulunamadı"
-            };
-        }
-
-        const targetSet = fifthGroup.sets[targetIndex];
-
-        if(
-            !targetSet ||
-            !Array.isArray(targetSet.numbers) ||
-            targetSet.numbers.length < rowNumber
-        ) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"Gri sıra bulunamadı"
-            };
-        }
-
-        const ballValue = Number(
-            targetSet.numbers[rowNumber - 1]
-        );
-
-        if(!Number.isFinite(ballValue)) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"Balon bulunamadı"
-            };
-        }
-
-        const isResult =
-            Array.isArray(fifthGroup.results?.main) &&
-            fifthGroup.results.main.includes(ballValue);
-
-        return {
-            targetNumber:groupNumber,
-            columnNumber:targetColumnNumber,
-            rowNumber,
-            ballValue,
-            isResult,
-            found:true
-        };
-    });
+        });
 }
 
 /* Beşinci listedeki eşleşen kolonun aynı gri sıra numaralı ana balonunu oluşturur. */
@@ -3025,16 +3021,16 @@ async function runFourSelectedListsAnalysis() {
                 : whole.toString();
         }
 
-        const divisionGroups =
-            average !== null
-                ? getDivisionIntegerGroups(average)
-                : [];
-
-        const fifthMatches = findFifthListMatches(
-            average,
-            fifthGroup,
-            rowNumber
-        );
+        /*
+           Genel ortalamanın ilk dört üç haneli grubu,
+           beşinci listede aynı gri sıra numarasıyla aranır.
+        */
+        const fifthMatches =
+            findFifthListMatches(
+                average,
+                fifthGroup,
+                rowNumber
+            );
 
         fourGapAnalysisResults = {
             rowNumber,
@@ -3084,14 +3080,16 @@ function createDivisionResultDisplay(
     value,
     fifthMatches = [],
     rowNumber = 1,
-    customTitle = "Son Bölme İşleminin Tam Sonucu ve Beşinci Liste Eşleşmeleri"
+    customTitle = null
 ) {
     const wrapper = document.createElement("div");
     wrapper.className = "division-result-card";
 
     const title = document.createElement("div");
     title.className = "division-result-title";
-    title.textContent = customTitle;
+    title.textContent =
+        customTitle ||
+        "Son Bölme İşleminin Tam Sonucu ve Beşinci Liste Eşleşmeleri";
     wrapper.appendChild(title);
 
     const line = document.createElement("div");
@@ -3143,6 +3141,11 @@ function createDivisionResultDisplay(
         line.appendChild(decimal);
     }
 
+    /*
+       Sonuç tek satırda kalır.
+       Karakter sayısına göre yazı boyutu otomatik küçültülür.
+       Böylece yatay kaydırma veya sonuç kesilmesi önlenir.
+    */
     const characterCount =
         result.length +
         Math.max(0,groups.length - 1);
@@ -3173,12 +3176,19 @@ function createDivisionResultDisplay(
 }
 
 /*
-   Tek ve çift sayı dizilerini son rakamlarına göre ayırır.
-   Her grubun adet, toplam ve ortalaması bağımsız hesaplanır.
-   Her ortalamanın ilk dört üç haneli grubu beşinci listede
-   aynı gri sıra numarası kullanılarak ayrı ayrı aranır.
+   Bulunan sayı dizilerini son rakamlarına göre tek ve çift
+   olarak ayırır. Her grup için adet, toplam ve ortalama
+   birbirinden bağımsız hesaplanır.
+
+   Her grubun ortalaması ayrıca bölünür ve ilk dört üç
+   haneli grup, aynı beşinci listede aynı gri sıra numarasıyla
+   aranır.
 */
-function renderParityResults(allSequences,fifthGroup,rowNumber) {
+function renderParityResults(
+    allSequences,
+    fifthGroup = null,
+    rowNumber = 1
+) {
 
     const card = document.createElement("div");
     card.className = "parity-result-card";
@@ -3285,24 +3295,36 @@ function renderParityResults(allSequences,fifthGroup,rowNumber) {
         card.appendChild(calculationInfo);
 
         /*
-           Her tek/çift ortalaması kendi bölme sonucunu üretir.
-           Eşleşmeler diğer grubun ortalamasından alınmaz.
+           Tek ve çift ortalamaları birbirinden bağımsız
+           olarak bölünür. Her ortalamanın ilk dört üç
+           haneli grubu beşinci listede ayrı ayrı aranır.
         */
         if(average !== null) {
-            const parityMatches = findFifthListMatches(
-                average,
-                fifthGroup,
-                rowNumber
-            );
+            const parityFifthMatches =
+                findFifthListMatches(
+                    average,
+                    fifthGroup,
+                    rowNumber
+                );
 
             card.appendChild(
                 createDivisionResultDisplay(
                     average,
-                    parityMatches,
+                    parityFifthMatches,
                     rowNumber,
-                    `${heading} Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`
+                    type === "odd"
+                        ? "Tek Sayıların Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri"
+                        : "Çift Sayıların Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri"
                 )
             );
+
+        } else {
+            const noAverage = document.createElement("div");
+            noAverage.className = "parity-result-empty";
+            noAverage.textContent =
+                "Bu grupta ortalama olmadığı için bölme ve beşinci liste eşleşmesi yapılamadı.";
+
+            card.appendChild(noAverage);
         }
 
         const listTitle = document.createElement("div");
@@ -3485,9 +3507,9 @@ function renderFourGapAnalysisResults(data) {
     });
 
     /*
-       Tek ve çift sayı dizilerini mevcut analiz sonuçlarının
-       en altına ekler. Her bölüm kendi ortalamasını ve
-       beşinci liste eşleşmelerini bağımsız hesaplar.
+       Tek ve çift sayı dizilerinin her biri kendi
+       ortalaması ve kendi beşinci liste eşleşmeleriyle
+       mevcut analiz sonuçlarının en altında gösterilir.
     */
     card.appendChild(
         renderParityResults(
