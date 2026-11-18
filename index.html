@@ -367,6 +367,59 @@
         font-size:14px;
         margin:8px 0;
     }
+
+    .batch-row-number-card{
+        margin-top:18px;
+        padding:12px;
+        border:1px solid #90caf9;
+        border-radius:8px;
+        background:#f7fbff;
+    }
+    .batch-row-number-title{
+        display:block;
+        color:#1976d2;
+        font-weight:bold;
+        margin-bottom:8px;
+    }
+    #four-gap-row-numbers{
+        width:100%;
+        min-height:90px;
+        box-sizing:border-box;
+        padding:10px;
+        border:1px solid #bbb;
+        border-radius:6px;
+        font-size:15px;
+        line-height:1.5;
+        resize:vertical;
+    }
+    .batch-row-number-actions{
+        display:flex;
+        flex-direction:column;
+        gap:7px;
+        margin-top:8px;
+    }
+    .batch-row-number-actions button{
+        margin-top:0;
+    }
+    .batch-division-results{
+        margin-top:18px;
+    }
+    .batch-division-item{
+        background:#fff;
+        border:1px solid #90caf9;
+        border-radius:8px;
+        padding:12px 8px;
+        margin-bottom:14px;
+        overflow:hidden;
+    }
+    .batch-division-heading{
+        color:#1976d2;
+        font-weight:bold;
+        font-size:16px;
+        margin-bottom:8px;
+        overflow-wrap:anywhere;
+    }
+
 </style>
 </head>
 <body>
@@ -2500,6 +2553,16 @@ function clearFourGapAnalysisOutput() {
     if(oldOutput) {
         oldOutput.remove();
     }
+
+    const oldBatchOutput = getEl("batch-division-results");
+    if(oldBatchOutput) {
+        oldBatchOutput.remove();
+    }
+
+    const batchStatus = getEl("batch-row-number-status");
+    if(batchStatus) {
+        batchStatus.textContent = "";
+    }
 }
 
 function createFourGapSelectionCard(groups) {
@@ -2678,6 +2741,48 @@ function createFourGapSelectionCard(groups) {
     );
 
     card.appendChild(button);
+
+    const batchCard = document.createElement("div");
+    batchCard.className = "batch-row-number-card";
+
+    const batchTitle = document.createElement("strong");
+    batchTitle.className = "batch-row-number-title";
+    batchTitle.textContent = "Birden Fazla Gri Sıra Numarasını Toplu Hesapla";
+    batchCard.appendChild(batchTitle);
+
+    const batchDescription = document.createElement("p");
+    batchDescription.className = "fifth-gap-description";
+    batchDescription.textContent =
+        "Dört seçili listede ortak olarak bulunan gri sıra numaralarını otomatik doldurabilir veya numaraları kendin düzenleyebilirsin. Her sıra numarası ayrı hesaplanır ve sonuçlar aşağıda alt alta gösterilir.";
+    batchCard.appendChild(batchDescription);
+
+    const batchInput = document.createElement("textarea");
+    batchInput.id = "four-gap-row-numbers";
+    batchInput.placeholder = "Örnek: 1, 2, 3, 4";
+    batchCard.appendChild(batchInput);
+
+    const batchActions = document.createElement("div");
+    batchActions.className = "batch-row-number-actions";
+
+    const autoFillButton = document.createElement("button");
+    autoFillButton.type = "button";
+    autoFillButton.textContent = "Ortak Sıra Numaralarını Otomatik Doldur";
+    autoFillButton.addEventListener("click",autoFillAvailableRowNumbers);
+
+    const batchRunButton = document.createElement("button");
+    batchRunButton.type = "button";
+    batchRunButton.textContent = "Toplu Hesaplamayı Başlat";
+    batchRunButton.addEventListener("click",runBatchRowAnalysis);
+
+    batchActions.append(autoFillButton,batchRunButton);
+    batchCard.appendChild(batchActions);
+
+    const batchStatus = document.createElement("div");
+    batchStatus.id = "batch-row-number-status";
+    batchStatus.className = "four-gap-count";
+    batchCard.appendChild(batchStatus);
+
+    card.appendChild(batchCard);
 
     updateFourGapCheckboxStates(card);
 
@@ -3073,6 +3178,329 @@ async function runFourSelectedListsAnalysis() {
     } catch(e) {
         ErrorHandler.report("Four Lists Analysis Error",e);
         alert(e?.message || "Dört liste karşılaştırılamadı.");
+
+    } finally {
+        setLoading(false);
+    }
+}
+
+
+async function getSelectedAnalysisGroups() {
+    if(selectedFourGapGroupIds.size !== 4) {
+        throw new Error("Toplu hesaplama için tam olarak dört liste seçmelisin.");
+    }
+
+    if(!selectedFifthGapGroupId) {
+        throw new Error("Lütfen dört karşılaştırma listesinden farklı bir beşinci liste seç.");
+    }
+
+    if(selectedFourGapGroupIds.has(String(selectedFifthGapGroupId))) {
+        throw new Error("Beşinci liste, seçilen dört listeden farklı olmalıdır.");
+    }
+
+    const groups = await getAllGroups();
+    const groupsById = new Map(
+        groups.map(group => [String(group.id),group])
+    );
+
+    const selectedGroups = [];
+
+    for(const id of selectedFourGapGroupIds) {
+        const group = groupsById.get(String(id));
+
+        if(!group) {
+            throw new Error("Seçilen dört listeden biri artık kayıtlı değil. Listeleri yeniden seç.");
+        }
+
+        if(!Array.isArray(group.sets) || group.sets.length === 0) {
+            throw new Error(`"${group.name}" listesinde kolon bulunamadı.`);
+        }
+
+        selectedGroups.push(group);
+    }
+
+    const fifthGroup = groupsById.get(String(selectedFifthGapGroupId));
+
+    if(!fifthGroup) {
+        throw new Error("Seçilen beşinci liste artık kayıtlı değil. Lütfen yeniden seç.");
+    }
+
+    if(selectedFourGapGroupIds.has(String(fifthGroup.id))) {
+        throw new Error("Beşinci liste, dört karşılaştırma listesinden farklı olmalıdır.");
+    }
+
+    if(!Array.isArray(fifthGroup.sets) || fifthGroup.sets.length === 0) {
+        throw new Error(`"${fifthGroup.name}" beşinci listesinde kolon bulunamadı.`);
+    }
+
+    return {
+        selectedGroups,
+        fifthGroup
+    };
+}
+
+async function autoFillAvailableRowNumbers() {
+    const input = getEl("four-gap-row-numbers");
+    const status = getEl("batch-row-number-status");
+
+    if(!input) return;
+
+    try {
+        setLoading(true);
+
+        const {selectedGroups} = await getSelectedAnalysisGroups();
+        let commonRowCount = 100;
+
+        selectedGroups.forEach(group => {
+            const totalColumns = Math.min(group.sets.length,1000);
+
+            for(let index = 0; index < totalColumns; index++) {
+                const set = group.sets[index];
+                const availableCount =
+                    set && Array.isArray(set.numbers)
+                        ? set.numbers.length
+                        : 0;
+
+                commonRowCount = Math.min(
+                    commonRowCount,
+                    availableCount
+                );
+            }
+        });
+
+        if(commonRowCount < 1) {
+            throw new Error("Seçilen dört listede ortak kullanılabilir gri sıra numarası bulunamadı.");
+        }
+
+        const rowNumbers = Array.from(
+            {length:commonRowCount},
+            (_,index) => index + 1
+        );
+
+        input.value = rowNumbers.join(", ");
+
+        if(status) {
+            status.textContent =
+                `${rowNumbers.length} ortak gri sıra numarası otomatik dolduruldu. İstersen numaraları düzenleyebilirsin.`;
+        }
+
+    } catch(e) {
+        if(status) status.textContent = "";
+        alert(e?.message || "Ortak sıra numaraları belirlenemedi.");
+
+    } finally {
+        setLoading(false);
+    }
+}
+
+function calculateBatchAverage(selectedGroups,fifthGroup,rowNumber) {
+    const allSequences = [];
+
+    selectedGroups.forEach(group => {
+        const matches = findFourNonBlueRuns(group,rowNumber);
+
+        matches.forEach(sequence => {
+            const joinedNumber = sequence.join("");
+
+            if(!/^\d+$/.test(joinedNumber)) {
+                return;
+            }
+
+            allSequences.push({
+                listName:group.name,
+                sequence:joinedNumber,
+                value:BigInt(joinedNumber)
+            });
+        });
+    });
+
+    let total = 0n;
+
+    allSequences.forEach(item => {
+        total += item.value;
+    });
+
+    const count = allSequences.length;
+    let average = null;
+
+    if(count > 0) {
+        const divisor = BigInt(count);
+        const scale = 1000000n;
+        const scaled =
+            (total * scale + divisor / 2n) / divisor;
+        const whole = scaled / scale;
+        const fraction =
+            (scaled % scale)
+                .toString()
+                .padStart(6,"0")
+                .replace(/0+$/,"");
+
+        average = fraction
+            ? `${whole}.${fraction}`
+            : whole.toString();
+    }
+
+    const fifthMatches = findFifthListMatches(
+        average,
+        fifthGroup,
+        rowNumber
+    );
+
+    return {
+        rowNumber,
+        count,
+        total:total.toString(),
+        average,
+        fifthMatches
+    };
+}
+
+async function runBatchRowAnalysis() {
+    const input = getEl("four-gap-row-numbers");
+    const status = getEl("batch-row-number-status");
+
+    if(!input) {
+        alert("Toplu sıra numarası alanı bulunamadı.");
+        return;
+    }
+
+    const rawValues = input.value
+        .split(/[\s,;]+/)
+        .map(value => value.trim())
+        .filter(Boolean);
+
+    const rowNumbers = [];
+    const seen = new Set();
+
+    for(const value of rawValues) {
+        if(!/^\d+$/.test(value)) {
+            alert(`Geçersiz sıra numarası: ${value}`);
+            return;
+        }
+
+        const number = Number(value);
+
+        if(!Number.isSafeInteger(number) || number < 1 || number > 100) {
+            alert("Gri sıra numaraları 1 ile 100 arasında olmalıdır.");
+            return;
+        }
+
+        if(!seen.has(number)) {
+            seen.add(number);
+            rowNumbers.push(number);
+        }
+    }
+
+    if(rowNumbers.length === 0) {
+        alert("Lütfen hesaplanacak en az bir gri sıra numarası gir veya otomatik doldur.");
+        return;
+    }
+
+    try {
+        setLoading(true);
+
+        const {selectedGroups,fifthGroup} =
+            await getSelectedAnalysisGroups();
+
+        selectedGroups.forEach(group => {
+            const totalColumns = Math.min(group.sets.length,1000);
+
+            rowNumbers.forEach(rowNumber => {
+                for(let index = 0; index < totalColumns; index++) {
+                    const set = group.sets[index];
+
+                    if(
+                        !set ||
+                        !Array.isArray(set.numbers) ||
+                        set.numbers.length < rowNumber ||
+                        !Number.isFinite(Number(set.numbers[rowNumber - 1]))
+                    ) {
+                        throw new Error(
+                            `"${group.name}" listesinde ${index + 1}. kolonda gri ${rowNumber} sıra numaralı ana balon bulunamadı. Toplu hesaplama başlatılmadı.`
+                        );
+                    }
+                }
+            });
+        });
+
+        const results = rowNumbers.map(rowNumber =>
+            calculateBatchAverage(
+                selectedGroups,
+                fifthGroup,
+                rowNumber
+            )
+        );
+
+        const output = document.createElement("div");
+        output.id = "batch-division-results";
+        output.className = "batch-division-results";
+
+        const heading = document.createElement("div");
+        heading.className = "four-gap-average-title";
+        heading.textContent = "Toplu Sıra Numarası Hesaplama Sonuçları";
+        output.appendChild(heading);
+
+        results.forEach(result => {
+            const item = document.createElement("div");
+            item.className = "batch-division-item";
+
+            const itemHeading = document.createElement("div");
+            itemHeading.className = "batch-division-heading";
+            itemHeading.textContent =
+                `Gri sıra numarası: ${result.rowNumber}`;
+            item.appendChild(itemHeading);
+
+            if(result.average === null) {
+                const empty = document.createElement("p");
+                empty.className = "four-gap-empty";
+                empty.textContent =
+                    "Bu sıra numarası için hesaplamaya uygun sayı dizisi bulunamadı.";
+                item.appendChild(empty);
+            } else {
+                const averageInfo = document.createElement("div");
+                averageInfo.className = "parity-result-number";
+                averageInfo.textContent =
+                    `Ortalama: ${result.total} ÷ ${result.count} = ${result.average}`;
+                item.appendChild(averageInfo);
+
+                item.appendChild(
+                    createDivisionResultDisplay(
+                        result.average,
+                        result.fifthMatches,
+                        result.rowNumber,
+                        `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`
+                    )
+                );
+            }
+
+            output.appendChild(item);
+        });
+
+        const oldOutput = getEl("batch-division-results");
+        if(oldOutput) {
+            oldOutput.replaceWith(output);
+        } else {
+            const selectionCard =
+                document.querySelector(".four-gap-select-card");
+
+            if(selectionCard) {
+                selectionCard.after(output);
+            }
+        }
+
+        if(status) {
+            status.textContent =
+                `${results.length} sıra numarası ayrı ayrı hesaplandı.`;
+        }
+
+        output.scrollIntoView({
+            behavior:"smooth",
+            block:"start"
+        });
+
+    } catch(e) {
+        ErrorHandler.report("Batch Row Analysis Error",e);
+        alert(e?.message || "Toplu hesaplama tamamlanamadı.");
 
     } finally {
         setLoading(false);
