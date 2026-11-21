@@ -6,420 +6,57 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;">
 <title>Lucky Generator Pro - Stable State</title>
 <style>
-    body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom:100px; }
-    body.modal-open{ overflow:hidden; }
-    header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position:relative; }
+    body{ margin:0; font-family:Arial, sans-serif; background:#f2f6fb; padding-bottom: 100px; }
+    body.modal-open { overflow: hidden; }
+    header{ background:#1976d2; color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; position: relative; }
     .container{ padding:20px; }
     .card{ background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
-    input{ width:100%; box-sizing:border-box; padding:8px; margin:5px 0 10px 0; }
-    button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top:5px; cursor:pointer; }
-    .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index:1000; }
+    input{ width:100%; box-sizing: border-box; padding:8px; margin:5px 0 10px 0; }
+
+    /* Sonuç Gir toplu sayı yapıştırma alanı */
+    #bulkResultNumbers {
+        width: 100%;
+        min-height: 90px;
+        box-sizing: border-box;
+        padding: 10px;
+        margin: 8px 0;
+        border: 1px solid #bbb;
+        border-radius: 8px;
+        font-size: 16px;
+        resize: vertical;
+        font-family: Arial, sans-serif;
+    }
+
+    #bulk-result-status {
+        font-size: 13px;
+        margin: 5px 0 10px;
+        color: #555;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+
+    button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top: 5px; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index: 1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-
-    .ball-item{
-        display:flex;
-        flex-direction:column;
-        align-items:center;
-        justify-content:flex-start;
-    }
-
-    .ball-order{
-        width:38px;
-        min-height:16px;
-        margin-bottom:3px;
-        font-size:12px;
-        font-weight:bold;
-        color:#f44336;
-        line-height:16px;
-        text-align:center;
-        box-sizing:border-box;
-    }
-
-    .ball-index{
-        width:38px;
-        min-height:14px;
-        margin-bottom:2px;
-        font-size:11px;
-        font-weight:bold;
-        color:#888;
-        line-height:14px;
-        text-align:center;
-        box-sizing:border-box;
-    }
-
-    .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select:none; transition:opacity 0.2s; }
+    .ball-item{ display:flex; flex-direction:column; align-items:center; gap:4px; flex:0 0 38px; }
+    .ball-order{ font-size:11px; line-height:12px; font-weight:700; color:#666; text-align:center; }
+    .ball{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; background:#f0f0f0; color:#333; border:1px solid #ddd; cursor:pointer; user-select: none; transition: opacity 0.2s; }
     .ball.selected.result-selected{ background:#1976d2!important; color:white!important; border:none; }
     .ball.joker{ background:#ffebee; color:#c62828; border:1px solid #ffcdd2; }
     .ball.joker.result-selected{ background:#f44336!important; color:white!important; border:none; }
     .card b{ display:block; margin-bottom:10px; color:#1976d2; }
     .ball.result-selected{ background:#1976d2; color:#fff; }
-    .delete-all-btn{ background:#d32f2f; margin-bottom:10px; }
-    .secondary-btn{ background:#555; margin-top:5px; }
-    #error-monitor{ position:fixed; top:10px; left:10px; right:10px; z-index:3000; pointer-events:none; }
-    .error-toast{ background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family:monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events:auto; animation:slideIn 0.3s ease-out; }
-    #crypto-status{ position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.2); font-size:10px; padding:2px; color:#e0e0e0; }
-    .engine-badge{ display:inline-block; padding:2px 5px; border-radius:4px; font-weight:bold; background:#4caf50; color:white; }
-    @keyframes slideIn{ from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
-    #global-loader{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.6); z-index:4000; cursor:wait; }
-    #resultPanel{ display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index:2000; border-radius:20px 20px 0 0; box-sizing:border-box; }
-
-    .four-gap-card{
-        background:white;
-        padding:15px;
-        border-radius:10px;
-        margin-bottom:15px;
-        box-shadow:0 2px 6px rgba(0,0,0,0.1);
-    }
-
-    .four-gap-row{
-        display:flex;
-        flex-wrap:nowrap;
-        gap:0;
-        margin-top:12px;
-        padding:10px 0;
-        border-bottom:1px solid #eee;
-    }
-
-    .four-gap-number{
-        color:#f44336;
-        font-size:20px;
-        font-weight:bold;
-        min-width:0;
-        text-align:left;
-        white-space:nowrap;
-        letter-spacing:0;
-    }
-
-    .four-gap-select-card{
-        background:white;
-        padding:15px;
-        border-radius:10px;
-        margin-bottom:15px;
-        box-shadow:0 2px 6px rgba(0,0,0,0.1);
-    }
-
-    .four-gap-select-row{
-        display:flex;
-        align-items:center;
-        gap:10px;
-        padding:12px 5px;
-        border-bottom:1px solid #eee;
-    }
-
-    .four-gap-select-row input{
-        width:22px;
-        height:22px;
-        margin:0;
-        flex-shrink:0;
-    }
-
-    .four-gap-select-info{
-        flex:1;
-        min-width:0;
-        overflow-wrap:anywhere;
-    }
-
-    .four-gap-select-info strong{
-        display:block;
-        color:#1976d2;
-        margin-bottom:4px;
-    }
-
-    .four-gap-select-info small{
-        color:#666;
-        font-size:12px;
-    }
-
-    .four-gap-count{
-        margin:10px 0;
-        font-weight:bold;
-        color:#1976d2;
-    }
-
-    .four-gap-results{
-        margin-top:15px;
-    }
-
-    .four-gap-list-title{
-        color:#1976d2;
-        font-size:16px;
-        font-weight:bold;
-        margin:15px 0 5px;
-        overflow-wrap:anywhere;
-    }
-
-    .four-gap-empty{
-        color:#666;
-        font-size:14px;
-        margin:10px 0;
-    }
-
-    .four-gap-average-card{
-        background:#eaf3ff;
-        border:1px solid #90caf9;
-        border-radius:10px;
-        padding:15px;
-        margin-bottom:18px;
-    }
-
-    .four-gap-average-title{
-        color:#1976d2;
-        font-size:17px;
-        font-weight:bold;
-        margin-bottom:12px;
-    }
-
-    .four-gap-average-value{
-        color:#d32f2f;
-        font-size:25px;
-        font-weight:bold;
-        overflow-wrap:anywhere;
-        margin:12px 0;
-    }
-
-    .four-gap-average-detail{
-        font-family:monospace;
-        font-size:14px;
-        line-height:1.8;
-        overflow-wrap:anywhere;
-    }
-
-    .division-result-card{
-        width:100%;
-        box-sizing:border-box;
-        margin-top:15px;
-        padding:12px 5px;
-        background:#fff;
-        border:1px solid #90caf9;
-        border-radius:8px;
-        overflow:hidden;
-    }
-
-    .division-result-title{
-        color:#1976d2;
-        font-weight:bold;
-        font-size:14px;
-        margin-bottom:12px;
-    }
-
-    .division-result-line{
-        display:flex;
-        align-items:flex-start;
-        justify-content:flex-start;
-        flex-wrap:nowrap;
-        width:100%;
-        white-space:nowrap;
-        overflow:visible;
-        font-family:monospace;
-        font-weight:bold;
-        line-height:1.5;
-        letter-spacing:-0.04em;
-        box-sizing:border-box;
-    }
-
-    .division-digit-group{
-        display:flex;
-        flex-direction:column;
-        align-items:center;
-        flex-shrink:0;
-        margin-left:-5px;
-        margin-right:-5px;
-    }
-
-    .division-digit-order{
-        color:#f44336;
-        font-size:0.8em;
-        height:1.4em;
-        line-height:1.4em;
-        text-align:center;
-    }
-
-    .division-digit-value{
-        color:#222;
-    }
-
-    .division-digit-separator{
-        color:#222;
-        flex-shrink:0;
-        padding-top:1.4em;
-        margin-left:-4px;
-        margin-right:-4px;
-    }
-
-    .division-decimal{
-        color:#222;
-        flex-shrink:0;
-        padding-top:1.4em;
-        margin-left:-2px;
-    }
-
-    .fifth-gap-select{
-        display:block;
-        width:100%;
-        box-sizing:border-box;
-        padding:11px;
-        margin:8px 0 10px;
-        border:1px solid #ccc;
-        border-radius:6px;
-        background:#fff;
-        font-size:15px;
-    }
-
-    .fifth-gap-description{
-        color:#666;
-        font-size:13px;
-        line-height:1.6;
-        margin:5px 0 12px;
-    }
-
-    .division-transfer-group{
-        display:flex;
-        flex-direction:column;
-        align-items:center;
-        flex-shrink:0;
-        min-width:38px;
-        margin-top:5px;
-    }
-
-    .division-transferred-ball{
-        width:38px;
-        height:38px;
-        border-radius:50%;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        font-size:16px;
-        font-weight:bold;
-        background:#f0f0f0;
-        color:#333;
-        border:1px solid #ddd;
-        box-sizing:border-box;
-    }
-
-    .division-transferred-ball.result-selected{
-        background:#1976d2;
-        color:#fff;
-        border:none;
-    }
-
-    .division-transferred-status{
-        color:#666;
-        font-size:10px;
-        text-align:center;
-        white-space:normal;
-        line-height:1.3;
-        margin-top:3px;
-        max-width:70px;
-    }
-
-    .division-transfer-label{
-        color:#1976d2;
-        font-size:11px;
-        font-weight:bold;
-        text-align:center;
-        margin-top:3px;
-    }
-
-    /* Son rakama göre tek ve çift sayı dizileri */
-    .parity-result-card{
-        background:white;
-        padding:15px;
-        border-radius:10px;
-        margin-top:18px;
-        box-shadow:0 2px 6px rgba(0,0,0,0.1);
-    }
-
-    .parity-result-title{
-        font-size:17px;
-        font-weight:bold;
-        margin:15px 0 8px;
-    }
-
-    .parity-result-title.odd{
-        color:#1976d2;
-    }
-
-    .parity-result-title.even{
-        color:#d32f2f;
-    }
-
-    .parity-result-count{
-        font-size:14px;
-        font-weight:bold;
-        margin-bottom:10px;
-        color:#555;
-    }
-
-    .parity-result-number{
-        font-family:monospace;
-        font-size:17px;
-        font-weight:bold;
-        line-height:1.8;
-        overflow-wrap:anywhere;
-        color:#222;
-        border-bottom:1px solid #eee;
-        padding:4px 0;
-    }
-
-    .parity-result-empty{
-        color:#777;
-        font-size:14px;
-        margin:8px 0;
-    }
-
-    .batch-row-number-card{
-        margin-top:18px;
-        padding:12px;
-        border:1px solid #90caf9;
-        border-radius:8px;
-        background:#f7fbff;
-    }
-    .batch-row-number-title{
-        display:block;
-        color:#1976d2;
-        font-weight:bold;
-        margin-bottom:8px;
-    }
-    #four-gap-row-numbers{
-        width:100%;
-        min-height:90px;
-        box-sizing:border-box;
-        padding:10px;
-        border:1px solid #bbb;
-        border-radius:6px;
-        font-size:15px;
-        line-height:1.5;
-        resize:vertical;
-    }
-    .batch-row-number-actions{
-        display:flex;
-        flex-direction:column;
-        gap:7px;
-        margin-top:8px;
-    }
-    .batch-row-number-actions button{
-        margin-top:0;
-    }
-    .batch-division-results{
-        margin-top:18px;
-    }
-    .batch-division-item{
-        background:#fff;
-        border:1px solid #90caf9;
-        border-radius:8px;
-        padding:12px 8px;
-        margin-bottom:14px;
-        overflow:hidden;
-    }
-    .batch-division-heading{
-        color:#1976d2;
-        font-weight:bold;
-        font-size:16px;
-        margin-bottom:8px;
-        overflow-wrap:anywhere;
-    }
-
+    .delete-all-btn { background: #d32f2f; margin-bottom: 10px; }
+    .secondary-btn { background: #555; margin-top: 5px; }
+    #error-monitor { position:fixed; top:10px; left:10px; right:10px; z-index: 3000; pointer-events:none; }
+    .error-toast { background:#212121; color:#ff5252; padding:12px; border-radius:8px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); font-family: monospace; font-size:12px; border-left:4px solid #ff5252; pointer-events: auto; animation: slideIn 0.3s ease-out; }
+    #crypto-status { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.2); font-size: 10px; padding: 2px; color: #e0e0e0; }
+    .engine-badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-weight: bold; background: #4caf50; color: white; }
+    @keyframes slideIn { from{transform:translateY(-20px); opacity:0;} to{transform:translateY(0); opacity:1;} }
+    #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.6); z-index: 4000; cursor: wait; }
+    #resultPanel { display:none; position:fixed; bottom:0; left:0; width:100%; background:#fff; padding:15px; box-shadow:0 -2px 15px rgba(0,0,0,0.3); max-height:85%; overflow:auto; z-index: 2000; border-radius: 20px 20px 0 0; box-sizing: border-box; }
 </style>
 </head>
 <body>
@@ -442,9 +79,30 @@
 </div>
 
 <div id="resultPanel">
-    <h3 style="margin-top:0;">Sonuç Gir <span id="close-panel-btn" style="float:right;cursor:pointer;padding:5px;">×</span></h3>
+    <h3 style="margin-top:0;">Sonuç Gir <span id="close-panel-btn" style="float:right;cursor:pointer; padding: 5px;">×</span></h3>
+
+    <!-- Toplu sayı yapıştırma alanı -->
+    <div>
+        <label for="bulkResultNumbers">
+            <b>Sonuç Sayılarını Toplu Yapıştır</b>
+        </label>
+
+        <textarea
+            id="bulkResultNumbers"
+            placeholder="Örnek: 1 2 5 10 12 14 24 28 30 31 32 33 39 47 48 53 66 68 71 74 76 77"
+            aria-describedby="bulk-result-status"
+        ></textarea>
+
+        <button type="button" id="btn-apply-bulk-results">
+            Yapıştırılan Sayıları Renklendir
+        </button>
+
+        <div id="bulk-result-status" aria-live="polite"></div>
+    </div>
+
     <div id="resultNumbers"></div>
-    <div style="margin-top:15px;">
+
+    <div style="margin-top: 15px;">
         <button id="btn-confirm-result">Tamamla</button>
         <button id="btn-clean-result" style="background:#999;margin-top:8px;">Tümünü Temizle</button>
     </div>
@@ -461,7 +119,7 @@ const setLoading = (state) => {
 };
 
 function toggleBodyScroll(lock) {
-    if(lock) {
+    if (lock) {
         document.body.classList.add("modal-open");
     } else {
         document.body.classList.remove("modal-open");
@@ -484,7 +142,7 @@ const ErrorHandler = {
             const br = document.createElement("br");
 
             const small = document.createElement("small");
-            small.textContent = (data.message || String(data)).substring(0,100);
+            small.textContent = (data.message || String(data)).substring(0, 100);
 
             toast.appendChild(strong);
             toast.appendChild(br);
@@ -496,7 +154,7 @@ const ErrorHandler = {
 
             setTimeout(() => {
                 if(toast.parentNode) toast.remove();
-            },6000);
+            }, 6000);
         }
     }
 };
@@ -514,17 +172,17 @@ window.onerror = (message, source, lineno, colno, error) => {
 
 window.onunhandledrejection = (event) => {
     ErrorHandler.report("Promise Error", {
-        message:event.reason?.message || "Asenkron işlem başarısız"
+        message: event.reason?.message || "Asenkron işlem başarısız"
     });
     return false;
 };
 
 const GENERATION_LIMITS = {
-    max:1000,
-    per:100,
-    jokerMax:1000,
-    jokerPer:100,
-    count:1000
+    max: 1000,
+    per: 100,
+    jokerMax: 1000,
+    jokerPer: 100,
+    count: 100
 };
 
 let generatedSets = [];
@@ -541,12 +199,8 @@ let panelDraftGroupId = null;
 let panelSelectionLimits = null;
 let panelBaseVersion = null;
 
-let selectedFourGapGroupIds = new Set();
-let selectedFifthGapGroupId = "";
-let fourGapAnalysisResults = null;
-
 function escapeHTML(str) {
-    if(!str) return "";
+    if (!str) return "";
 
     const p = document.createElement("p");
     p.textContent = str;
@@ -554,15 +208,147 @@ function escapeHTML(str) {
     return p.innerHTML;
 }
 
-const CryptoEngine = {
-    isSecure:!!(window.crypto && window.crypto.getRandomValues),
+/*
+ * SONUÇ SAYILARINI TOPLU UYGULA
+ *
+ * Boşluk, satır sonu, virgül ve noktalı virgülle ayrılmış
+ * sayıları okur ve ana sayı balonlarını işaretler.
+ *
+ * Joker sonuçları bu alan üzerinden otomatik seçilmez;
+ * joker balonları kendi bölümünden seçilebilir.
+ *
+ * Bu fonksiyon global kapsamda tanımlanmıştır. Böylece
+ * window.onload içindeki olay dinleyicisi fonksiyona erişebilir.
+ */
+function applyBulkResultNumbers() {
+    if (
+        !panelDraft ||
+        !panelSelectionLimits ||
+        !panelDraftGroupId ||
+        String(history.state?.groupId) !== panelDraftGroupId ||
+        history.state?.page !== "panel"
+    ) {
+        return;
+    }
 
-    nextUint32:function(max) {
-        if(!this.isSecure) {
+    const textarea = getEl("bulkResultNumbers");
+    const status = getEl("bulk-result-status");
+
+    if (!textarea || !status) return;
+
+    const raw = textarea.value.trim();
+
+    if (!raw) {
+        status.textContent = "Lütfen sayı listesini yapıştırın.";
+        return;
+    }
+
+    /*
+     * Örnek kabul edilen biçimler:
+     * 1 2 5 10
+     * 1, 2, 5, 10
+     * 1; 2; 5; 10
+     * Her satıra bir sayı
+     */
+    const tokens = raw.split(/[\s,;]+/).filter(Boolean);
+
+    const values = [];
+
+    for (const token of tokens) {
+        if (!/^\d+$/.test(token)) {
+            status.textContent =
+                `Geçersiz değer: "${token}". Yalnızca pozitif tam sayılar girin.`;
+            return;
+        }
+
+        const value = Number(token);
+
+        if (!Number.isSafeInteger(value) || value < 1) {
+            status.textContent =
+                `Geçersiz sayı: "${token}". Yalnızca pozitif tam sayılar girin.`;
+            return;
+        }
+
+        values.push(value);
+    }
+
+    const uniqueValues = [...new Set(values)];
+
+    const mainMax = panelSelectionLimits.max;
+
+    const mainValues = uniqueValues.filter(
+        value => value <= mainMax
+    );
+
+    const outOfRangeValues = uniqueValues.filter(
+        value => value > mainMax
+    );
+
+    /*
+     * Ana seçim listesini toplu yapıştırılan sayılara göre güncelle.
+     * Kaydetme sırasında mevcut perSet kuralı yine uygulanır.
+     */
+    panelDraft.main = [...mainValues];
+
+    /*
+     * Yalnızca ana sayı bölümündeki balonları güncelle.
+     * Joker balonlarının seçimleri değiştirilmez.
+     */
+    document
+        .querySelectorAll("#resultNumbers .ball")
+        .forEach(ball => {
+            if (ball.classList.contains("joker")) {
+                return;
+            }
+
+            const number = Number(ball.textContent);
+
+            ball.classList.toggle(
+                "result-selected",
+                panelDraft.main.includes(number)
+            );
+        });
+
+    const messages = [];
+
+    messages.push(
+        `${mainValues.length} ana sayı balonu renklendirildi.`
+    );
+
+    if (uniqueValues.length !== values.length) {
+        messages.push("Tekrarlanan sayılar bir kez değerlendirildi.");
+    }
+
+    if (outOfRangeValues.length > 0) {
+        messages.push(
+            `Ana sayı aralığı (${mainMax}) dışında kalan sayılar: ${outOfRangeValues.join(", ")}.`
+        );
+    }
+
+    const requiredMainCount = panelSelectionLimits.main;
+
+    if (mainValues.length !== requiredMainCount) {
+        messages.push(
+            `Kaydetmek için tam ${requiredMainCount} ana sayı seçilmelidir.`
+        );
+    } else {
+        messages.push(
+            "Ana sayı adedi kayıt için uygun."
+        );
+    }
+
+    status.textContent = messages.join(" ");
+}
+
+const CryptoEngine = {
+    isSecure: !!(window.crypto && window.crypto.getRandomValues),
+
+    nextUint32: function(max) {
+        if (!this.isSecure) {
             throw new Error("GÜVENLİ MOTOR BULUNAMADI!");
         }
 
-        if(
+        if (
             typeof max !== 'number' ||
             !Number.isFinite(max) ||
             max <= 0 ||
@@ -571,7 +357,7 @@ const CryptoEngine = {
             throw new Error("GEÇERSİZ MAKSİMUM DEĞER!");
         }
 
-        if(max <= 1) return 0;
+        if (max <= 1) return 0;
 
         const buf = new Uint32Array(1);
         const limit = Math.floor(0x100000000 / max) * max;
@@ -581,12 +367,12 @@ const CryptoEngine = {
         do {
             window.crypto.getRandomValues(buf);
             val = buf[0];
-        } while(val >= limit);
+        } while (val >= limit);
 
         return val % max;
     },
 
-    updateUI:function() {
+    updateUI: function() {
         const statusEl = getEl("crypto-status");
 
         if(statusEl) {
@@ -597,15 +383,15 @@ const CryptoEngine = {
 
             cryptoTimeout = setTimeout(() => {
                 statusEl.innerHTML = `Motor: Bekleniyor...`;
-            },10000);
+            }, 10000);
         }
     }
 };
 
 function secureShuffle(array) {
-    for(let i = array.length - 1; i > 0; i--) {
+    for (let i = array.length - 1; i > 0; i--) {
         const j = CryptoEngine.nextUint32(i + 1);
-        [array[i],array[j]] = [array[j],array[i]];
+        [array[i], array[j]] = [array[j], array[i]];
     }
 
     CryptoEngine.updateUI();
@@ -614,19 +400,19 @@ function secureShuffle(array) {
 }
 
 const DB_CONFIG = {
-    name:"LuckyDB",
-    version:4,
-    storeName:"savedGroups",
-    draftStore:"drafts",
-    lockName:"db_write_lock"
+    name: "LuckyDB",
+    version: 4,
+    storeName: "savedGroups",
+    draftStore: "drafts",
+    lockName: "db_write_lock"
 };
 
 let dbInstance = null;
 
 function getDB() {
-    return new Promise((resolve,reject) => {
+    return new Promise((resolve, reject) => {
 
-        if(dbInstance) {
+        if (dbInstance) {
             resolve(dbInstance);
             return;
         }
@@ -634,13 +420,13 @@ function getDB() {
         let settled = false;
 
         const fail = (error) => {
-            if(settled) return;
+            if (settled) return;
             settled = true;
             reject(error instanceof Error ? error : new Error(String(error)));
         };
 
         const succeed = (db) => {
-            if(settled) return;
+            if (settled) return;
             settled = true;
             resolve(db);
         };
@@ -648,8 +434,8 @@ function getDB() {
         let req;
 
         try {
-            req = indexedDB.open(DB_CONFIG.name,DB_CONFIG.version);
-        } catch(e) {
+            req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
+        } catch (e) {
             fail(e);
             return;
         }
@@ -663,20 +449,20 @@ function getDB() {
             try {
                 const db = e.target.result;
 
-                if(!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
+                if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
                     db.createObjectStore(
                         DB_CONFIG.storeName,
-                        {keyPath:"id"}
+                        { keyPath: "id" }
                     );
                 }
 
-                if(!db.objectStoreNames.contains(DB_CONFIG.draftStore)) {
+                if (!db.objectStoreNames.contains(DB_CONFIG.draftStore)) {
                     db.createObjectStore(
                         DB_CONFIG.draftStore,
-                        {keyPath:"id"}
+                        { keyPath: "id" }
                     );
                 }
-            } catch(err) {
+            } catch (err) {
                 fail(err);
             }
         };
@@ -712,10 +498,10 @@ function getDB() {
 }
 
 const cleanNumberArray = (arr) => {
-    if(!Array.isArray(arr)) return [];
+    if (!Array.isArray(arr)) return [];
 
     return arr
-        .map(n => parseInt(n,10))
+        .map(n => parseInt(n, 10))
         .filter(n =>
             Number.isInteger(n) &&
             Number.isFinite(n) &&
@@ -723,13 +509,13 @@ const cleanNumberArray = (arr) => {
         );
 };
 
-function validateNumberList(list,max) {
-    if(!Array.isArray(list)) return [];
+function validateNumberList(list, max) {
+    if (!Array.isArray(list)) return [];
 
     const result = [];
 
-    for(const n of list) {
-        if(
+    for (const n of list) {
+        if (
             !Number.isInteger(n) ||
             !Number.isFinite(n) ||
             n <= 0 ||
@@ -738,7 +524,7 @@ function validateNumberList(list,max) {
             continue;
         }
 
-        if(!result.includes(n)) {
+        if (!result.includes(n)) {
             result.push(n);
         }
     }
@@ -748,9 +534,9 @@ function validateNumberList(list,max) {
 
 const Validator = {
 
-    validateGroup:(data) => {
+    validateGroup: (data) => {
         try {
-            if(!data || typeof data !== 'object' || Array.isArray(data)) {
+            if (!data || typeof data !== 'object' || Array.isArray(data)) {
                 return null;
             }
 
@@ -775,14 +561,14 @@ const Validator = {
 
             const safeJokerPerSet =
                 jokerMax > 0
-                    ? Math.min(jokerPerSet,jokerMax)
+                    ? Math.min(jokerPerSet, jokerMax)
                     : 0;
 
             const validatedSets = Array.isArray(data.sets)
                 ? data.sets
                     .map(set => {
 
-                        if(
+                        if (
                             !set ||
                             typeof set !== "object" ||
                             Array.isArray(set)
@@ -812,21 +598,21 @@ const Validator = {
                         };
                     })
                     .filter(set => {
-                        if(!set) return false;
+                        if (!set) return false;
 
-                        if(set.numbers.length === 0) {
+                        if (set.numbers.length === 0) {
                             return false;
                         }
 
-                        if(set.numbers.length > max) {
+                        if (set.numbers.length > max) {
                             return false;
                         }
 
-                        if(jokerMax === 0 && set.jokers.length > 0) {
+                        if (jokerMax === 0 && set.jokers.length > 0) {
                             return false;
                         }
 
-                        if(
+                        if (
                             safeJokerPerSet > 0 &&
                             set.jokers.length > safeJokerPerSet
                         ) {
@@ -866,14 +652,14 @@ const Validator = {
                             : 5
                     );
 
-            const safePerSet = Math.min(perSet,max);
+            const safePerSet = Math.min(perSet, max);
 
             const safeResultsMain =
-                resultsMain.slice(0,safePerSet);
+                resultsMain.slice(0, safePerSet);
 
             const safeResultsJoker =
                 safeJokerPerSet > 0
-                    ? resultsJoker.slice(0,safeJokerPerSet)
+                    ? resultsJoker.slice(0, safeJokerPerSet)
                     : [];
 
             const safeId =
@@ -898,21 +684,21 @@ const Validator = {
                     : Date.now();
 
             return {
-                id:safeId,
-                name:safeName,
-                sets:validatedSets,
+                id: safeId,
+                name: safeName,
+                sets: validatedSets,
                 max,
-                perSet:safePerSet,
+                perSet: safePerSet,
                 jokerMax,
-                jokerPerSet:safeJokerPerSet,
-                results:{
-                    main:safeResultsMain,
-                    joker:safeResultsJoker
+                jokerPerSet: safeJokerPerSet,
+                results: {
+                    main: safeResultsMain,
+                    joker: safeResultsJoker
                 },
                 version
             };
 
-        } catch(e) {
+        } catch (e) {
             return null;
         }
     }
@@ -922,7 +708,7 @@ let lockQueue = Promise.resolve();
 
 async function withLock(workFn) {
 
-    if(navigator.locks) {
+    if (navigator.locks) {
         return navigator.locks.request(
             DB_CONFIG.lockName,
             async () => {
@@ -933,7 +719,8 @@ async function withLock(workFn) {
 
     const currentLock = lockQueue.then(() => workFn());
 
-    lockQueue = currentLock.catch(() => {});
+    lockQueue = currentLock.catch(() => {
+    });
 
     return currentLock;
 }
@@ -942,18 +729,18 @@ async function getDraft(id) {
     try {
         const db = await getDB();
 
-        return await new Promise((resolve,reject) => {
+        return await new Promise((resolve, reject) => {
 
             let settled = false;
 
             const finishError = (error) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
                 reject(error instanceof Error ? error : new Error(String(error)));
             };
 
             const finishSuccess = (value) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
                 resolve(value);
             };
@@ -961,8 +748,8 @@ async function getDraft(id) {
             let tx;
 
             try {
-                tx = db.transaction(DB_CONFIG.draftStore,"readonly");
-            } catch(e) {
+                tx = db.transaction(DB_CONFIG.draftStore, "readonly");
+            } catch (e) {
                 finishError(e);
                 return;
             }
@@ -974,44 +761,56 @@ async function getDraft(id) {
             };
 
             req.onerror = () => {
-                finishError(req.error || new Error("Draft okuma hatası."));
+                finishError(
+                    req.error || new Error("Draft okuma hatası.")
+                );
             };
 
             req.onabort = () => {
-                finishError(new Error("Draft okuma işlemi iptal edildi."));
+                finishError(
+                    new Error("Draft okuma işlemi iptal edildi.")
+                );
             };
 
             tx.onerror = () => {
-                finishError(tx.error || new Error("Draft transaction hatası."));
+                finishError(
+                    tx.error || new Error("Draft transaction hatası.")
+                );
             };
 
             tx.onabort = () => {
-                finishError(tx.error || new Error("Draft transaction iptal edildi."));
+                finishError(
+                    tx.error || new Error("Draft transaction iptal edildi.")
+                );
             };
         });
 
     } catch(e) {
-        ErrorHandler.report("Draft Get Error",e);
+        ErrorHandler.report("Draft Get Error", e);
         throw e;
     }
 }
 
-async function saveDraft(id,data) {
+async function saveDraft(id, data) {
     try {
         const db = await getDB();
 
-        await new Promise((resolve,reject) => {
+        await new Promise((resolve, reject) => {
 
             let settled = false;
 
             const fail = (error) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
-                reject(error instanceof Error ? error : new Error(String(error)));
+                reject(
+                    error instanceof Error
+                        ? error
+                        : new Error(String(error))
+                );
             };
 
             const success = () => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
                 resolve();
             };
@@ -1019,7 +818,10 @@ async function saveDraft(id,data) {
             let tx;
 
             try {
-                tx = db.transaction(DB_CONFIG.draftStore,"readwrite");
+                tx = db.transaction(
+                    DB_CONFIG.draftStore,
+                    "readwrite"
+                );
             } catch(e) {
                 fail(e);
                 return;
@@ -1031,7 +833,7 @@ async function saveDraft(id,data) {
                 store.put({
                     id,
                     data,
-                    ts:Date.now()
+                    ts: Date.now()
                 });
             } catch(e) {
                 fail(e);
@@ -1041,16 +843,22 @@ async function saveDraft(id,data) {
             tx.oncomplete = success;
 
             tx.onerror = () => {
-                fail(tx.error || new Error("Draft yazma hatası."));
+                fail(
+                    tx.error ||
+                    new Error("Draft yazma hatası.")
+                );
             };
 
             tx.onabort = () => {
-                fail(tx.error || new Error("Draft yazma işlemi iptal edildi."));
+                fail(
+                    tx.error ||
+                    new Error("Draft yazma işlemi iptal edildi.")
+                );
             };
         });
 
     } catch(e) {
-        ErrorHandler.report("Draft Save Error",e);
+        ErrorHandler.report("Draft Save Error", e);
         throw e;
     }
 }
@@ -1059,18 +867,22 @@ async function deleteDraft(id) {
     try {
         const db = await getDB();
 
-        await new Promise((resolve,reject) => {
+        await new Promise((resolve, reject) => {
 
             let settled = false;
 
             const fail = (error) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
-                reject(error instanceof Error ? error : new Error(String(error)));
+                reject(
+                    error instanceof Error
+                        ? error
+                        : new Error(String(error))
+                );
             };
 
             const success = () => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
                 resolve();
             };
@@ -1078,7 +890,10 @@ async function deleteDraft(id) {
             let tx;
 
             try {
-                tx = db.transaction(DB_CONFIG.draftStore,"readwrite");
+                tx = db.transaction(
+                    DB_CONFIG.draftStore,
+                    "readwrite"
+                );
             } catch(e) {
                 fail(e);
                 return;
@@ -1094,30 +909,36 @@ async function deleteDraft(id) {
             tx.oncomplete = success;
 
             tx.onerror = () => {
-                fail(tx.error || new Error("Draft silme hatası."));
+                fail(
+                    tx.error ||
+                    new Error("Draft silme hatası.")
+                );
             };
 
             tx.onabort = () => {
-                fail(tx.error || new Error("Draft silme işlemi iptal edildi."));
+                fail(
+                    tx.error ||
+                    new Error("Draft silme işlemi iptal edildi.")
+                );
             };
         });
 
     } catch(e) {
-        ErrorHandler.report("Draft Delete Error",e);
+        ErrorHandler.report("Draft Delete Error", e);
         throw e;
     }
 }
 
 function queueInputDraftSave(values) {
-    const savedValues = {...values};
+    const savedValues = { ...values };
 
-    currentInputValues = {...savedValues};
+    currentInputValues = { ...savedValues };
 
     inputDraftSaveQueue = inputDraftSaveQueue
         .catch(() => {})
-        .then(() => saveDraft("tempInputs",savedValues))
+        .then(() => saveDraft("tempInputs", savedValues))
         .catch(e => {
-            ErrorHandler.report("Draft Save Error",e);
+            ErrorHandler.report("Draft Save Error", e);
         });
 
     return inputDraftSaveQueue;
@@ -1127,18 +948,22 @@ async function getAllGroups() {
     try {
         const db = await getDB();
 
-        return await new Promise((resolve,reject) => {
+        return await new Promise((resolve, reject) => {
 
             let settled = false;
 
             const fail = (error) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
-                reject(error instanceof Error ? error : new Error(String(error)));
+                reject(
+                    error instanceof Error
+                        ? error
+                        : new Error(String(error))
+                );
             };
 
             const success = (value) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
                 resolve(value);
             };
@@ -1146,13 +971,17 @@ async function getAllGroups() {
             let tx;
 
             try {
-                tx = db.transaction(DB_CONFIG.storeName,"readonly");
+                tx = db.transaction(
+                    DB_CONFIG.storeName,
+                    "readonly"
+                );
             } catch(e) {
                 fail(e);
                 return;
             }
 
-            const req = tx.objectStore(DB_CONFIG.storeName).getAll();
+            const req =
+                tx.objectStore(DB_CONFIG.storeName).getAll();
 
             req.onsuccess = (e) => {
                 const result =
@@ -1164,24 +993,35 @@ async function getAllGroups() {
             };
 
             req.onerror = () => {
-                fail(req.error || new Error("Kayıtlar okunamadı."));
+                fail(
+                    req.error ||
+                    new Error("Kayıtlar okunamadı.")
+                );
             };
 
             req.onabort = () => {
-                fail(new Error("Kayıt okuma işlemi iptal edildi."));
+                fail(
+                    new Error("Kayıt okuma işlemi iptal edildi.")
+                );
             };
 
             tx.onerror = () => {
-                fail(tx.error || new Error("DB okuma transaction hatası."));
+                fail(
+                    tx.error ||
+                    new Error("DB okuma transaction hatası.")
+                );
             };
 
             tx.onabort = () => {
-                fail(tx.error || new Error("DB okuma transaction iptal edildi."));
+                fail(
+                    tx.error ||
+                    new Error("DB okuma transaction iptal edildi.")
+                );
             };
         });
 
-    } catch(e) {
-        ErrorHandler.report("Get All Groups Error",e);
+    } catch (e) {
+        ErrorHandler.report("Get All Groups Error", e);
         throw e;
     }
 }
@@ -1192,18 +1032,22 @@ async function getGroupById(id) {
     try {
         const db = await getDB();
 
-        return await new Promise((resolve,reject) => {
+        return await new Promise((resolve, reject) => {
 
             let settled = false;
 
             const fail = (error) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
-                reject(error instanceof Error ? error : new Error(String(error)));
+                reject(
+                    error instanceof Error
+                        ? error
+                        : new Error(String(error))
+                );
             };
 
             const success = (value) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
                 resolve(value);
             };
@@ -1211,66 +1055,89 @@ async function getGroupById(id) {
             let tx;
 
             try {
-                tx = db.transaction(DB_CONFIG.storeName,"readonly");
+                tx = db.transaction(
+                    DB_CONFIG.storeName,
+                    "readonly"
+                );
             } catch(e) {
                 fail(e);
                 return;
             }
 
             const req =
-                tx.objectStore(DB_CONFIG.storeName).get(String(id));
+                tx.objectStore(DB_CONFIG.storeName)
+                  .get(String(id));
 
             req.onsuccess = (e) => {
-                success(Validator.validateGroup(e.target.result));
+                success(
+                    Validator.validateGroup(
+                        e.target.result
+                    )
+                );
             };
 
             req.onerror = () => {
-                fail(req.error || new Error("Kayıt okunamadı."));
+                fail(
+                    req.error ||
+                    new Error("Kayıt okunamadı.")
+                );
             };
 
             req.onabort = () => {
-                fail(new Error("Kayıt okuma işlemi iptal edildi."));
+                fail(
+                    new Error("Kayıt okuma işlemi iptal edildi.")
+                );
             };
 
             tx.onerror = () => {
-                fail(tx.error || new Error("DB transaction hatası."));
+                fail(
+                    tx.error ||
+                    new Error("DB transaction hatası.")
+                );
             };
 
             tx.onabort = () => {
-                fail(tx.error || new Error("DB transaction iptal edildi."));
+                fail(
+                    tx.error ||
+                    new Error("DB transaction iptal edildi.")
+                );
             };
         });
 
     } catch(e) {
-        ErrorHandler.report("Get Group Error",e);
+        ErrorHandler.report("Get Group Error", e);
         return null;
     }
 }
 
-async function atomicSave(item,options = {}) {
+async function atomicSave(item, options = {}) {
     return withLock(async () => {
 
         const val = Validator.validateGroup(item);
 
-        if(!val) {
+        if (!val) {
             throw new Error("Doğrulama hatası.");
         }
 
         const db = await getDB();
 
-        return await new Promise((resolve,reject) => {
+        return await new Promise((resolve, reject) => {
 
             let settled = false;
 
             const fail = (error) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
 
-                reject(error instanceof Error ? error : new Error(String(error)));
+                reject(
+                    error instanceof Error
+                        ? error
+                        : new Error(String(error))
+                );
             };
 
             const success = () => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
                 resolve();
             };
@@ -1279,17 +1146,20 @@ async function atomicSave(item,options = {}) {
             let conflict = false;
 
             try {
-                tx = db.transaction(DB_CONFIG.storeName,"readwrite");
+                tx = db.transaction(
+                    DB_CONFIG.storeName,
+                    "readwrite"
+                );
 
                 const store = tx.objectStore(DB_CONFIG.storeName);
                 const request = store.get(val.id);
 
                 request.onsuccess = () => {
-                    if(settled) return;
+                    if (settled) return;
 
                     const current = request.result;
 
-                    if(options.requireExisting && !current) {
+                    if (options.requireExisting && !current) {
                         conflict = true;
                         fail(
                             new Error(
@@ -1299,11 +1169,12 @@ async function atomicSave(item,options = {}) {
                         return;
                     }
 
-                    if(
+                    if (
                         options.expectedVersion !== undefined &&
                         (
                             !current ||
-                            Number(current.version) !== Number(options.expectedVersion)
+                            Number(current.version) !==
+                            Number(options.expectedVersion)
                         )
                     ) {
                         conflict = true;
@@ -1332,7 +1203,10 @@ async function atomicSave(item,options = {}) {
                 };
 
                 request.onerror = () => {
-                    fail(request.error || new Error("Kayıt kontrolü başarısız."));
+                    fail(
+                        request.error ||
+                        new Error("Kayıt kontrolü başarısız.")
+                    );
 
                     try {
                         tx.abort();
@@ -1345,48 +1219,58 @@ async function atomicSave(item,options = {}) {
             }
 
             tx.oncomplete = () => {
-                if(!conflict) {
+                if (!conflict) {
                     success();
                 }
             };
 
             tx.onerror = () => {
-                fail(tx.error || new Error("Yazma hatası."));
+                fail(
+                    tx.error ||
+                    new Error("Yazma hatası.")
+                );
             };
 
             tx.onabort = () => {
-                if(!settled) {
-                    fail(tx.error || new Error("Yazma işlemi iptal edildi."));
+                if (!settled) {
+                    fail(
+                        tx.error ||
+                        new Error("Yazma işlemi iptal edildi.")
+                    );
                 }
             };
         });
     });
 }
 
-async function atomicSaveGroupAndDeleteDraft(item,draftId) {
+async function atomicSaveGroupAndDeleteDraft(item, draftId) {
     return withLock(async () => {
 
         const val = Validator.validateGroup(item);
 
-        if(!val) {
+        if (!val) {
             throw new Error("Doğrulama hatası.");
         }
 
         const db = await getDB();
 
-        return await new Promise((resolve,reject) => {
+        return await new Promise((resolve, reject) => {
 
             let settled = false;
 
             const fail = (error) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
 
-                reject(error instanceof Error ? error : new Error(String(error)));
+                reject(
+                    error instanceof Error
+                        ? error
+                        : new Error(String(error))
+                );
             };
 
             const success = () => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
                 resolve();
             };
@@ -1395,7 +1279,7 @@ async function atomicSaveGroupAndDeleteDraft(item,draftId) {
 
             try {
                 tx = db.transaction(
-                    [DB_CONFIG.storeName,DB_CONFIG.draftStore],
+                    [DB_CONFIG.storeName, DB_CONFIG.draftStore],
                     "readwrite"
                 );
 
@@ -1404,7 +1288,7 @@ async function atomicSaveGroupAndDeleteDraft(item,draftId) {
                 const request = groupStore.get(val.id);
 
                 request.onsuccess = () => {
-                    if(settled) return;
+                    if (settled) return;
 
                     const current = request.result;
 
@@ -1430,7 +1314,10 @@ async function atomicSaveGroupAndDeleteDraft(item,draftId) {
                         tx.abort();
                     } catch(_) {}
 
-                    fail(request.error || new Error("Kayıt kontrolü başarısız."));
+                    fail(
+                        request.error ||
+                        new Error("Kayıt kontrolü başarısız.")
+                    );
                 };
 
                 tx.oncomplete = success;
@@ -1450,7 +1337,7 @@ async function atomicSaveGroupAndDeleteDraft(item,draftId) {
                 };
 
             } catch(e) {
-                if(tx) {
+                if (tx) {
                     try {
                         tx.abort();
                     } catch(_) {}
@@ -1466,18 +1353,22 @@ async function deleteFromDB(id) {
     try {
         const db = await getDB();
 
-        await new Promise((resolve,reject) => {
+        await new Promise((resolve, reject) => {
 
             let settled = false;
 
             const fail = (error) => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
-                reject(error instanceof Error ? error : new Error(String(error)));
+                reject(
+                    error instanceof Error
+                        ? error
+                        : new Error(String(error))
+                );
             };
 
             const success = () => {
-                if(settled) return;
+                if (settled) return;
                 settled = true;
                 resolve();
             };
@@ -1485,10 +1376,13 @@ async function deleteFromDB(id) {
             let tx;
 
             try {
-                tx = db.transaction(DB_CONFIG.storeName,"readwrite");
+                tx = db.transaction(
+                    DB_CONFIG.storeName,
+                    "readwrite"
+                );
 
                 tx.objectStore(DB_CONFIG.storeName)
-                    .delete(String(id));
+                  .delete(String(id));
 
             } catch(e) {
                 fail(e);
@@ -1498,16 +1392,22 @@ async function deleteFromDB(id) {
             tx.oncomplete = success;
 
             tx.onerror = () => {
-                fail(tx.error || new Error("Silme hatası."));
+                fail(
+                    tx.error ||
+                    new Error("Silme hatası.")
+                );
             };
 
             tx.onabort = () => {
-                fail(tx.error || new Error("Silme işlemi iptal edildi."));
+                fail(
+                    tx.error ||
+                    new Error("Silme işlemi iptal edildi.")
+                );
             };
         });
 
     } catch(e) {
-        ErrorHandler.report("Delete Error",e);
+        ErrorHandler.report("Delete Error", e);
         throw e;
     }
 }
@@ -1516,18 +1416,21 @@ async function exportBackup() {
     try {
         const groups = await getAllGroups();
 
-        if(groups.length === 0) {
+        if (groups.length === 0) {
             alert("Dışa aktarılacak kayıtlı veri bulunamadı.");
             return;
         }
 
         const dataStr =
             "data:text/json;charset=utf-8," +
-            encodeURIComponent(JSON.stringify(groups,null,2));
+            encodeURIComponent(
+                JSON.stringify(groups, null, 2)
+            );
 
-        const downloadAnchor = document.createElement('a');
+        const downloadAnchor =
+            document.createElement('a');
 
-        downloadAnchor.setAttribute("href",dataStr);
+        downloadAnchor.setAttribute("href", dataStr);
 
         downloadAnchor.setAttribute(
             "download",
@@ -1541,7 +1444,7 @@ async function exportBackup() {
         downloadAnchor.remove();
 
     } catch(e) {
-        ErrorHandler.report("Export Error",e);
+        ErrorHandler.report("Export Error", e);
     }
 }
 
@@ -1552,7 +1455,7 @@ function triggerImport() {
 async function handleFileImport(event) {
     const file = event.target.files[0];
 
-    if(!file) return;
+    if (!file) return;
 
     const reader = new FileReader();
 
@@ -1560,16 +1463,16 @@ async function handleFileImport(event) {
         try {
             const importedData = JSON.parse(e.target.result);
 
-            if(!Array.isArray(importedData)) {
+            if (!Array.isArray(importedData)) {
                 throw new Error("Geçersiz yedek dosyası formatı.");
             }
 
             let count = 0;
 
-            for(const item of importedData) {
+            for (const item of importedData) {
                 const valid = Validator.validateGroup(item);
 
-                if(valid) {
+                if (valid) {
                     await atomicSave(valid);
                     count++;
                 }
@@ -1598,14 +1501,14 @@ async function handleFileImport(event) {
 }
 
 function normalizeGeneratedSetsDraft(data) {
-    if(!Array.isArray(data)) {
+    if (!Array.isArray(data)) {
         return [];
     }
 
     const safeSets = [];
 
-    for(const set of data) {
-        if(
+    for (const set of data) {
+        if (
             !set ||
             typeof set !== "object" ||
             Array.isArray(set) ||
@@ -1618,7 +1521,7 @@ function normalizeGeneratedSetsDraft(data) {
         const rawMax = Number(set.max);
         const rawJokerMax = Number(set.jokerMax);
 
-        if(
+        if (
             !Number.isSafeInteger(rawMax) ||
             rawMax < 1 ||
             rawMax > GENERATION_LIMITS.max
@@ -1626,7 +1529,7 @@ function normalizeGeneratedSetsDraft(data) {
             continue;
         }
 
-        if(
+        if (
             !Number.isSafeInteger(rawJokerMax) ||
             rawJokerMax < 0 ||
             rawJokerMax > GENERATION_LIMITS.jokerMax
@@ -1648,26 +1551,31 @@ function normalizeGeneratedSetsDraft(data) {
                 )
                 : [];
 
-        if(
+        if (
             numbers.length === 0 ||
             numbers.length > GENERATION_LIMITS.per
         ) {
             continue;
         }
 
-        if(rawJokerMax === 0 && jokers.length > 0) {
+        if (
+            rawJokerMax === 0 &&
+            jokers.length > 0
+        ) {
             continue;
         }
 
-        if(jokers.length > GENERATION_LIMITS.jokerPer) {
+        if (
+            jokers.length > GENERATION_LIMITS.jokerPer
+        ) {
             continue;
         }
 
         safeSets.push({
             numbers,
             jokers,
-            max:rawMax,
-            jokerMax:rawJokerMax
+            max: rawMax,
+            jokerMax: rawJokerMax
         });
     }
 
@@ -1676,23 +1584,23 @@ function normalizeGeneratedSetsDraft(data) {
 
 function normalizeDraftInputs(data) {
     const defaults = {
-        max:35,
-        per:5,
-        jMax:31,
-        jPer:1,
-        count:5
+        max: 35,
+        per: 5,
+        jMax: 31,
+        jPer: 1,
+        count: 5
     };
 
-    if(
+    if (
         !data ||
         typeof data !== "object" ||
         Array.isArray(data)
     ) {
-        return {...defaults};
+        return { ...defaults };
     }
 
     const readInteger = (value) => {
-        if(
+        if (
             value === undefined ||
             value === null ||
             (
@@ -1705,7 +1613,7 @@ function normalizeDraftInputs(data) {
 
         const number = Number(value);
 
-        if(!Number.isSafeInteger(number)) {
+        if (!Number.isSafeInteger(number)) {
             return null;
         }
 
@@ -1727,7 +1635,7 @@ function normalizeDraftInputs(data) {
         rawPer <= GENERATION_LIMITS.per &&
         rawPer <= max
             ? rawPer
-            : Math.min(defaults.per,max);
+            : Math.min(defaults.per, max);
 
     const rawJMax = readInteger(data.jMax);
     const jMax =
@@ -1744,7 +1652,7 @@ function normalizeDraftInputs(data) {
         rawJPer <= GENERATION_LIMITS.jokerPer &&
         (rawJPer === 0 || rawJPer <= jMax)
             ? rawJPer
-            : Math.min(defaults.jPer,jMax);
+            : Math.min(defaults.jPer, jMax);
 
     const rawCount = readInteger(data.count);
     const count =
@@ -1764,27 +1672,27 @@ function normalizeDraftInputs(data) {
 }
 
 async function requestPersistentStorage() {
-    if(
+    if (
         navigator.storage &&
         navigator.storage.persist
     ) {
         try {
             const isPersisted = await navigator.storage.persisted();
 
-            if(!isPersisted) {
+            if (!isPersisted) {
                 await navigator.storage.persist();
             }
         } catch(e) {
-            ErrorHandler.report("Persistent Storage Error",e);
+            ErrorHandler.report("Persistent Storage Error", e);
         }
     }
 }
 
 window.onload = async () => {
 
-    if(!CryptoEngine.isSecure) {
+    if (!CryptoEngine.isSecure) {
         document.body.innerHTML =
-            `<div style="padding:40px;text-align:center;color:#d32f2f;">
+            `<div style="padding:40px; text-align:center; color:#d32f2f;">
                 <h2>⚠ Güvenlik</h2>
                 <p>Web Crypto API desteklenmiyor.</p>
             </div>`;
@@ -1816,6 +1724,12 @@ window.onload = async () => {
         cleanResult
     );
 
+    /* Toplu yapıştırma düğmesinin olay dinleyicisi */
+    getEl("btn-apply-bulk-results").addEventListener(
+        "click",
+        applyBulkResultNumbers
+    );
+
     getEl("import-file-input").addEventListener(
         "change",
         handleFileImport
@@ -1830,7 +1744,7 @@ window.onload = async () => {
             groupId:null
         };
 
-    if(
+    if (
         state.page === "panel" &&
         state.groupId
     ) {
@@ -1870,7 +1784,7 @@ window.onpopstate = async (event) => {
             groupId:null
         };
 
-    if(state.page !== "panel") {
+    if (state.page !== "panel") {
         closeResultPanel(false);
     }
 
@@ -1879,7 +1793,7 @@ window.onpopstate = async (event) => {
         state.groupId
     );
 
-    if(
+    if (
         state.page === "panel" &&
         state.groupId &&
         history.state?.page === "panel" &&
@@ -1893,16 +1807,16 @@ window.onpopstate = async (event) => {
     }
 };
 
-function navTo(page,groupId = null) {
+function navTo(page, groupId = null) {
 
-    if(isProcessing) return;
+    if (isProcessing) return;
 
-    if(page !== "panel") {
+    if (page !== "panel") {
         lastRequestId++;
         panelPreviousState = null;
     }
 
-    if(page !== "panel") {
+    if (page !== "panel") {
         panelDraft = null;
         panelDraftGroupId = null;
         panelSelectionLimits = null;
@@ -1912,7 +1826,7 @@ function navTo(page,groupId = null) {
     history.pushState(
         {
             page,
-            groupId:groupId
+            groupId: groupId
                 ? String(groupId)
                 : null
         },
@@ -1925,14 +1839,14 @@ function navTo(page,groupId = null) {
     );
 }
 
-async function renderCurrentState(page,groupId) {
+async function renderCurrentState(page, groupId) {
 
     const currentRequestId = ++lastRequestId;
     const container = getEl("view-container");
 
     if(!container) return;
 
-    if(page !== "panel") {
+    if (page !== "panel") {
         const panel = getEl("resultPanel");
 
         if(panel) {
@@ -1942,24 +1856,24 @@ async function renderCurrentState(page,groupId) {
         toggleBodyScroll(false);
 
         container.innerHTML =
-            `<div style="padding:20px;color:#666;">
+            `<div style="padding:20px; color:#666;">
                 Yükleniyor...
             </div>`;
     }
 
     try {
-        if(page === "generate") {
-            if(currentRequestId === lastRequestId) {
+        if (page === "generate") {
+            if (currentRequestId === lastRequestId) {
                 await renderGeneratePage();
             }
 
-        } else if(page === "mySets") {
-            if(groupId) {
+        } else if (page === "mySets") {
+            if (groupId) {
                 const group = await getGroupById(groupId);
 
-                if(currentRequestId === lastRequestId) {
+                if (currentRequestId === lastRequestId) {
                     group
-                        ? await renderViewGroup(group,currentRequestId)
+                        ? await renderViewGroup(group, currentRequestId)
                         : await renderMySetsList(currentRequestId);
                 }
 
@@ -1968,11 +1882,11 @@ async function renderCurrentState(page,groupId) {
             }
         }
 
-    } catch(e) {
-        ErrorHandler.report("Render Error",e);
+    } catch (e) {
+        ErrorHandler.report("Render Error", e);
 
     } finally {
-        if(
+        if (
             currentRequestId !== lastRequestId &&
             container.innerHTML.includes("Yükleniyor...")
         ) {
@@ -1999,30 +1913,30 @@ async function renderGeneratePage() {
     try {
         dSets = await getDraft("tempSets");
 
-        if(requestId !== lastRequestId) {
+        if (requestId !== lastRequestId) {
             return;
         }
 
         await inputDraftSaveQueue;
 
-        if(requestId !== lastRequestId) {
+        if (requestId !== lastRequestId) {
             return;
         }
 
         dInputs = await getDraft("tempInputs");
 
-        if(requestId !== lastRequestId) {
+        if (requestId !== lastRequestId) {
             return;
         }
 
     } catch(e) {
-        if(requestId !== lastRequestId) {
+        if (requestId !== lastRequestId) {
             return;
         }
 
         const view = getEl("view-container");
 
-        if(view) {
+        if (view) {
             view.innerHTML = `
                 <div class="container">
                     <div class="card">
@@ -2047,15 +1961,15 @@ async function renderGeneratePage() {
             ? normalizeGeneratedSetsDraft(dSets.data)
             : [];
 
-    if(currentInputValues !== null) {
+    if (currentInputValues !== null) {
         storedInputs = normalizeDraftInputs(currentInputValues);
-        currentInputValues = {...storedInputs};
-    } else if(dInputs) {
+        currentInputValues = { ...storedInputs };
+    } else if (dInputs) {
         storedInputs = normalizeDraftInputs(dInputs.data);
-        currentInputValues = {...storedInputs};
+        currentInputValues = { ...storedInputs };
     }
 
-    if(requestId !== lastRequestId) {
+    if (requestId !== lastRequestId) {
         return;
     }
 
@@ -2080,28 +1994,28 @@ async function renderGeneratePage() {
         </div>`;
 
     const inputElements = {
-        max:getEl("maxNumber"),
-        per:getEl("perSet"),
-        jMax:getEl("jokerMax"),
-        jPer:getEl("jokerCount"),
-        count:getEl("setCount")
+        max: getEl("maxNumber"),
+        per: getEl("perSet"),
+        jMax: getEl("jokerMax"),
+        jPer: getEl("jokerCount"),
+        count: getEl("setCount")
     };
 
     const saveCurrentInputs = () => {
         const values = {
-            max:inputElements.max.value,
-            per:inputElements.per.value,
-            jMax:inputElements.jMax.value,
-            jPer:inputElements.jPer.value,
-            count:inputElements.count.value
+            max: inputElements.max.value,
+            per: inputElements.per.value,
+            jMax: inputElements.jMax.value,
+            jPer: inputElements.jPer.value,
+            count: inputElements.count.value
         };
 
         queueInputDraftSave(values);
     };
 
     Object.values(inputElements).forEach(input => {
-        input.addEventListener("input",saveCurrentInputs);
-        input.addEventListener("change",saveCurrentInputs);
+        input.addEventListener("input", saveCurrentInputs);
+        input.addEventListener("change", saveCurrentInputs);
     });
 
     getEl("btn-generate-action").addEventListener(
@@ -2120,18 +2034,18 @@ function renderGeneratedSetsList() {
 
     resultsDiv.innerHTML = "";
 
-    generatedSets.forEach((set,i) => {
+    generatedSets.forEach((set, i) => {
         const card = document.createElement("div");
 
         card.className = "card";
         card.innerHTML = `<b>${i+1}. Kolon</b>`;
 
-        card.appendChild(createBallsUI(set,null,i+1));
+        card.appendChild(createBallsUI(set));
 
         resultsDiv.appendChild(card);
     });
 
-    if(generatedSets.length > 0) {
+    if (generatedSets.length > 0) {
         const actionCard = document.createElement("div");
 
         actionCard.className = "card";
@@ -2162,7 +2076,7 @@ function renderGeneratedSetsList() {
 
 async function generateSets() {
 
-    if(isProcessing) return;
+    if (isProcessing) return;
 
     const maxEl = getEl("maxNumber");
     const perEl = getEl("perSet");
@@ -2170,15 +2084,15 @@ async function generateSets() {
     const jPerEl = getEl("jokerCount");
     const countEl = getEl("setCount");
 
-    if(!maxEl || !perEl || !jMaxEl || !jPerEl || !countEl) return;
+    if (!maxEl || !perEl || !jMaxEl || !jPerEl || !countEl) return;
 
-    const max = parseInt(maxEl.value,10) || 0;
-    const per = parseInt(perEl.value,10) || 0;
-    const jMax = parseInt(jMaxEl.value,10) || 0;
-    const jPer = parseInt(jPerEl.value,10) || 0;
-    const count = parseInt(countEl.value,10) || 0;
+    const max = parseInt(maxEl.value, 10) || 0;
+    const per = parseInt(perEl.value, 10) || 0;
+    const jMax = parseInt(jMaxEl.value, 10) || 0;
+    const jPer = parseInt(jPerEl.value, 10) || 0;
+    const count = parseInt(countEl.value, 10) || 0;
 
-    if(
+    if (
         !Number.isSafeInteger(max) ||
         !Number.isSafeInteger(per) ||
         !Number.isSafeInteger(jMax) ||
@@ -2214,38 +2128,38 @@ async function generateSets() {
 
         const newGeneratedSets = [];
 
-        for(let i = 0; i < count; i++) {
+        for (let i = 0; i < count; i++) {
             const mainPool = Array.from(
-                {length:max},
-                (_,k) => k+1
+                {length: max},
+                (_, k) => k + 1
             );
 
             const n = secureShuffle([...mainPool])
-                .slice(0,per)
+                .slice(0, per)
                 .sort((a,b) => a-b);
 
             let j = [];
 
-            if(jMax > 0 && jPer > 0) {
+            if (jMax > 0 && jPer > 0) {
                 const jokerPool = Array.from(
-                    {length:jMax},
-                    (_,k) => k+1
+                    {length: jMax},
+                    (_, k) => k + 1
                 );
 
                 j = secureShuffle([...jokerPool])
-                    .slice(0,jPer)
+                    .slice(0, jPer)
                     .sort((a,b) => a-b);
             }
 
             newGeneratedSets.push({
-                numbers:n,
-                jokers:j,
+                numbers: n,
+                jokers: j,
                 max,
-                jokerMax:jMax
+                jokerMax: jMax
             });
         }
 
-        await saveDraft("tempSets",newGeneratedSets);
+        await saveDraft("tempSets", newGeneratedSets);
 
         await queueInputDraftSave({
             max,
@@ -2268,7 +2182,7 @@ async function generateSets() {
         renderGeneratedSetsList();
 
     } catch(e) {
-        ErrorHandler.report("Generate Error",e);
+        ErrorHandler.report("Generate Error", e);
 
     } finally {
         setLoading(false);
@@ -2278,40 +2192,42 @@ async function generateSets() {
 
 async function saveGroup() {
 
-    if(isProcessing) return;
+    if (isProcessing) return;
 
     const nameEl = getEl("groupNameInput");
 
-    if(!nameEl) return;
+    if (!nameEl) return;
 
     const name = nameEl.value.trim();
 
-    if(!name) {
+    if (!name) {
         alert("İsim verin.");
         return;
     }
 
-    if(generatedSets.length === 0) {
+    if (generatedSets.length === 0) {
         alert("Kaydedilecek kolon bulunamadı.");
         return;
     }
 
     const maxVal = generatedSets[0].max;
     const jMaxVal = generatedSets[0].jokerMax;
+
     const jPerVal = generatedSets[0].jokers.length;
+
     const perSetVal = generatedSets[0].numbers.length;
 
     const group = {
-        id:String(Date.now()),
-        name:name,
-        sets:[...generatedSets],
-        max:maxVal,
-        perSet:perSetVal,
-        jokerMax:jMaxVal,
-        jokerPerSet:jPerVal,
-        results:{
-            main:[],
-            joker:[]
+        id: String(Date.now()),
+        name: name,
+        sets: [...generatedSets],
+        max: maxVal,
+        perSet: perSetVal,
+        jokerMax: jMaxVal,
+        jokerPerSet: jPerVal,
+        results: {
+            main: [],
+            joker: []
         }
     };
 
@@ -2319,16 +2235,16 @@ async function saveGroup() {
         setLoading(true);
         isProcessing = true;
 
-        await atomicSaveGroupAndDeleteDraft(group,"tempSets");
+        await atomicSaveGroupAndDeleteDraft(group, "tempSets");
 
         generatedSets = [];
 
         isProcessing = false;
 
-        navTo('mySets',group.id);
+        navTo('mySets', group.id);
 
     } catch(err) {
-        ErrorHandler.report("Save Error",err);
+        ErrorHandler.report("Save Error", err);
 
         alert(
             "Kayıt tamamlanamadı. Kolonlar korunmuştur; tekrar deneyebilirsiniz.\n\n" +
@@ -2345,14 +2261,14 @@ async function renderMySetsList(reqId) {
 
     const view = getEl("view-container");
 
-    if(!view || reqId !== lastRequestId) return;
+    if (!view || reqId !== lastRequestId) return;
 
     let groups;
 
     try {
         groups = await getAllGroups();
     } catch(e) {
-        if(reqId !== lastRequestId) return;
+        if (reqId !== lastRequestId) return;
 
         view.innerHTML = `
             <div class="container">
@@ -2372,30 +2288,7 @@ async function renderMySetsList(reqId) {
         return;
     }
 
-    if(!view || reqId !== lastRequestId) return;
-
-    const existingIds = new Set(groups.map(group => String(group.id)));
-    const previousSelectionSize = selectedFourGapGroupIds.size;
-    const previousFifthSelection = selectedFifthGapGroupId;
-
-    selectedFourGapGroupIds = new Set(
-        [...selectedFourGapGroupIds]
-            .filter(id => existingIds.has(String(id)))
-    );
-
-    if(
-        selectedFifthGapGroupId &&
-        !existingIds.has(String(selectedFifthGapGroupId))
-    ) {
-        selectedFifthGapGroupId = "";
-    }
-
-    if(
-        selectedFourGapGroupIds.size !== previousSelectionSize ||
-        selectedFifthGapGroupId !== previousFifthSelection
-    ) {
-        fourGapAnalysisResults = null;
-    }
+    if (!view || reqId !== lastRequestId) return;
 
     view.innerHTML = "";
 
@@ -2404,7 +2297,7 @@ async function renderMySetsList(reqId) {
 
     container.innerHTML = `
         <h3>Kayıtlı Listelerim</h3>
-        <div style="margin-bottom:15px;">
+        <div style="margin-bottom: 15px;">
             <button id="btn-export-backup" class="secondary-btn">
                 Yedekle (JSON Dışa Aktar)
             </button>
@@ -2414,10 +2307,8 @@ async function renderMySetsList(reqId) {
         </div>
     `;
 
-    if(groups.length === 0) {
-        const emptyMessage = document.createElement("p");
-        emptyMessage.textContent = "Henüz kayıtlı kolon yok.";
-        container.appendChild(emptyMessage);
+    if (groups.length === 0) {
+        container.innerHTML += "<p>Henüz kayıtlı kolon yok.</p>";
 
     } else {
         groups.forEach(group => {
@@ -2427,7 +2318,7 @@ async function renderMySetsList(reqId) {
 
             card.innerHTML =
                 `<b>${escapeHTML(group.name)}</b>
-                <div style="font-size:12px;color:#666;">
+                <div style="font-size:12px; color:#666;">
                     ${group.sets.length} Kolon |
                     ${group.max}'lık Sistem
                 </div>`;
@@ -2436,7 +2327,7 @@ async function renderMySetsList(reqId) {
             btnView.textContent = "Aç";
 
             btnView.onclick = () =>
-                navTo("mySets",group.id);
+                navTo("mySets", group.id);
 
             const btnDel = document.createElement("button");
             btnDel.textContent = "Sil";
@@ -2445,20 +2336,14 @@ async function renderMySetsList(reqId) {
 
             btnDel.onclick = () => deleteGroup(group.id);
 
-            card.append(btnView,btnDel);
+            card.append(btnView, btnDel);
             container.appendChild(card);
         });
     }
 
-    container.appendChild(createFourGapSelectionCard(groups));
-
-    if(fourGapAnalysisResults) {
-        container.appendChild(
-            renderFourGapAnalysisResults(fourGapAnalysisResults)
-        );
-    }
-
     view.appendChild(container);
+
+    container.appendChild(createFourListCompareCard(groups));
 
     getEl("btn-export-backup").addEventListener(
         "click",
@@ -2471,103 +2356,21 @@ async function renderMySetsList(reqId) {
     );
 }
 
-function findFourNonBlueRuns(group,rowNumber) {
-    const matchingGroups = [];
-
-    if(
-        !group ||
-        !Array.isArray(group.sets) ||
-        !group.results ||
-        !Array.isArray(group.results.main) ||
-        !Number.isInteger(rowNumber) ||
-        rowNumber < 1
-    ) {
-        return matchingGroups;
-    }
-
-    const resultNumbers = new Set(
-        group.results.main.map(Number)
-    );
-
-    const totalColumns = Math.min(
-        group.sets.length,
-        1000
-    );
-
-    let pendingColumns = [];
-    let previousBlue = false;
-
-    for(let index = 0; index < totalColumns; index++) {
-        const set = group.sets[index];
-
-        if(
-            !set ||
-            !Array.isArray(set.numbers) ||
-            set.numbers.length < rowNumber
-        ) {
-            pendingColumns = [];
-            previousBlue = false;
-            continue;
-        }
-
-        const selectedBallNumber = Number(
-            set.numbers[rowNumber - 1]
-        );
-
-        if(!Number.isFinite(selectedBallNumber)) {
-            pendingColumns = [];
-            previousBlue = false;
-            continue;
-        }
-
-        const isBlue = resultNumbers.has(selectedBallNumber);
-
-        const columnNumber = index + 100;
-
-        if(isBlue) {
-
-            if(
-                previousBlue &&
-                pendingColumns.length === 4
-            ) {
-                matchingGroups.push([...pendingColumns]);
-            }
-
-            pendingColumns = [];
-            previousBlue = true;
-
-        } else if(previousBlue) {
-
-            pendingColumns.push(columnNumber);
-        }
-    }
-
-    return matchingGroups;
-}
-
-function clearFourGapAnalysisOutput() {
-    fourGapAnalysisResults = null;
-
-    const oldOutput = getEl("four-gap-analysis-output");
-
-    if(oldOutput) {
-        oldOutput.remove();
-    }
-
-    const oldBatchOutput = getEl("batch-division-results");
-    if(oldBatchOutput) {
-        oldBatchOutput.remove();
-    }
-
-    const batchStatus = getEl("batch-row-number-status");
-    if(batchStatus) {
-        batchStatus.textContent = "";
-    }
-}
-
-function createFourGapSelectionCard(groups) {
+/*
+ * DÖRT LİSTEYİ OTOMATİK KARŞILAŞTIR
+ *
+ * Ekranda gösterilen balon sırası:
+ * 1. Önce set.numbers dizisindeki balonlar
+ * 2. Ardından set.jokers dizisindeki joker balonları
+ *
+ * Her sıra bağımsız karşılaştırılır.
+ * Bir sıradaki balonun mavi olup olmadığı kendi sonuç grubuna
+ * göre kontrol edilir: ana balon results.main, joker balonu
+ * results.joker ile değerlendirilir.
+ */
+function createFourListCompareCard(groups) {
     const card = document.createElement("div");
-    card.className = "four-gap-select-card";
+    card.className = "card";
 
     const title = document.createElement("b");
     title.textContent = "Dört Listeyi Otomatik Karşılaştır";
@@ -2575,1364 +2378,396 @@ function createFourGapSelectionCard(groups) {
 
     const description = document.createElement("p");
     description.textContent =
-        "Karşılaştırmak istediğin dört kayıtlı listeyi seç. Girilen gri balon sıra numarası, seçilen dört listede yalnızca kendi sırasındaki ana balonlarla karşılaştırılır. İlk 1000 kolon taranır; farklı sıra numaraları birbirine karıştırılmaz.";
+        "Her kolondaki 1–22 sıralı balonları ayrı ayrı karşılaştırır. Her balon sırası için dört listede de ilgili balonun mavi olmadığı kolonları bulur; sonuçları tek ve çift kolonlar olarak ayrıca gösterir.";
     card.appendChild(description);
 
-    const count = document.createElement("div");
-    count.className = "four-gap-count";
-    count.id = "four-gap-selection-count";
-    count.textContent =
-        `Seçilen liste: ${selectedFourGapGroupIds.size} / 4`;
-    card.appendChild(count);
+    const selectors = [];
 
-    if(groups.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "four-gap-empty";
-        empty.textContent = "Seçilebilecek kayıtlı liste bulunamadı.";
-        card.appendChild(empty);
-        return card;
-    }
+    for (let i = 0; i < 4; i++) {
+        const label = document.createElement("label");
+        label.textContent = `${i + 1}. Liste`;
+        label.style.display = "block";
+        label.style.marginTop = "10px";
 
-    const listContainer = document.createElement("div");
+        const select = document.createElement("select");
+        select.style.width = "100%";
+        select.style.boxSizing = "border-box";
+        select.style.padding = "10px";
+        select.style.marginTop = "5px";
 
-    groups.forEach(group => {
-        const row = document.createElement("label");
-        row.className = "four-gap-select-row";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Liste seçin";
+        select.appendChild(placeholder);
 
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.value = String(group.id);
-        checkbox.checked = selectedFourGapGroupIds.has(String(group.id));
-
-        const info = document.createElement("span");
-        info.className = "four-gap-select-info";
-
-        const name = document.createElement("strong");
-        name.textContent = group.name;
-
-        const details = document.createElement("small");
-        details.textContent =
-            `${group.sets.length} kolon · Mavi sonuç sayısı: ${group.results.main.length}`;
-
-        info.append(name,details);
-        row.append(checkbox,info);
-        listContainer.appendChild(row);
-
-        checkbox.addEventListener("change",() => {
-            const id = String(group.id);
-
-            if(checkbox.checked) {
-                if(id === String(selectedFifthGapGroupId)) {
-                    checkbox.checked = false;
-                    alert("Beşinci liste olarak seçilen liste, dört karşılaştırma listesine eklenemez.");
-                    return;
-                }
-
-                if(selectedFourGapGroupIds.size >= 4) {
-                    checkbox.checked = false;
-                    alert("En fazla dört liste seçebilirsin.");
-                    return;
-                }
-
-                selectedFourGapGroupIds.add(id);
-
-            } else {
-                selectedFourGapGroupIds.delete(id);
-            }
-
-            count.textContent =
-                `Seçilen liste: ${selectedFourGapGroupIds.size} / 4`;
-
-            clearFourGapAnalysisOutput();
-
-            updateFourGapCheckboxStates(card);
-        });
-    });
-
-    card.appendChild(listContainer);
-
-    const fifthTitle = document.createElement("b");
-    fifthTitle.textContent = "Beşinci Listeyi Seç";
-    fifthTitle.style.marginTop = "20px";
-    card.appendChild(fifthTitle);
-
-    const fifthDescription = document.createElement("p");
-    fifthDescription.className = "fifth-gap-description";
-    fifthDescription.textContent =
-        "Bölme sonucundaki ilk dört üç haneli sayı, bu listede kırmızı kolon numarası olarak aranır. Beşinci liste, yukarıda seçilen dört listeden farklı olmalıdır.";
-    card.appendChild(fifthDescription);
-
-    const fifthSelect = document.createElement("select");
-    fifthSelect.id = "fifth-gap-group-select";
-    fifthSelect.className = "fifth-gap-select";
-
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "Beşinci listeyi seç";
-    fifthSelect.appendChild(placeholder);
-
-    groups.forEach(group => {
-        const option = document.createElement("option");
-        option.value = String(group.id);
-        option.textContent =
-            `${group.name} (${group.sets.length} kolon)`;
-
-        option.disabled =
-            selectedFourGapGroupIds.has(String(group.id));
-
-        fifthSelect.appendChild(option);
-    });
-
-    fifthSelect.value = selectedFifthGapGroupId;
-
-    fifthSelect.addEventListener("change",() => {
-        const newId = String(fifthSelect.value || "");
-
-        if(
-            newId &&
-            selectedFourGapGroupIds.has(newId)
-        ) {
-            alert("Beşinci liste, karşılaştırmada seçilen dört listeden farklı olmalıdır.");
-            fifthSelect.value = selectedFifthGapGroupId;
-            return;
-        }
-
-        selectedFifthGapGroupId = newId;
-
-        clearFourGapAnalysisOutput();
-
-        updateFourGapCheckboxStates(card);
-    });
-
-    card.appendChild(fifthSelect);
-
-    const rowNumberLabel = document.createElement("label");
-    rowNumberLabel.textContent =
-        "İncelenecek gri balon sıra numarası:";
-    rowNumberLabel.style.display = "block";
-    rowNumberLabel.style.fontWeight = "bold";
-    rowNumberLabel.style.marginTop = "18px";
-
-    const rowNumberInput = document.createElement("input");
-    rowNumberInput.type = "number";
-    rowNumberInput.id = "four-gap-row-number";
-    rowNumberInput.min = "1";
-    rowNumberInput.max = "100";
-    rowNumberInput.step = "1";
-    rowNumberInput.value = "1";
-    rowNumberInput.placeholder = "Örneğin: 2";
-
-    rowNumberLabel.appendChild(rowNumberInput);
-    card.appendChild(rowNumberLabel);
-
-    const inputDescription = document.createElement("small");
-    inputDescription.textContent =
-        "Örneğin 2 girildiğinde her kolondaki gri 2 numaralı ana balon incelenir. Balonun üzerinde yazan gerçek sayı değil, gri sıra numarası kullanılır. Beşinci listede de aynı gri sıra numarasındaki balon alınır.";
-    inputDescription.style.display = "block";
-    inputDescription.style.color = "#666";
-    inputDescription.style.marginBottom = "10px";
-    card.appendChild(inputDescription);
-
-    const button = document.createElement("button");
-    button.textContent = "Karşılaştırmayı Başlat";
-    button.addEventListener(
-        "click",
-        runFourSelectedListsAnalysis
-    );
-
-    card.appendChild(button);
-
-    const batchCard = document.createElement("div");
-    batchCard.className = "batch-row-number-card";
-
-    const batchTitle = document.createElement("strong");
-    batchTitle.className = "batch-row-number-title";
-    batchTitle.textContent = "Birden Fazla Gri Sıra Numarasını Toplu Hesapla";
-    batchCard.appendChild(batchTitle);
-
-    const batchDescription = document.createElement("p");
-    batchDescription.className = "fifth-gap-description";
-    batchDescription.textContent =
-        "Dört seçili listede ortak olarak bulunan gri sıra numaralarını otomatik doldurabilir veya numaraları kendin düzenleyebilirsin. Her sıra numarası ayrı hesaplanır ve sonuçlar aşağıda alt alta gösterilir.";
-    batchCard.appendChild(batchDescription);
-
-    const batchInput = document.createElement("textarea");
-    batchInput.id = "four-gap-row-numbers";
-    batchInput.placeholder = "Örnek: 1, 2, 3, 4";
-    batchCard.appendChild(batchInput);
-
-    const batchActions = document.createElement("div");
-    batchActions.className = "batch-row-number-actions";
-
-    const autoFillButton = document.createElement("button");
-    autoFillButton.type = "button";
-    autoFillButton.textContent = "Ortak Sıra Numaralarını Otomatik Doldur";
-    autoFillButton.addEventListener("click",autoFillAvailableRowNumbers);
-
-    const batchRunButton = document.createElement("button");
-    batchRunButton.type = "button";
-    batchRunButton.textContent = "Toplu Hesaplamayı Başlat";
-    batchRunButton.addEventListener("click",runBatchRowAnalysis);
-
-    batchActions.append(autoFillButton,batchRunButton);
-    batchCard.appendChild(batchActions);
-
-    const batchStatus = document.createElement("div");
-    batchStatus.id = "batch-row-number-status";
-    batchStatus.className = "four-gap-count";
-    batchCard.appendChild(batchStatus);
-
-    card.appendChild(batchCard);
-
-    updateFourGapCheckboxStates(card);
-
-    return card;
-}
-
-function updateFourGapCheckboxStates(container) {
-    if(!container) return;
-
-    const selectedCount = selectedFourGapGroupIds.size;
-
-    container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-        const id = String(checkbox.value);
-
-        checkbox.disabled =
-            (
-                selectedCount >= 4 &&
-                !checkbox.checked
-            ) ||
-            (
-                id === String(selectedFifthGapGroupId) &&
-                !checkbox.checked
-            );
-    });
-
-    const fifthSelect = container.querySelector("#fifth-gap-group-select");
-
-    if(fifthSelect) {
-        Array.from(fifthSelect.options).forEach(option => {
-            if(!option.value) return;
-
-            option.disabled =
-                selectedFourGapGroupIds.has(String(option.value));
+        groups.forEach(group => {
+            const option = document.createElement("option");
+            option.value = String(group.id);
+            option.textContent = group.name;
+            select.appendChild(option);
         });
 
-        fifthSelect.value = selectedFifthGapGroupId;
-    }
-}
-
-/* Bölme sonucunun tam sayı kısmını, ekranda gösterilen sırayla gruplara ayırır. */
-function getDivisionIntegerGroups(value) {
-    if(value === null || value === undefined) {
-        return [];
+        selectors.push(select);
+        card.append(label, select);
     }
 
-    const integerPart = String(value).split(".")[0] || "0";
-
-    return integerPart.match(/.{1,3}/g) || [];
-}
-
-/*
-   Verilen ortalamanın ilk dört üç haneli grubunu beşinci listede arar.
-   Her eşleşmede aynı gri sıra numarasındaki ana balon alınır.
-*/
-function findFifthListMatches(average,fifthGroup,rowNumber) {
-    if(
-        average === null ||
-        average === undefined ||
-        !fifthGroup ||
-        !Array.isArray(fifthGroup.sets)
-    ) {
-        return [];
-    }
-
-    const groups = getDivisionIntegerGroups(average);
-
-    return groups.slice(0,4).map(groupNumber => {
-
-        if(!/^\d{3}$/.test(groupNumber)) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"3 haneli değil"
-            };
-        }
-
-        const targetColumnNumber = Number(groupNumber);
-        const targetIndex = targetColumnNumber - 100;
-        const totalColumns = Math.min(fifthGroup.sets.length,1000);
-
-        if(
-            !Number.isSafeInteger(targetColumnNumber) ||
-            targetColumnNumber < 100 ||
-            targetIndex < 0 ||
-            targetIndex >= totalColumns
-        ) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"Kolon bulunamadı"
-            };
-        }
-
-        const targetSet = fifthGroup.sets[targetIndex];
-
-        if(
-            !targetSet ||
-            !Array.isArray(targetSet.numbers) ||
-            targetSet.numbers.length < rowNumber
-        ) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"Gri sıra bulunamadı"
-            };
-        }
-
-        const ballValue = Number(
-            targetSet.numbers[rowNumber - 1]
-        );
-
-        if(!Number.isFinite(ballValue)) {
-            return {
-                targetNumber:groupNumber,
-                found:false,
-                message:"Balon bulunamadı"
-            };
-        }
-
-        const isResult =
-            Array.isArray(fifthGroup.results?.main) &&
-            fifthGroup.results.main.includes(ballValue);
-
-        return {
-            targetNumber:groupNumber,
-            columnNumber:targetColumnNumber,
-            rowNumber,
-            ballValue,
-            isResult,
-            found:true
-        };
-    });
-}
-
-/* Beşinci listedeki eşleşen kolonun aynı gri sıra numaralı ana balonunu oluşturur. */
-function createTransferredBallDisplay(match,rowNumber) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "division-transfer-group";
-
-    if(!match || !match.found) {
-        const status = document.createElement("span");
-        status.className = "division-transferred-status";
-        status.textContent = match?.message || "Eşleşme yok";
-
-        wrapper.appendChild(status);
-        return wrapper;
-    }
-
-    const order = document.createElement("span");
-    order.className = "ball-order";
-    order.textContent = String(match.columnNumber);
-
-    const index = document.createElement("span");
-    index.className = "ball-index";
-    index.textContent = String(rowNumber);
-
-    const ball = document.createElement("div");
-    ball.className = "division-transferred-ball";
-    ball.textContent = String(match.ballValue);
-
-    if(match.isResult) {
-        ball.classList.add("result-selected");
-    }
-
-    wrapper.append(order,index,ball);
-
-    const status = document.createElement("span");
-    status.className = "division-transferred-status";
-    status.textContent = match.isResult
-        ? "Mavi sonuç"
-        : "Mavi değil";
-
-    wrapper.appendChild(status);
-
-    return wrapper;
-}
-
-async function runFourSelectedListsAnalysis() {
-    if(selectedFourGapGroupIds.size !== 4) {
-        alert("Karşılaştırma için tam olarak dört liste seçmelisin.");
-        return;
-    }
-
-    if(!selectedFifthGapGroupId) {
-        alert("Lütfen dört karşılaştırma listesinden farklı bir beşinci liste seç.");
-        return;
-    }
-
-    if(selectedFourGapGroupIds.has(String(selectedFifthGapGroupId))) {
-        alert("Beşinci liste, seçilen dört listeden farklı olmalıdır.");
-        return;
-    }
-
-    const rowNumberInput = getEl("four-gap-row-number");
-
-    if(!rowNumberInput) {
-        alert("Gri balon sıra numarası giriş alanı bulunamadı.");
-        return;
-    }
-
-    const rowNumber = Number(rowNumberInput.value);
-
-    if(
-        !Number.isSafeInteger(rowNumber) ||
-        rowNumber < 1 ||
-        rowNumber > 100
-    ) {
-        alert("Lütfen 1 ile 100 arasında geçerli bir gri balon sıra numarası gir.");
-        rowNumberInput.focus();
-        return;
-    }
-
-    try {
-        setLoading(true);
-
-        const groups = await getAllGroups();
-
-        const groupsById = new Map(
-            groups.map(group => [String(group.id),group])
-        );
-
-        const selectedGroups = [];
-
-        for(const id of selectedFourGapGroupIds) {
-            const group = groupsById.get(String(id));
-
-            if(!group) {
-                selectedFourGapGroupIds.delete(String(id));
-                throw new Error(
-                    "Seçilen listelerden biri artık kayıtlı değil. Listeleri yeniden seç."
-                );
-            }
-
-            const totalColumns = Math.min(
-                group.sets.length,
-                1000
-            );
-
-            if(totalColumns === 0) {
-                throw new Error(
-                    `"${group.name}" listesinde incelenecek kolon bulunamadı.`
-                );
-            }
-
-            for(let index = 0; index < totalColumns; index++) {
-                const set = group.sets[index];
-
-                if(
-                    !set ||
-                    !Array.isArray(set.numbers) ||
-                    set.numbers.length < rowNumber ||
-                    !Number.isFinite(Number(set.numbers[rowNumber - 1]))
-                ) {
-                    throw new Error(
-                        `"${group.name}" listesinde ${index + 1}. kolonda gri ${rowNumber} sıra numaralı ana balon bulunamadı. Karşılaştırma başlatılmadı.`
-                    );
-                }
-            }
-
-            selectedGroups.push(group);
-        }
-
-        const fifthGroup = groupsById.get(
-            String(selectedFifthGapGroupId)
-        );
-
-        if(!fifthGroup) {
-            selectedFifthGapGroupId = "";
-            throw new Error(
-                "Seçilen beşinci liste artık kayıtlı değil. Lütfen yeniden seç."
-            );
-        }
-
-        if(
-            selectedFourGapGroupIds.has(String(fifthGroup.id))
-        ) {
-            throw new Error(
-                "Beşinci liste dört karşılaştırma listesinden biriyle aynı olamaz."
-            );
-        }
-
-        const fifthTotalColumns = Math.min(
-            fifthGroup.sets.length,
-            1000
-        );
-
-        if(fifthTotalColumns === 0) {
-            throw new Error(
-                `"${fifthGroup.name}" beşinci listesinde kolon bulunamadı.`
-            );
-        }
-
-        const results = selectedGroups.map(group => ({
-            id:String(group.id),
-            name:group.name,
-            rowNumber,
-            matches:findFourNonBlueRuns(group,rowNumber)
-        }));
-
-        const allSequences = [];
-
-        results.forEach(result => {
-            result.matches.forEach(sequence => {
-                const joinedNumber = sequence.join("");
-
-                if(!/^\d+$/.test(joinedNumber)) {
-                    return;
-                }
-
-                allSequences.push({
-                    listName:result.name,
-                    sequence:joinedNumber,
-                    value:BigInt(joinedNumber)
-                });
-            });
-        });
-
-        let total = 0n;
-
-        allSequences.forEach(item => {
-            total += item.value;
-        });
-
-        const count = allSequences.length;
-
-        let average = null;
-
-        if(count > 0) {
-            const divisor = BigInt(count);
-            const scale = 1000000n;
-
-            const scaled =
-                (total * scale + divisor / 2n) / divisor;
-
-            const whole = scaled / scale;
-
-            const fraction =
-                (scaled % scale)
-                    .toString()
-                    .padStart(6,"0")
-                    .replace(/0+$/,"");
-
-            average = fraction
-                ? `${whole}.${fraction}`
-                : whole.toString();
-        }
-
-        const divisionGroups =
-            average !== null
-                ? getDivisionIntegerGroups(average)
-                : [];
-
-        const fifthMatches = findFifthListMatches(
-            average,
-            fifthGroup,
-            rowNumber
-        );
-
-        fourGapAnalysisResults = {
-            rowNumber,
-            results,
-            allSequences,
-            total:total.toString(),
-            count,
-            average,
-            fifthGroupId:String(fifthGroup.id),
-            fifthGroupName:fifthGroup.name,
-            fifthGroup:fifthGroup,
-            fifthMatches
-        };
-
-        const output = renderFourGapAnalysisResults(
-            fourGapAnalysisResults
-        );
-
-        const oldOutput = getEl("four-gap-analysis-output");
-
-        if(oldOutput) {
-            oldOutput.replaceWith(output);
-        } else {
-            const selectionCard = document.querySelector(".four-gap-select-card");
-
-            if(selectionCard) {
-                selectionCard.after(output);
-            }
-        }
-
-        output.scrollIntoView({
-            behavior:"smooth",
-            block:"start"
-        });
-
-    } catch(e) {
-        ErrorHandler.report("Four Lists Analysis Error",e);
-        alert(e?.message || "Dört liste karşılaştırılamadı.");
-
-    } finally {
-        setLoading(false);
-    }
-}
-
-
-async function getSelectedAnalysisGroups() {
-    if(selectedFourGapGroupIds.size !== 4) {
-        throw new Error("Toplu hesaplama için tam olarak dört liste seçmelisin.");
-    }
-
-    if(!selectedFifthGapGroupId) {
-        throw new Error("Lütfen dört karşılaştırma listesinden farklı bir beşinci liste seç.");
-    }
-
-    if(selectedFourGapGroupIds.has(String(selectedFifthGapGroupId))) {
-        throw new Error("Beşinci liste, seçilen dört listeden farklı olmalıdır.");
-    }
-
-    const groups = await getAllGroups();
-    const groupsById = new Map(
-        groups.map(group => [String(group.id),group])
-    );
-
-    const selectedGroups = [];
-
-    for(const id of selectedFourGapGroupIds) {
-        const group = groupsById.get(String(id));
-
-        if(!group) {
-            throw new Error("Seçilen dört listeden biri artık kayıtlı değil. Listeleri yeniden seç.");
-        }
-
-        if(!Array.isArray(group.sets) || group.sets.length === 0) {
-            throw new Error(`"${group.name}" listesinde kolon bulunamadı.`);
-        }
-
-        selectedGroups.push(group);
-    }
-
-    const fifthGroup = groupsById.get(String(selectedFifthGapGroupId));
-
-    if(!fifthGroup) {
-        throw new Error("Seçilen beşinci liste artık kayıtlı değil. Lütfen yeniden seç.");
-    }
-
-    if(selectedFourGapGroupIds.has(String(fifthGroup.id))) {
-        throw new Error("Beşinci liste, dört karşılaştırma listesinden farklı olmalıdır.");
-    }
-
-    if(!Array.isArray(fifthGroup.sets) || fifthGroup.sets.length === 0) {
-        throw new Error(`"${fifthGroup.name}" beşinci listesinde kolon bulunamadı.`);
-    }
-
-    return {
-        selectedGroups,
-        fifthGroup
-    };
-}
-
-async function autoFillAvailableRowNumbers() {
-    const input = getEl("four-gap-row-numbers");
-    const status = getEl("batch-row-number-status");
-
-    if(!input) return;
-
-    try {
-        setLoading(true);
-
-        const {selectedGroups} = await getSelectedAnalysisGroups();
-        let commonRowCount = 100;
-
-        selectedGroups.forEach(group => {
-            const totalColumns = Math.min(group.sets.length,1000);
-
-            for(let index = 0; index < totalColumns; index++) {
-                const set = group.sets[index];
-                const availableCount =
-                    set && Array.isArray(set.numbers)
-                        ? set.numbers.length
-                        : 0;
-
-                commonRowCount = Math.min(
-                    commonRowCount,
-                    availableCount
-                );
-            }
-        });
-
-        if(commonRowCount < 1) {
-            throw new Error("Seçilen dört listede ortak kullanılabilir gri sıra numarası bulunamadı.");
-        }
-
-        const rowNumbers = Array.from(
-            {length:commonRowCount},
-            (_,index) => index + 1
-        );
-
-        input.value = rowNumbers.join(", ");
-
-        if(status) {
-            status.textContent =
-                `${rowNumbers.length} ortak gri sıra numarası otomatik dolduruldu. İstersen numaraları düzenleyebilirsin.`;
-        }
-
-    } catch(e) {
-        if(status) status.textContent = "";
-        alert(e?.message || "Ortak sıra numaraları belirlenemedi.");
-
-    } finally {
-        setLoading(false);
-    }
-}
-
-function calculateBatchAverage(selectedGroups,fifthGroup,rowNumber) {
-    const allSequences = [];
-
-    selectedGroups.forEach(group => {
-        const matches = findFourNonBlueRuns(group,rowNumber);
-
-        matches.forEach(sequence => {
-            const joinedNumber = sequence.join("");
-
-            if(!/^\d+$/.test(joinedNumber)) {
-                return;
-            }
-
-            allSequences.push({
-                listName:group.name,
-                sequence:joinedNumber,
-                value:BigInt(joinedNumber)
-            });
-        });
-    });
-
-    let total = 0n;
-
-    allSequences.forEach(item => {
-        total += item.value;
-    });
-
-    const count = allSequences.length;
-    let average = null;
-
-    if(count > 0) {
-        const divisor = BigInt(count);
-        const scale = 1000000n;
-        const scaled =
-            (total * scale + divisor / 2n) / divisor;
-        const whole = scaled / scale;
-        const fraction =
-            (scaled % scale)
-                .toString()
-                .padStart(6,"0")
-                .replace(/0+$/,"");
-
-        average = fraction
-            ? `${whole}.${fraction}`
-            : whole.toString();
-    }
-
-    const fifthMatches = findFifthListMatches(
-        average,
-        fifthGroup,
-        rowNumber
-    );
-
-    return {
-        rowNumber,
-        count,
-        total:total.toString(),
-        average,
-        fifthMatches
-    };
-}
-
-async function runBatchRowAnalysis() {
-    const input = getEl("four-gap-row-numbers");
-    const status = getEl("batch-row-number-status");
-
-    if(!input) {
-        alert("Toplu sıra numarası alanı bulunamadı.");
-        return;
-    }
-
-    const rawValues = input.value
-        .split(/[\s,;]+/)
-        .map(value => value.trim())
-        .filter(Boolean);
-
-    const rowNumbers = [];
-    const seen = new Set();
-
-    for(const value of rawValues) {
-        if(!/^\d+$/.test(value)) {
-            alert(`Geçersiz sıra numarası: ${value}`);
-            return;
-        }
-
-        const number = Number(value);
-
-        if(!Number.isSafeInteger(number) || number < 1 || number > 100) {
-            alert("Gri sıra numaraları 1 ile 100 arasında olmalıdır.");
-            return;
-        }
-
-        if(!seen.has(number)) {
-            seen.add(number);
-            rowNumbers.push(number);
-        }
-    }
-
-    if(rowNumbers.length === 0) {
-        alert("Lütfen hesaplanacak en az bir gri sıra numarası gir veya otomatik doldur.");
-        return;
-    }
-
-    try {
-        setLoading(true);
-
-        const {selectedGroups,fifthGroup} =
-            await getSelectedAnalysisGroups();
-
-        selectedGroups.forEach(group => {
-            const totalColumns = Math.min(group.sets.length,1000);
-
-            rowNumbers.forEach(rowNumber => {
-                for(let index = 0; index < totalColumns; index++) {
-                    const set = group.sets[index];
-
-                    if(
-                        !set ||
-                        !Array.isArray(set.numbers) ||
-                        set.numbers.length < rowNumber ||
-                        !Number.isFinite(Number(set.numbers[rowNumber - 1]))
-                    ) {
-                        throw new Error(
-                            `"${group.name}" listesinde ${index + 1}. kolonda gri ${rowNumber} sıra numaralı ana balon bulunamadı. Toplu hesaplama başlatılmadı.`
-                        );
-                    }
-                }
-            });
-        });
-
-        const results = rowNumbers.map(rowNumber =>
-            calculateBatchAverage(
-                selectedGroups,
-                fifthGroup,
-                rowNumber
-            )
-        );
-
-        const output = document.createElement("div");
-        output.id = "batch-division-results";
-        output.className = "batch-division-results";
-
-        const heading = document.createElement("div");
-        heading.className = "four-gap-average-title";
-        heading.textContent = "Toplu Sıra Numarası Hesaplama Sonuçları";
-        output.appendChild(heading);
-
-        results.forEach(result => {
-            const item = document.createElement("div");
-            item.className = "batch-division-item";
-
-            const itemHeading = document.createElement("div");
-            itemHeading.className = "batch-division-heading";
-            itemHeading.textContent =
-                `Gri sıra numarası: ${result.rowNumber}`;
-            item.appendChild(itemHeading);
-
-            if(result.average === null) {
-                const empty = document.createElement("p");
-                empty.className = "four-gap-empty";
-                empty.textContent =
-                    "Bu sıra numarası için hesaplamaya uygun sayı dizisi bulunamadı.";
-                item.appendChild(empty);
-            } else {
-                const averageInfo = document.createElement("div");
-                averageInfo.className = "parity-result-number";
-                averageInfo.textContent =
-                    `Ortalama: ${result.total} ÷ ${result.count} = ${result.average}`;
-                item.appendChild(averageInfo);
-
-                item.appendChild(
-                    createDivisionResultDisplay(
-                        result.average,
-                        result.fifthMatches,
-                        result.rowNumber,
-                        `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`
-                    )
-                );
-            }
-
-            output.appendChild(item);
-        });
-
-        const oldOutput = getEl("batch-division-results");
-        if(oldOutput) {
-            oldOutput.replaceWith(output);
-        } else {
-            const selectionCard =
-                document.querySelector(".four-gap-select-card");
-
-            if(selectionCard) {
-                selectionCard.after(output);
-            }
-        }
-
-        if(status) {
-            status.textContent =
-                `${results.length} sıra numarası ayrı ayrı hesaplandı.`;
-        }
-
-        output.scrollIntoView({
-            behavior:"smooth",
-            block:"start"
-        });
-
-    } catch(e) {
-        ErrorHandler.report("Batch Row Analysis Error",e);
-        alert(e?.message || "Toplu hesaplama tamamlanamadı.");
-
-    } finally {
-        setLoading(false);
-    }
-}
-
-/* Bölme sonucunu gruplar, sıra numaraları ve beşinci listeden aktarılan balonlarla gösterir. */
-function createDivisionResultDisplay(
-    value,
-    fifthMatches = [],
-    rowNumber = 1,
-    customTitle = "Son Bölme İşleminin Tam Sonucu ve Beşinci Liste Eşleşmeleri"
-) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "division-result-card";
-
-    const title = document.createElement("div");
-    title.className = "division-result-title";
-    title.textContent = customTitle;
-    wrapper.appendChild(title);
-
-    const line = document.createElement("div");
-    line.className = "division-result-line";
-
-    const result = String(value);
-    const parts = result.split(".");
-    const integerPart = parts[0] || "0";
-    const decimalPart = parts.length > 1 ? parts.slice(1).join(".") : "";
-
-    const groups = integerPart.match(/.{1,3}/g) || [];
-
-    groups.forEach((group,index) => {
-        if(index > 0) {
-            const separator = document.createElement("span");
-            separator.className = "division-digit-separator";
-            separator.textContent = "-";
-            line.appendChild(separator);
-        }
-
-        const groupElement = document.createElement("span");
-        groupElement.className = "division-digit-group";
-
-        const order = document.createElement("span");
-        order.className = "division-digit-order";
-        order.textContent = index < 4 ? String(index + 1) : "";
-
-        const digits = document.createElement("span");
-        digits.className = "division-digit-value";
-        digits.textContent = group;
-
-        groupElement.append(order,digits);
-
-        if(index < 4) {
-            const match = fifthMatches[index];
-
-            groupElement.appendChild(
-                createTransferredBallDisplay(match,rowNumber)
-            );
-        }
-
-        line.appendChild(groupElement);
-    });
-
-    if(decimalPart) {
-        const decimal = document.createElement("span");
-        decimal.className = "division-decimal";
-        decimal.textContent = "." + decimalPart;
-        line.appendChild(decimal);
-    }
-
-    const characterCount =
-        result.length +
-        Math.max(0,groups.length - 1);
-
-    const availableWidth =
-        Math.max(20,window.innerWidth - 70);
-
-    const calculatedFontSize =
-        availableWidth / Math.max(1,characterCount * 0.62);
-
-    const fontSize =
-        Math.max(
-            1,
-            Math.min(18,calculatedFontSize)
-        );
-
-    line.style.fontSize = fontSize + "px";
-
-    wrapper.appendChild(line);
-
-    const note = document.createElement("p");
-    note.className = "fifth-gap-description";
-    note.textContent =
-        "Her sayının altındaki balon, beşinci listede o kırmızı kolon numarasına karşılık gelen kolondan ve girilen aynı gri sıra numarasından alınmıştır. Mavi balon, beşinci listede sonuç olarak işaretlenmiş balondur.";
-    wrapper.appendChild(note);
-
-    return wrapper;
-}
-
-/*
-   Tek ve çift sayı dizilerini son rakamlarına göre ayırır.
-   Her grubun adet, toplam ve ortalaması bağımsız hesaplanır.
-   Her ortalamanın ilk dört üç haneli grubu beşinci listede
-   aynı gri sıra numarası kullanılarak ayrı ayrı aranır.
-*/
-function renderParityResults(allSequences,fifthGroup,rowNumber) {
-
-    const card = document.createElement("div");
-    card.className = "parity-result-card";
-
-    const title = document.createElement("b");
-    title.textContent = "Bulunan Sayıların Tek ve Çift Ayrımı";
-    card.appendChild(title);
-
-    const oddNumbers = [];
-    const evenNumbers = [];
-
-    let oddTotal = 0n;
-    let evenTotal = 0n;
-
-    (Array.isArray(allSequences) ? allSequences : []).forEach(item => {
-
-        const sequence = String(item.sequence);
-
-        if(!/^\d+$/.test(sequence)) {
-            return;
-        }
-
-        const sequenceValue = BigInt(sequence);
-
-        const lastDigit = Number(
-            sequence.charAt(sequence.length - 1)
-        );
-
-        if(lastDigit % 2 === 1) {
-            oddNumbers.push(sequence);
-            oddTotal += sequenceValue;
-        } else {
-            evenNumbers.push(sequence);
-            evenTotal += sequenceValue;
-        }
-    });
-
-    function calculateAverage(total,count) {
-        if(count === 0) {
+    const compareButton = document.createElement("button");
+    compareButton.textContent = "100 Kolonu Karşılaştır";
+
+    const output = document.createElement("div");
+    output.style.marginTop = "15px";
+    output.style.whiteSpace = "pre-wrap";
+    output.style.overflowWrap = "anywhere";
+    output.style.lineHeight = "1.5";
+
+    function getBallAtPosition(group, columnIndex, position) {
+        const set = group.sets[columnIndex];
+
+        if (!set || !Array.isArray(set.numbers) || !Array.isArray(set.jokers)) {
             return null;
         }
 
-        const divisor = BigInt(count);
-        const scale = 1000000n;
+        const mainCount = set.numbers.length;
+        const zeroBasedPosition = position - 1;
 
-        const scaled =
-            (total * scale + divisor / 2n) / divisor;
+        if (zeroBasedPosition < mainCount) {
+            const number = Number(set.numbers[zeroBasedPosition]);
 
-        const whole = scaled / scale;
+            if (!Number.isInteger(number)) {
+                return null;
+            }
 
-        const fraction =
-            (scaled % scale)
-                .toString()
-                .padStart(6,"0")
-                .replace(/0+$/,"");
-
-        return fraction
-            ? `${whole}.${fraction}`
-            : whole.toString();
-    }
-
-    function createParitySection(heading,numbers,total,type) {
-
-        const sectionTitle = document.createElement("div");
-
-        sectionTitle.className =
-            "parity-result-title " + type;
-
-        sectionTitle.textContent = heading;
-
-        card.appendChild(sectionTitle);
-
-        const count = numbers.length;
-        const average = calculateAverage(total,count);
-
-        const countInfo = document.createElement("div");
-        countInfo.className = "parity-result-count";
-        countInfo.textContent = `Toplam ${count} adet`;
-
-        card.appendChild(countInfo);
-
-        const totalInfo = document.createElement("div");
-        totalInfo.className = "parity-result-number";
-        totalInfo.textContent = `Toplam: ${total.toString()}`;
-
-        card.appendChild(totalInfo);
-
-        const averageInfo = document.createElement("div");
-        averageInfo.className = "parity-result-number";
-        averageInfo.textContent =
-            average === null
-                ? "Ortalama: Hesaplanamadı"
-                : `Ortalama: ${average}`;
-
-        card.appendChild(averageInfo);
-
-        const calculationInfo = document.createElement("div");
-        calculationInfo.className = "parity-result-number";
-        calculationInfo.textContent =
-            count > 0
-                ? `${total.toString()} ÷ ${count} = ${average}`
-                : "Hesaplama için sayı bulunamadı.";
-
-        card.appendChild(calculationInfo);
-
-        /*
-           Her tek/çift ortalaması kendi bölme sonucunu üretir.
-           Eşleşmeler diğer grubun ortalamasından alınmaz.
-        */
-        if(average !== null) {
-            const parityMatches = findFifthListMatches(
-                average,
-                fifthGroup,
-                rowNumber
-            );
-
-            card.appendChild(
-                createDivisionResultDisplay(
-                    average,
-                    parityMatches,
-                    rowNumber,
-                    `${heading} Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`
-                )
-            );
+            return {
+                number,
+                isJoker: false
+            };
         }
 
-        const listTitle = document.createElement("div");
-        listTitle.className = "parity-result-count";
-        listTitle.style.marginTop = "12px";
-        listTitle.textContent = "Toplamaya dahil edilen sayı dizileri:";
+        const jokerIndex = zeroBasedPosition - mainCount;
 
-        card.appendChild(listTitle);
+        if (jokerIndex < set.jokers.length) {
+            const number = Number(set.jokers[jokerIndex]);
 
-        if(numbers.length === 0) {
+            if (!Number.isInteger(number)) {
+                return null;
+            }
 
-            const empty = document.createElement("div");
-
-            empty.className = "parity-result-empty";
-            empty.textContent = "Bu grupta bulunan sayı yok.";
-
-            card.appendChild(empty);
-
-            return;
+            return {
+                number,
+                isJoker: true
+            };
         }
 
-        numbers.forEach(number => {
-
-            const row = document.createElement("div");
-
-            row.className = "parity-result-number";
-            row.textContent = number;
-
-            card.appendChild(row);
-        });
+        return null;
     }
 
-    createParitySection(
-        "Son rakamına göre tekler",
-        oddNumbers,
-        oddTotal,
-        "odd"
-    );
+    function isBallBlue(group, ball) {
+        if (!ball) {
+            return false;
+        }
 
-    createParitySection(
-        "Son rakamına göre çiftler",
-        evenNumbers,
-        evenTotal,
-        "even"
-    );
+        if (ball.isJoker) {
+            return Array.isArray(group.results?.joker) &&
+                group.results.joker.includes(ball.number);
+        }
 
-    return card;
-}
+        return Array.isArray(group.results?.main) &&
+            group.results.main.includes(ball.number);
+    }
 
-function renderFourGapAnalysisResults(data) {
-    const card = document.createElement("div");
-    card.className = "four-gap-card four-gap-results";
-    card.id = "four-gap-analysis-output";
+    function getOddEvenStats(columnNumbers) {
+        const oddColumns = columnNumbers.filter(number => number % 2 === 1);
+        const evenColumns = columnNumbers.filter(number => number % 2 === 0);
 
-    const rowNumber = data.rowNumber || 1;
-
-    const averageCard = document.createElement("div");
-    averageCard.className = "four-gap-average-card";
-
-    const averageTitle = document.createElement("div");
-    averageTitle.className = "four-gap-average-title";
-    averageTitle.textContent =
-        "Dört Listenin Birleşik Hesaplama Sonucu";
-
-    averageCard.appendChild(averageTitle);
-
-    const countInfo = document.createElement("div");
-    countInfo.textContent =
-        `Bulunan bitiştirilmiş sayı dizisi adedi: ${data.count}`;
-
-    averageCard.appendChild(countInfo);
-
-    const totalInfo = document.createElement("div");
-    totalInfo.className = "four-gap-average-value";
-    totalInfo.textContent =
-        `Toplam: ${data.total}`;
-
-    averageCard.appendChild(totalInfo);
-
-    const averageInfo = document.createElement("div");
-    averageInfo.className = "four-gap-average-value";
-    averageInfo.textContent =
-        data.average === null
-            ? "Ortalama hesaplanamadı"
-            : `Ortalama: ${data.average}`;
-
-    averageCard.appendChild(averageInfo);
-
-    const calculationInfo = document.createElement("div");
-    calculationInfo.className = "four-gap-average-detail";
-
-    calculationInfo.textContent =
-        data.count > 0
-            ? `${data.total} ÷ ${data.count} = ${data.average}`
-            : "Hesaplama için eşleşen sayı dizisi bulunamadı.";
-
-    averageCard.appendChild(calculationInfo);
-
-    if(data.count > 0 && data.average !== null) {
-        averageCard.appendChild(
-            createDivisionResultDisplay(
-                data.average,
-                data.fifthMatches || [],
-                rowNumber,
-                "Genel Ortalamanın Bölme Sonucu ve Beşinci Liste Eşleşmeleri"
-            )
+        const oddSum = oddColumns.reduce(
+            (total, number) => total + number,
+            0
         );
 
-        const fifthListInfo = document.createElement("div");
-        fifthListInfo.className = "four-gap-average-detail";
-        fifthListInfo.style.marginTop = "10px";
-        fifthListInfo.textContent =
-            `Beşinci liste: ${data.fifthGroupName || "Seçilmedi"}`;
+        const evenSum = evenColumns.reduce(
+            (total, number) => total + number,
+            0
+        );
 
-        averageCard.appendChild(fifthListInfo);
+        const oddAverage = oddColumns.length > 0
+            ? oddSum / oddColumns.length
+            : null;
+
+        const evenAverage = evenColumns.length > 0
+            ? evenSum / evenColumns.length
+            : null;
+
+        return {
+            oddColumns,
+            evenColumns,
+            oddSum,
+            evenSum,
+            oddAverage,
+            evenAverage
+        };
     }
 
-    if(data.allSequences && data.allSequences.length > 0) {
-        const sequenceTitle = document.createElement("div");
-        sequenceTitle.className = "four-gap-average-detail";
-        sequenceTitle.style.marginTop = "12px";
-        sequenceTitle.style.fontWeight = "bold";
-        sequenceTitle.textContent =
-            "Toplamaya dahil edilen sayı dizileri:";
-
-        averageCard.appendChild(sequenceTitle);
-
-        const sequenceList = document.createElement("div");
-        sequenceList.className = "four-gap-average-detail";
-
-        sequenceList.textContent =
-            data.allSequences
-                .map(item => item.sequence)
-                .join(" + ");
-
-        averageCard.appendChild(sequenceList);
+    function formatNumber(number) {
+        return number.toLocaleString("tr-TR", {
+            maximumFractionDigits: 4
+        });
     }
 
-    card.appendChild(averageCard);
+    function formatColumnList(columns) {
+        return columns.length > 0
+            ? columns.join(", ")
+            : "Yok";
+    }
 
-    const title = document.createElement("b");
-    title.textContent =
-        `Dört Mavi Olmayan Balonun Kolon Numaraları - Gri Sıra ${rowNumber}`;
-    card.appendChild(title);
+    function formatStats(columns, label) {
+        const stats = getOddEvenStats(columns);
 
-    const explanation = document.createElement("p");
-    explanation.textContent =
-        `Her listede yalnızca gri renkli ${rowNumber} numaralı ana balon incelenir. Tarama 1. kolondan 1000. kolona kadar yapılır. Dört listede de aynı sıra numarası kendi satırında değerlendirilir; farklı sıra numaraları birbirine karıştırılmaz. İki mavi ${rowNumber} sıra numaralı balon arasında tam dört mavi olmayan ${rowNumber} sıra numaralı balon bulunursa, bu dört balonun kırmızı kolon numaraları yan yana gösterilir. Her yeni eşleşme ayrı bir satırda, önceki satırın altında gösterilir.`;
-    card.appendChild(explanation);
+        return (
+            `${label} SAYILI KOLONLAR\n` +
+            `${label} sayılı kolon sayısı: ${
+                label === "TEK"
+                    ? stats.oddColumns.length
+                    : stats.evenColumns.length
+            }\n` +
+            `${label} sayılı kolon numaraları:\n${
+                label === "TEK"
+                    ? formatColumnList(stats.oddColumns)
+                    : formatColumnList(stats.evenColumns)
+            }\n` +
+            `${label} sayılı kolon numaralarının toplamı: ${
+                formatNumber(
+                    label === "TEK"
+                        ? stats.oddSum
+                        : stats.evenSum
+                )
+            }\n` +
+            `${label} sayılı kolon numaralarının ortalaması: ${
+                (
+                    label === "TEK"
+                        ? stats.oddAverage
+                        : stats.evenAverage
+                ) !== null
+                    ? formatNumber(
+                        label === "TEK"
+                            ? stats.oddAverage
+                            : stats.evenAverage
+                    )
+                    : "Hesaplanamadı (kolon yok)"
+            }`
+        );
+    }
 
-    data.results.forEach((result,index) => {
-        const listTitle = document.createElement("div");
-        listTitle.className = "four-gap-list-title";
-        listTitle.textContent =
-            `${index + 1}. Liste: ${result.name}`;
+    compareButton.addEventListener("click", async () => {
+        output.textContent = "";
 
-        card.appendChild(listTitle);
+        const ids = selectors.map(select => select.value);
 
-        if(!result.matches || result.matches.length === 0) {
-            const message = document.createElement("p");
-            message.className = "four-gap-empty";
-            message.textContent =
-                `İlk 1000 kolon içinde iki mavi ${rowNumber} sıra numaralı balon arasında tam olarak dört mavi olmayan ${rowNumber} sıra numaralı balon bulunamadı.`;
-
-            card.appendChild(message);
+        if (ids.some(id => !id)) {
+            alert("Lütfen dört listenin tamamını seçin.");
             return;
         }
 
-        result.matches.forEach(numbers => {
-            const row = document.createElement("div");
-            row.className = "four-gap-row";
+        if (new Set(ids).size !== 4) {
+            alert("Dört farklı kayıtlı liste seçmelisiniz.");
+            return;
+        }
 
-            const span = document.createElement("span");
-            span.className = "four-gap-number";
-            span.textContent = numbers.join("");
+        compareButton.disabled = true;
+        compareButton.textContent = "Karşılaştırılıyor...";
 
-            row.appendChild(span);
-            card.appendChild(row);
-        });
+        try {
+            const selectedGroups = [];
+
+            for (const id of ids) {
+                const group = await getGroupById(id);
+
+                if (!group) {
+                    throw new Error(
+                        "Seçilen listelerden biri okunamadı. Kayıtlarınızı kontrol edip tekrar deneyin."
+                    );
+                }
+
+                if (group.sets.length < 100) {
+                    throw new Error(
+                        `"${group.name}" listesinde 100 kolon bulunmuyor.`
+                    );
+                }
+
+                if (
+                    !Array.isArray(group.results?.main) ||
+                    group.results.main.length !== group.perSet
+                ) {
+                    throw new Error(
+                        `"${group.name}" listesine ana sonuçlar eksik girilmiş. Önce bu listenin ana sonuçlarını kaydedin.`
+                    );
+                }
+
+                if (
+                    group.jokerPerSet > 0 &&
+                    (
+                        !Array.isArray(group.results?.joker) ||
+                        group.results.joker.length !== group.jokerPerSet
+                    )
+                ) {
+                    throw new Error(
+                        `"${group.name}" listesine joker sonuçları eksik girilmiş. Önce bu listenin joker sonuçlarını kaydedin.`
+                    );
+                }
+
+                for (let i = 0; i < 100; i++) {
+                    const set = group.sets[i];
+
+                    if (
+                        !set ||
+                        !Array.isArray(set.numbers) ||
+                        !Array.isArray(set.jokers)
+                    ) {
+                        throw new Error(
+                            `"${group.name}" listesinin ${i + 1}. kolonundaki balonlar okunamadı.`
+                        );
+                    }
+
+                    const totalBalls =
+                        set.numbers.length + set.jokers.length;
+
+                    if (totalBalls < 22) {
+                        throw new Error(
+                            `"${group.name}" listesinin ${i + 1}. kolonunda ${totalBalls} balon var. Karşılaştırma için her kolonda 22 balon bulunmalıdır.`
+                        );
+                    }
+
+                    for (let position = 1; position <= 22; position++) {
+                        const ball = getBallAtPosition(
+                            group,
+                            i,
+                            position
+                        );
+
+                        if (!ball) {
+                            throw new Error(
+                                `"${group.name}" listesinin ${i + 1}. kolonundaki ${position}. balon okunamadı.`
+                            );
+                        }
+                    }
+                }
+
+                selectedGroups.push(group);
+            }
+
+            const positionResults = [];
+
+            for (let position = 1; position <= 22; position++) {
+                const matchingColumns = [];
+
+                for (let columnIndex = 0; columnIndex < 100; columnIndex++) {
+                    const allFourNotBlue = selectedGroups.every(group => {
+                        const ball = getBallAtPosition(
+                            group,
+                            columnIndex,
+                            position
+                        );
+
+                        return ball !== null && !isBallBlue(group, ball);
+                    });
+
+                    if (allFourNotBlue) {
+                        matchingColumns.push(columnIndex + 1);
+                    }
+                }
+
+                positionResults.push({
+                    position,
+                    matchingColumns
+                });
+            }
+
+            const lines = [];
+
+            lines.push("DÖRT LİSTE KARŞILAŞTIRMA SONUÇLARI");
+            lines.push("Her balon sırası birbirinden bağımsız karşılaştırılmıştır.");
+            lines.push("Koşul: Aynı kolon numarasındaki dört listede de ilgili sıradaki balon mavi olmamalıdır.");
+            lines.push("");
+
+            for (const result of positionResults) {
+                const matchingColumns = result.matchingColumns;
+                const stats = getOddEvenStats(matchingColumns);
+
+                lines.push("========================================");
+                lines.push(`${result.position}. BALON SIRASI`);
+                lines.push("========================================");
+
+                lines.push(
+                    `Koşulu sağlayan toplam kolon sayısı: ${matchingColumns.length}`
+                );
+
+                lines.push("Koşulu sağlayan kolon numaraları:");
+                lines.push(formatColumnList(matchingColumns));
+                lines.push("");
+
+                lines.push("TEK SAYILI KOLONLAR");
+                lines.push(
+                    `Tek sayılı kolon sayısı: ${stats.oddColumns.length}`
+                );
+                lines.push("Tek sayılı kolon numaraları:");
+                lines.push(formatColumnList(stats.oddColumns));
+                lines.push(
+                    `Tek sayılı kolon numaralarının toplamı: ${formatNumber(stats.oddSum)}`
+                );
+                lines.push(
+                    `Tek sayılı kolon numaralarının ortalaması: ${
+                        stats.oddAverage !== null
+                            ? formatNumber(stats.oddAverage)
+                            : "Hesaplanamadı (kolon yok)"
+                    }`
+                );
+                lines.push("");
+
+                lines.push("ÇİFT SAYILI KOLONLAR");
+                lines.push(
+                    `Çift sayılı kolon sayısı: ${stats.evenColumns.length}`
+                );
+                lines.push("Çift sayılı kolon numaraları:");
+                lines.push(formatColumnList(stats.evenColumns));
+                lines.push(
+                    `Çift sayılı kolon numaralarının toplamı: ${formatNumber(stats.evenSum)}`
+                );
+                lines.push(
+                    `Çift sayılı kolon numaralarının ortalaması: ${
+                        stats.evenAverage !== null
+                            ? formatNumber(stats.evenAverage)
+                            : "Hesaplanamadı (kolon yok)"
+                    }`
+                );
+                lines.push("");
+            }
+
+            output.textContent = lines.join("\n");
+
+        } catch (error) {
+            alert(error.message || "Karşılaştırma yapılamadı.");
+        } finally {
+            compareButton.disabled = false;
+            compareButton.textContent = "100 Kolonu Karşılaştır";
+        }
     });
 
-    /*
-       Tek ve çift sayı dizilerini mevcut analiz sonuçlarının
-       en altına ekler. Her bölüm kendi ortalamasını ve
-       beşinci liste eşleşmelerini bağımsız hesaplar.
-    */
-    card.appendChild(
-        renderParityResults(
-            data.allSequences || [],
-            data.fifthGroup || null,
-            rowNumber
-        )
-    );
+    card.append(compareButton, output);
+
+    if (groups.length < 4) {
+        const note = document.createElement("p");
+        note.textContent =
+            "Karşılaştırma için en az dört kayıtlı listeniz olmalı.";
+        card.appendChild(note);
+    }
 
     return card;
 }
 
-async function renderViewGroup(group,reqId) {
+async function renderViewGroup(group, reqId) {
 
     const view = getEl("view-container");
 
-    if(!view || reqId !== lastRequestId) return;
+    if (!view || reqId !== lastRequestId) return;
 
     const container = document.createElement("div");
     container.className = "container";
@@ -3948,12 +2783,12 @@ async function renderViewGroup(group,reqId) {
 
     resCard.innerHTML =
         `<b>Çıkan Sonuçlar:</b>
-        <div style="margin:10px 0;font-family:monospace;background:#f0f0f0;padding:5px;border-radius:4px;">
+        <div style="margin:10px 0; font-family:monospace; background:#f0f0f0; padding:5px; border-radius:4px;">
             ${
                 hasRes
                     ? 'Ana: ' +
                         [...group.results.main]
-                            .sort((a,b) => a-b)
+                            .sort((a,b)=>a-b)
                             .join(', ')
                     : 'Girilmedi'
             }
@@ -3964,7 +2799,7 @@ async function renderViewGroup(group,reqId) {
                         (
                             group.results.joker.length
                                 ? [...group.results.joker]
-                                    .sort((a,b) => a-b)
+                                    .sort((a,b)=>a-b)
                                     .join(', ')
                                 : '-'
                         )
@@ -3976,20 +2811,18 @@ async function renderViewGroup(group,reqId) {
     openBtn.textContent = "Sonuçları Gir";
 
     openBtn.onclick = () =>
-        openResultPanel(group.max,group.id);
+        openResultPanel(group.max, group.id);
 
     resCard.appendChild(openBtn);
     container.append(resCard);
 
-    group.sets.forEach((set,i) => {
+    group.sets.forEach((set, i) => {
         const setCard = document.createElement("div");
 
         setCard.className = "card";
         setCard.innerHTML = `<b>${i+1}. Kolon</b>`;
 
-        setCard.appendChild(
-            createBallsUI(set,group.results,i+1)
-        );
+        setCard.appendChild(createBallsUI(set, group.results));
 
         container.appendChild(setCard);
     });
@@ -4005,78 +2838,43 @@ async function renderViewGroup(group,reqId) {
     view.appendChild(container);
 }
 
-function createBallsUI(set,results = null,columnNumber = null) {
+function createBallsUI(set, results = null) {
 
     const row = document.createElement("div");
     row.className = "ball-row";
 
-    let sequenceNumber = 0;
+    let order = 0;
 
-    set.numbers.forEach((n,index) => {
-
-        sequenceNumber++;
-
+    const addBall = (number, isJoker = false) => {
         const item = document.createElement("div");
         item.className = "ball-item";
 
-        const order = document.createElement("div");
-        order.className = "ball-order";
-
-        if(columnNumber !== null) {
-            order.textContent = columnNumber + 99;
-        }
-
-        item.appendChild(order);
-
-        const ballIndex = document.createElement("div");
-        ballIndex.className = "ball-index";
-        ballIndex.textContent = sequenceNumber;
-
-        item.appendChild(ballIndex);
+        const orderLabel = document.createElement("span");
+        orderLabel.className = "ball-order";
+        orderLabel.textContent = String(++order);
 
         const ball = document.createElement("div");
-        ball.className = "ball selected";
+        ball.className = isJoker ? "ball joker" : "ball selected";
 
-        if(results && results.main.includes(Number(n))) {
+        if (
+            results &&
+            (
+                isJoker
+                    ? results.joker.includes(Number(number))
+                    : results.main.includes(Number(number))
+            )
+        ) {
             ball.classList.add("result-selected");
         }
 
-        ball.textContent = n;
+        ball.textContent = number;
 
-        item.appendChild(ball);
+        item.append(orderLabel, ball);
         row.appendChild(item);
-    });
+    };
 
-    set.jokers.forEach(j => {
-
-        sequenceNumber++;
-
-        const item = document.createElement("div");
-        item.className = "ball-item";
-
-        const order = document.createElement("div");
-        order.className = "ball-order";
-
-        item.appendChild(order);
-
-        const ballIndex = document.createElement("div");
-        ballIndex.className = "ball-index";
-        ballIndex.textContent = sequenceNumber;
-
-        item.appendChild(ballIndex);
-
-        const ball = document.createElement("div");
-        ball.className = "ball joker";
-
-        if(results && results.joker.includes(Number(j))) {
-            ball.classList.add("result-selected");
-        }
-
-        ball.textContent = j;
-
-        item.appendChild(ball);
-        row.appendChild(item);
-    });
+    set.numbers.forEach(number => addBall(number));
+    set.jokers.forEach(number => addBall(number, true));
 
     return row;
 }
@@ -4091,7 +2889,7 @@ async function openResultPanel(
 
     const group = await getGroupById(groupId);
 
-    if(
+    if (
         requestId !== lastRequestId ||
         String(history.state?.groupId) !== requestedGroupId ||
         (
@@ -4102,31 +2900,45 @@ async function openResultPanel(
         return;
     }
 
-    if(!group) return;
+    if (!group) return;
 
     const targetMax = max || group.max;
     const resDiv = getEl("resultNumbers");
+    const bulkTextarea = getEl("bulkResultNumbers");
+    const bulkStatus = getEl("bulk-result-status");
 
-    if(!resDiv) return;
+    if (!resDiv) return;
 
     panelDraft = {
-        main:[...group.results.main],
-        joker:[...group.results.joker]
+        main: [...group.results.main],
+        joker: [...group.results.joker]
     };
 
     panelDraftGroupId = requestedGroupId;
     panelBaseVersion = group.version;
 
     panelSelectionLimits = {
-        main:group.perSet,
-        joker:group.jokerPerSet,
-        max:targetMax,
-        jokerMax:group.jokerMax
+        main: group.perSet,
+        joker: group.jokerPerSet,
+        max: targetMax,
+        jokerMax: group.jokerMax
     };
 
     resDiv.innerHTML = "";
 
-    const createRow = (title,limit,isJoker) => {
+    /*
+     * Yeni liste veya panel açıldığında önceki toplu giriş metnini
+     * temizle; başka bir listeye ait sayılar yanlışlıkla uygulanmasın.
+     */
+    if (bulkTextarea) {
+        bulkTextarea.value = "";
+    }
+
+    if (bulkStatus) {
+        bulkStatus.textContent = "";
+    }
+
+    const createRow = (title, limit, isJoker) => {
         const h = document.createElement("h4");
 
         h.textContent = title;
@@ -4135,7 +2947,7 @@ async function openResultPanel(
         const row = document.createElement("div");
         row.className = "ball-row";
 
-        for(let i = 1; i <= limit; i++) {
+        for (let i = 1; i <= limit; i++) {
             const ball = document.createElement("div");
 
             ball.className = "ball" + (isJoker ? " joker" : "");
@@ -4144,7 +2956,7 @@ async function openResultPanel(
                 ? panelDraft.joker
                 : panelDraft.main;
 
-            if(list.includes(i)) {
+            if (list.includes(i)) {
                 ball.classList.add("result-selected");
             }
 
@@ -4162,7 +2974,7 @@ async function openResultPanel(
             row.appendChild(ball);
         }
 
-        resDiv.append(h,row);
+        resDiv.append(h, row);
     };
 
     createRow(
@@ -4171,7 +2983,7 @@ async function openResultPanel(
         false
     );
 
-    if(group.jokerPerSet > 0) {
+    if (group.jokerPerSet > 0) {
         createRow(
             `Joker Sayılar (1-${group.jokerMax})`,
             group.jokerMax,
@@ -4179,8 +2991,8 @@ async function openResultPanel(
         );
     }
 
-    if(shouldPushState) {
-        if(requestId !== lastRequestId) return;
+    if (shouldPushState) {
+        if (requestId !== lastRequestId) return;
 
         const currentState = history.state;
 
@@ -4191,21 +3003,21 @@ async function openResultPanel(
             currentState.groupId !== null &&
             String(currentState.groupId) === requestedGroupId
                 ? {
-                    page:"mySets",
-                    groupId:requestedGroupId
+                    page: "mySets",
+                    groupId: requestedGroupId
                 }
                 : null;
 
         history.pushState(
             {
-                page:"panel",
-                groupId:requestedGroupId
+                page: "panel",
+                groupId: requestedGroupId
             },
             ""
         );
     }
 
-    if(String(history.state?.groupId) !== requestedGroupId) {
+    if (String(history.state?.groupId) !== requestedGroupId) {
         panelDraft = null;
         panelDraftGroupId = null;
         panelSelectionLimits = null;
@@ -4218,8 +3030,8 @@ async function openResultPanel(
     toggleBodyScroll(true);
 }
 
-function toggleResult(el,id,val,isJoker) {
-    if(
+function toggleResult(el, id, val, isJoker) {
+    if (
         !panelDraft ||
         !panelSelectionLimits ||
         panelDraftGroupId !== String(id)
@@ -4239,32 +3051,39 @@ function toggleResult(el,id,val,isJoker) {
         ? panelSelectionLimits.jokerMax
         : panelSelectionLimits.max;
 
-    if(val < 1 || val > max) return;
+    if (val < 1 || val > max) return;
 
     const index = list.indexOf(val);
 
-    if(index !== -1) {
-        list.splice(index,1);
+    if (index !== -1) {
+        list.splice(index, 1);
         el.classList.remove("result-selected");
-        return;
+    } else {
+        if (list.length >= limit) {
+            alert(
+                isJoker
+                    ? `En fazla ${limit} joker sayısı seçebilirsiniz!`
+                    : `En fazla ${limit} ana sayı seçebilirsiniz!`
+            );
+            return;
+        }
+
+        list.push(val);
+        el.classList.add("result-selected");
     }
 
-    if(list.length >= limit) {
-        alert(
-            isJoker
-                ? `En fazla ${limit} joker sayısı seçebilirsiniz!`
-                : `En fazla ${limit} ana sayı seçebilirsiniz!`
-        );
-        return;
-    }
+    const status = getEl("bulk-result-status");
 
-    list.push(val);
-    el.classList.add("result-selected");
+    if (status) {
+        status.textContent =
+            `Ana sayı seçimi: ${panelDraft.main.length}/${panelSelectionLimits.main}. ` +
+            `Joker sayı seçimi: ${panelDraft.joker.length}/${panelSelectionLimits.joker}.`;
+    }
 }
 
 async function deleteGroup(id) {
 
-    if(isProcessing || !confirm("Silinsin?")) return;
+    if (isProcessing || !confirm("Silinsin?")) return;
 
     try {
         setLoading(true);
@@ -4272,18 +3091,10 @@ async function deleteGroup(id) {
 
         await deleteFromDB(id);
 
-        selectedFourGapGroupIds.delete(String(id));
-
-        if(String(selectedFifthGapGroupId) === String(id)) {
-            selectedFifthGapGroupId = "";
-        }
-
-        fourGapAnalysisResults = null;
-
         await renderMySetsList(lastRequestId);
 
     } catch(e) {
-        ErrorHandler.report("Delete Error",e);
+        ErrorHandler.report("Delete Error", e);
 
     } finally {
         setLoading(false);
@@ -4312,13 +3123,24 @@ function closeResultPanel(forceBack = true) {
     panelSelectionLimits = null;
     panelBaseVersion = null;
 
-    if(forceBack && isPanelState) {
+    const bulkTextarea = getEl("bulkResultNumbers");
+    const bulkStatus = getEl("bulk-result-status");
+
+    if (bulkTextarea) {
+        bulkTextarea.value = "";
+    }
+
+    if (bulkStatus) {
+        bulkStatus.textContent = "";
+    }
+
+    if (forceBack && isPanelState) {
         const currentGroupId = String(currentState.groupId);
         const previousState = panelPreviousState;
 
         panelPreviousState = null;
 
-        if(
+        if (
             previousState &&
             previousState.page === "mySets" &&
             String(previousState.groupId) === currentGroupId
@@ -4327,13 +3149,13 @@ function closeResultPanel(forceBack = true) {
         } else {
             history.replaceState(
                 {
-                    page:"mySets",
-                    groupId:currentGroupId
+                    page: "mySets",
+                    groupId: currentGroupId
                 },
                 ""
             );
 
-            renderCurrentState("mySets",currentGroupId);
+            renderCurrentState("mySets", currentGroupId);
         }
     }
 }
@@ -4342,7 +3164,7 @@ async function confirmResult() {
     const id = panelDraftGroupId;
     const expectedVersion = panelBaseVersion;
 
-    if(
+    if (
         isProcessing ||
         !id ||
         expectedVersion === null ||
@@ -4363,13 +3185,13 @@ async function confirmResult() {
 
         const group = await getGroupById(id);
 
-        if(!group) {
+        if (!group) {
             throw new Error(
                 "Kayıtlı liste bulunamadı veya başka bir sekmede silinmiş."
             );
         }
 
-        if(Number(group.version) !== Number(expectedVersion)) {
+        if (Number(group.version) !== Number(expectedVersion)) {
             throw new Error(
                 "Liste başka bir sekmede değiştirilmiş. Eski seçimler kaydedilmedi. Listeyi yeniden açıp kontrol edin."
             );
@@ -4378,7 +3200,7 @@ async function confirmResult() {
         const requiredMainCount = group.perSet;
         const requiredJokerCount = group.jokerPerSet;
 
-        if(mainSelection.length !== requiredMainCount) {
+        if (mainSelection.length !== requiredMainCount) {
             alert(
                 `Tamamlamak için tam ${requiredMainCount} ana sayı seçmelisiniz. ` +
                 `Şu anda ${mainSelection.length} ana sayı seçtiniz.`
@@ -4386,7 +3208,7 @@ async function confirmResult() {
             return;
         }
 
-        if(jokerSelection.length !== requiredJokerCount) {
+        if (jokerSelection.length !== requiredJokerCount) {
             alert(
                 `Tamamlamak için tam ${requiredJokerCount} joker sayısı seçmelisiniz. ` +
                 `Şu anda ${jokerSelection.length} joker sayısı seçtiniz.`
@@ -4395,13 +3217,13 @@ async function confirmResult() {
         }
 
         group.results = {
-            main:mainSelection,
-            joker:jokerSelection
+            main: mainSelection,
+            joker: jokerSelection
         };
 
-        await atomicSave(group,{
+        await atomicSave(group, {
             expectedVersion,
-            requireExisting:true
+            requireExisting: true
         });
 
         panelDraft = null;
@@ -4411,26 +3233,37 @@ async function confirmResult() {
 
         const panel = getEl("resultPanel");
 
-        if(panel) {
+        if (panel) {
             panel.style.display = "none";
         }
 
         toggleBodyScroll(false);
 
+        const bulkTextarea = getEl("bulkResultNumbers");
+        const bulkStatus = getEl("bulk-result-status");
+
+        if (bulkTextarea) {
+            bulkTextarea.value = "";
+        }
+
+        if (bulkStatus) {
+            bulkStatus.textContent = "";
+        }
+
         panelPreviousState = null;
 
         history.replaceState(
             {
-                page:"mySets",
-                groupId:id
+                page: "mySets",
+                groupId: id
             },
             ""
         );
 
-        await renderCurrentState("mySets",id);
+        await renderCurrentState("mySets", id);
 
-    } catch(e) {
-        ErrorHandler.report("Confirm Result Error",e);
+    } catch (e) {
+        ErrorHandler.report("Confirm Result Error", e);
 
         alert(
             (e?.message || "Sonuçlar kaydedilemedi.") +
@@ -4444,7 +3277,7 @@ async function confirmResult() {
 }
 
 function cleanResult() {
-    if(
+    if (
         isProcessing ||
         !panelDraft ||
         !panelDraftGroupId ||
@@ -4453,7 +3286,7 @@ function cleanResult() {
         return;
     }
 
-    if(!confirm("Seçimler temizlensin mi?")) {
+    if (!confirm("Seçimler temizlensin mi?")) {
         return;
     }
 
@@ -4465,13 +3298,24 @@ function cleanResult() {
         .forEach(ball => {
             ball.classList.remove("result-selected");
         });
+
+    const bulkTextarea = getEl("bulkResultNumbers");
+    const bulkStatus = getEl("bulk-result-status");
+
+    if (bulkTextarea) {
+        bulkTextarea.value = "";
+    }
+
+    if (bulkStatus) {
+        bulkStatus.textContent = "Tüm ana sayı ve joker seçimleri temizlendi.";
+    }
 }
 
 async function clearGeneratedSets() {
 
-    if(
+    if (
         isProcessing ||
-        !confirm("Üretilen tüm kolonlar temizlensin mi?")
+        !confirm("Üretilen tüm kolonlar temizlensin?")
     ) return;
 
     try {
@@ -4484,7 +3328,7 @@ async function clearGeneratedSets() {
         renderGeneratedSetsList();
 
     } catch(e) {
-        ErrorHandler.report("Clear Drafts Error",e);
+        ErrorHandler.report("Clear Drafts Error", e);
 
     } finally {
         isProcessing = false;
