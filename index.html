@@ -36,7 +36,6 @@
     }
 
     button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top:5px; cursor:pointer; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index:1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
     .ball-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
@@ -2513,9 +2512,7 @@ async function saveGroup() {
         ErrorHandler.report("Save Error",err);
 
         alert(
-            "Kayıt tamamlanamadı. Kolonlar korunmuştur; tekrar deneyebilirsiniz.
-
-" +
+            "Kayıt tamamlanamadı. Kolonlar korunmuştur; tekrar deneyebilirsiniz.\n\n" +
             (err?.message || "Bilinmeyen hata")
         );
 
@@ -4661,9 +4658,7 @@ async function confirmResult() {
 
         alert(
             (e?.message || "Sonuçlar kaydedilemedi.") +
-            "
-
-Panel kapatılmadı. Listeyi yeniden açarak güncel veriyi kontrol edin."
+            "\n\nPanel kapatılmadı. Listeyi yeniden açarak güncel veriyi kontrol edin."
         );
 
     } finally {
