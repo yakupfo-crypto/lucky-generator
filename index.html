@@ -2301,17 +2301,6 @@ function renderGeneratedSetsList() {
 
     resultsDiv.innerHTML = "";
 
-    generatedSets.forEach((set,i) => {
-        const card = document.createElement("div");
-
-        card.className = "card";
-        card.innerHTML = `<b>${i+1}. Kolon</b>`;
-
-        card.appendChild(createBallsUI(set,null,i+1));
-
-        resultsDiv.appendChild(card);
-    });
-
     if(generatedSets.length > 0) {
         const actionCard = document.createElement("div");
 
@@ -2339,6 +2328,17 @@ function renderGeneratedSetsList() {
             saveGroup
         );
     }
+
+    generatedSets.forEach((set,i) => {
+        const card = document.createElement("div");
+
+        card.className = "card";
+        card.innerHTML = `<b>${i+1}. Kolon</b>`;
+
+        card.appendChild(createBallsUI(set,null,i+1));
+
+        resultsDiv.appendChild(card);
+    });
 }
 
 async function generateSets() {
