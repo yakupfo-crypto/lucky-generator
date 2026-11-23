@@ -4356,10 +4356,8 @@ async function renderViewGroup(group,reqId) {
     const resCard = document.createElement("div");
     resCard.className = "card";
 
-    const mainCount = Array.isArray(group.results?.main) ? group.results.main.length : 0;
-
     resCard.innerHTML =
-        `<b>Çıkan Sonuçlar: <span style="font-size:20px;color:#d32f2f;">(${mainCount} Adet)</span></b>
+        `<b>Çıkan Sonuçlar:</b>
         <div style="margin:10px 0;font-family:monospace;background:#f0f0f0;padding:5px;border-radius:4px;">
             ${
                 hasRes
