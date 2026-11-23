@@ -29,10 +29,12 @@
 
     #bulk-result-status {
         font-size: 13px;
-        margin: 5px 0 10px;
-        color: #555;
-        line-height: 1.5;
-        overflow-wrap: anywhere;
+        font-weight: bold;
+        margin: 6px 0 10px;
+        color: #1976d2;
+        text-align: right;
+        line-height: 1.4;
+        min-height: 18px;
     }
 
     button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top:5px; cursor:pointer; }
@@ -820,35 +822,7 @@ function applyBulkResultNumbers() {
             );
         });
 
-    const messages = [];
-
-    messages.push(
-        `${mainValues.length} ana sayı balonu renklendirildi.`
-    );
-
-    if (uniqueValues.length !== values.length) {
-        messages.push("Tekrarlanan sayılar bir kez değerlendirildi.");
-    }
-
-    if (outOfRangeValues.length > 0) {
-        messages.push(
-            `Ana sayı aralığı (${mainMax}) dışında kalan sayılar: ${outOfRangeValues.join(", ")}.`
-        );
-    }
-
-    const requiredMainCount = panelSelectionLimits.main;
-
-    if (mainValues.length !== requiredMainCount) {
-        messages.push(
-            `Kaydetmek için tam ${requiredMainCount} ana sayı seçilmelidir.`
-        );
-    } else {
-        messages.push(
-            "Ana sayı adedi kayıt için uygun."
-        );
-    }
-
-    status.textContent = messages.join(" ");
+    status.textContent = `${mainValues.length} adet`;
 }
 
 const CryptoEngine = {
@@ -4547,7 +4521,7 @@ async function openResultPanel(
     }
 
     if (bulkStatus) {
-        bulkStatus.textContent = "";
+        bulkStatus.textContent = panelDraft.main.length > 0 ? `${panelDraft.main.length} adet` : "";
     }
 
     const createRow = (title,limit,isJoker) => {
@@ -4687,9 +4661,7 @@ function toggleResult(el,id,val,isJoker) {
     const status = getEl("bulk-result-status");
 
     if (status) {
-        status.textContent =
-            `Ana sayı seçimi: ${panelDraft.main.length}/${panelSelectionLimits.main}. ` +
-            `Joker sayı seçimi: ${panelDraft.joker.length}/${panelSelectionLimits.joker}.`;
+        status.textContent = `${panelDraft.main.length} adet`;
     }
 }
 
@@ -4928,7 +4900,7 @@ function cleanResult() {
     }
 
     if (bulkStatus) {
-        bulkStatus.textContent = "Tüm ana sayı ve joker seçimleri temizlendi.";
+        bulkStatus.textContent = "0 adet";
     }
 }
 
