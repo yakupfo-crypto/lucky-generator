@@ -27,13 +27,6 @@
         font-family: Arial, sans-serif;
     }
 
-    #bulk-result-count {
-        font-size: 13px;
-        font-weight: bold;
-        color: #1976d2;
-        margin: 4px 0 6px;
-    }
-
     #bulk-result-status {
         font-size: 13px;
         margin: 5px 0 10px;
@@ -480,12 +473,10 @@
             <b>Sonuç Sayılarını Toplu Yapıştır</b>
         </label>
 
-        <div id="bulk-result-count">Girilen sayı adedi: 0</div>
-
         <textarea
             id="bulkResultNumbers"
             placeholder="Örnek: 1 2 5 10 12 14 24 28 30 31 32 33 39 47 48 53 66 68 71 74 76 77"
-            aria-describedby="bulk-result-count bulk-result-status"
+            aria-describedby="bulk-result-status"
         ></textarea>
 
         <button type="button" id="btn-apply-bulk-results">
@@ -740,22 +731,6 @@ function escapeHTML(str) {
  * Bu fonksiyon global kapsamda tanımlanmıştır. Böylece
  * window.onload içindeki olay dinleyicisi fonksiyona erişebilir.
  */
-function updateBulkResultCount() {
-    const textarea = getEl("bulkResultNumbers");
-    const countEl = getEl("bulk-result-count");
-    if (!textarea || !countEl) return;
-
-    const raw = textarea.value.trim();
-    if (!raw) {
-        countEl.textContent = "Girilen sayı adedi: 0";
-        return;
-    }
-
-    const tokens = raw.split(/[\s,;]+/).filter(Boolean);
-    const numbers = tokens.filter(token => /^\d+$/.test(token));
-    countEl.textContent = `Girilen sayı adedi: ${numbers.length}`;
-}
-
 function applyBulkResultNumbers() {
     if (
         !panelDraft ||
@@ -2142,16 +2117,6 @@ window.onload = async () => {
     getEl("btn-apply-bulk-results").addEventListener(
         "click",
         applyBulkResultNumbers
-    );
-
-    getEl("bulkResultNumbers").addEventListener(
-        "input",
-        updateBulkResultCount
-    );
-
-    getEl("bulkResultNumbers").addEventListener(
-        "change",
-        updateBulkResultCount
     );
 
     getEl("import-file-input").addEventListener(
@@ -4581,8 +4546,6 @@ async function openResultPanel(
         bulkTextarea.value = "";
     }
 
-    updateBulkResultCount();
-
     if (bulkStatus) {
         bulkStatus.textContent = "";
     }
@@ -4788,8 +4751,6 @@ function closeResultPanel(forceBack = true) {
         bulkTextarea.value = "";
     }
 
-    updateBulkResultCount();
-
     if (bulkStatus) {
         bulkStatus.textContent = "";
     }
@@ -4965,8 +4926,6 @@ function cleanResult() {
     if (bulkTextarea) {
         bulkTextarea.value = "";
     }
-
-    updateBulkResultCount();
 
     if (bulkStatus) {
         bulkStatus.textContent = "Tüm ana sayı ve joker seçimleri temizlendi.";
