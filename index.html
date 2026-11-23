@@ -442,6 +442,69 @@
         margin-bottom:8px;
         overflow-wrap:anywhere;
     }
+    .batch-division-header-row{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        margin-bottom:8px;
+    }
+    .batch-division-header-row .batch-division-heading{
+        margin-bottom:0;
+    }
+    .batch-select-label{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        font-size:13px;
+        font-weight:bold;
+        color:#1976d2;
+        background:#eaf3ff;
+        border:1px solid #90caf9;
+        border-radius:6px;
+        padding:5px 9px;
+        cursor:pointer;
+        user-select:none;
+        flex-shrink:0;
+    }
+    .batch-select-label input[type="checkbox"]{
+        width:18px;
+        height:18px;
+        margin:0;
+        cursor:pointer;
+    }
+    .batch-division-item.batch-item-selected{
+        border:2px solid #2e7d32;
+        background:#f3fbf4;
+    }
+    .selected-batch-results-section{
+        margin-top:20px;
+        background:#f3fbf4;
+        border:2px solid #2e7d32;
+        border-radius:10px;
+        padding:14px 10px;
+        box-shadow:0 2px 6px rgba(0,0,0,0.08);
+    }
+    .selected-batch-results-header{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:8px;
+        flex-wrap:wrap;
+        margin-bottom:8px;
+    }
+    .selected-batch-results-title{
+        color:#2e7d32;
+        font-size:17px;
+        font-weight:bold;
+    }
+    .selected-batch-clear-btn{
+        width:auto;
+        margin-top:0;
+        padding:6px 12px;
+        font-size:13px;
+        background:#2e7d32;
+    }
 
 </style>
 </head>
@@ -591,6 +654,7 @@ let fourGapBatchRowNumbersValue = "";
 let fourGapBatchStatusText = "";
 let fourGapAnalysisResults = null;
 let batchDivisionAnalysisResults = null;
+let selectedBatchRowNumbers = new Set();
 let fourGapStateSaveQueue = Promise.resolve();
 let fourGapStateLoaded = false;
 
@@ -606,6 +670,7 @@ function serializeFourGapState() {
         batchStatusText: String(fourGapBatchStatusText || ""),
         fourGapAnalysisResults: fourGapAnalysisResults || null,
         batchDivisionAnalysisResults: batchDivisionAnalysisResults || null,
+        selectedBatchRowNumbers: [...selectedBatchRowNumbers].map(Number).filter(n => Number.isSafeInteger(n) && n >= 1),
         updatedAt: Date.now()
     };
 }
@@ -653,6 +718,12 @@ function applySerializedFourGapState(rawState) {
         Array.isArray(rawState.batchDivisionAnalysisResults)
             ? rawState.batchDivisionAnalysisResults
             : null;
+
+    selectedBatchRowNumbers = new Set(
+        Array.isArray(rawState.selectedBatchRowNumbers)
+            ? rawState.selectedBatchRowNumbers.map(Number).filter(n => Number.isSafeInteger(n) && n >= 1)
+            : []
+    );
 }
 
 function queueFourGapStateSave() {
@@ -707,6 +778,7 @@ async function restoreFourGapState(forceReload = false) {
 function clearSavedComparisonOutputs() {
     fourGapAnalysisResults = null;
     batchDivisionAnalysisResults = null;
+    selectedBatchRowNumbers.clear();
     fourGapBatchStatusText = "";
 }
 
@@ -2903,7 +2975,8 @@ async function resetFourGapComparisonSection() {
         String(fourGapBatchRowNumbersValue || "").trim() !== "" ||
         String(fourGapBatchStatusText || "").trim() !== "" ||
         Boolean(fourGapAnalysisResults) ||
-        (Array.isArray(batchDivisionAnalysisResults) && batchDivisionAnalysisResults.length > 0);
+        (Array.isArray(batchDivisionAnalysisResults) && batchDivisionAnalysisResults.length > 0) ||
+        selectedBatchRowNumbers.size > 0;
 
     if (!hasAnythingToClear) {
         alert("Dört Listeyi Otomatik Karşılaştır bölümünde temizlenecek işlem veya seçim bulunmuyor.");
@@ -3914,6 +3987,10 @@ async function runBatchRowAnalysis() {
 
         fourGapBatchRowNumbersValue = input.value;
         batchDivisionAnalysisResults = results;
+        const validRowSet = new Set(results.map(r => Number(r.rowNumber)));
+        selectedBatchRowNumbers = new Set(
+            [...selectedBatchRowNumbers].filter(n => validRowSet.has(Number(n)))
+        );
 
         const statusMsg = `${results.length} sıra numarası ayrı ayrı hesaplandı.`;
         fourGapBatchStatusText = statusMsg;
@@ -3955,6 +4032,148 @@ async function runBatchRowAnalysis() {
     }
 }
 
+function buildBatchResultItemCard(result, options = {}) {
+    const {
+        selectable = true,
+        isSelected = false,
+        onToggle = null
+    } = options;
+
+    const item = document.createElement("div");
+    item.className = "batch-division-item" + (isSelected ? " batch-item-selected" : "");
+    item.dataset.rowNumber = String(result.rowNumber);
+
+    const headerRow = document.createElement("div");
+    headerRow.className = "batch-division-header-row";
+
+    const itemHeading = document.createElement("div");
+    itemHeading.className = "batch-division-heading";
+    itemHeading.textContent = `Gri sıra numarası: ${result.rowNumber}`;
+    headerRow.appendChild(itemHeading);
+
+    if(selectable) {
+        const selectLabel = document.createElement("label");
+        selectLabel.className = "batch-select-label";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = Boolean(isSelected);
+        checkbox.setAttribute("aria-label", `Gri sıra numarası ${result.rowNumber} sonucunu seç`);
+
+        const labelText = document.createElement("span");
+        labelText.textContent = isSelected ? "Seçildi" : "Seç";
+
+        checkbox.addEventListener("change", () => {
+            if(typeof onToggle === "function") {
+                onToggle(Number(result.rowNumber), checkbox.checked);
+            }
+        });
+
+        selectLabel.append(checkbox, labelText);
+        headerRow.appendChild(selectLabel);
+    }
+
+    item.appendChild(headerRow);
+
+    if(result.average === null) {
+        const empty = document.createElement("p");
+        empty.className = "four-gap-empty";
+        empty.textContent =
+            "Bu sıra numarası için hesaplamaya uygun sayı dizisi bulunamadı.";
+        item.appendChild(empty);
+    } else {
+        const averageInfo = document.createElement("div");
+        averageInfo.className = "parity-result-number";
+        averageInfo.textContent =
+            `Ortalama: ${result.total} ÷ ${result.count} = ${result.average}`;
+        item.appendChild(averageInfo);
+
+        item.appendChild(
+            createDivisionResultDisplay(
+                result.average,
+                result.fifthMatches,
+                result.rowNumber,
+                `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
+                false
+            )
+        );
+    }
+
+    return item;
+}
+
+function renderSelectedBatchResultsSection(results) {
+    const section = document.createElement("div");
+    section.id = "selected-batch-results-section";
+    section.className = "selected-batch-results-section";
+
+    const list = Array.isArray(results) ? results : [];
+    const selectedResults = list.filter(r =>
+        selectedBatchRowNumbers.has(Number(r.rowNumber))
+    );
+
+    const header = document.createElement("div");
+    header.className = "selected-batch-results-header";
+
+    const title = document.createElement("div");
+    title.className = "selected-batch-results-title";
+    title.textContent =
+        `Seçilen Gri Sıra Numarası Sonuçları (${selectedResults.length})`;
+    header.appendChild(title);
+
+    if(selectedResults.length > 0) {
+        const clearBtn = document.createElement("button");
+        clearBtn.type = "button";
+        clearBtn.className = "selected-batch-clear-btn";
+        clearBtn.textContent = "Seçimleri Temizle";
+        clearBtn.addEventListener("click", () => {
+            selectedBatchRowNumbers.clear();
+            queueFourGapStateSave();
+            const existingOutput = getEl("batch-division-results");
+            if(existingOutput && Array.isArray(batchDivisionAnalysisResults)) {
+                existingOutput.replaceWith(
+                    renderBatchDivisionResults(batchDivisionAnalysisResults)
+                );
+            }
+        });
+        header.appendChild(clearBtn);
+    }
+
+    section.appendChild(header);
+
+    const infoNote = document.createElement("p");
+    infoNote.className = "fifth-gap-description";
+    infoNote.textContent =
+        selectedResults.length > 0
+            ? "Yukarıdaki sonuçlardan işaretlediğiniz gri sıra numarası sonuçları bu bölümde bir arada gösterilir."
+            : "Henüz seçili gri sıra numarası sonucu yok. Yukarıdaki sonuç kartlarının sağ üstündeki 'Seç' kutucuğunu işaretleyerek istediğiniz sonuçları burada toplayabilirsiniz.";
+    section.appendChild(infoNote);
+
+    selectedResults.forEach(result => {
+        const selectedCard = buildBatchResultItemCard(result, {
+            selectable: true,
+            isSelected: true,
+            onToggle: (rowNum, checked) => {
+                if(checked) {
+                    selectedBatchRowNumbers.add(rowNum);
+                } else {
+                    selectedBatchRowNumbers.delete(rowNum);
+                }
+                queueFourGapStateSave();
+                const existingOutput = getEl("batch-division-results");
+                if(existingOutput && Array.isArray(batchDivisionAnalysisResults)) {
+                    existingOutput.replaceWith(
+                        renderBatchDivisionResults(batchDivisionAnalysisResults)
+                    );
+                }
+            }
+        });
+        section.appendChild(selectedCard);
+    });
+
+    return section;
+}
+
 function renderBatchDivisionResults(results) {
     const output = document.createElement("div");
     output.id = "batch-division-results";
@@ -3968,45 +4187,37 @@ function renderBatchDivisionResults(results) {
     const topNote = document.createElement("p");
     topNote.className = "fifth-gap-description";
     topNote.textContent =
-        "Her sayının altındaki balon, beşinci listede o kırmızı kolon numarasına karşılık gelen kolondan ve girilen aynı gri sıra numarasından alınmıştır. Mavi balon, beşinci listede sonuç olarak işaretlenmiş balondur.";
+        "Her sayının altındaki balon, beşinci listede o kırmızı kolon numarasına karşılık gelen kolondan ve girilen aynı gri sıra numarasından alınmıştır. Mavi balon, beşinci listede sonuç olarak işaretlenmiş balondur. İstediğiniz sonuçları sağ üstteki 'Seç' kutucuğu ile işaretleyip aşağıdaki 'Seçilen Gri Sıra Numarası Sonuçları' bölümünde görebilirsiniz.";
     output.appendChild(topNote);
 
-    (Array.isArray(results) ? results : []).forEach(result => {
-        const item = document.createElement("div");
-        item.className = "batch-division-item";
+    const safeResults = Array.isArray(results) ? results : [];
 
-        const itemHeading = document.createElement("div");
-        itemHeading.className = "batch-division-heading";
-        itemHeading.textContent =
-            `Gri sıra numarası: ${result.rowNumber}`;
-        item.appendChild(itemHeading);
+    safeResults.forEach(result => {
+        const isSelected = selectedBatchRowNumbers.has(Number(result.rowNumber));
+        const item = buildBatchResultItemCard(result, {
+            selectable: true,
+            isSelected,
+            onToggle: (rowNum, checked) => {
+                if(checked) {
+                    selectedBatchRowNumbers.add(rowNum);
+                } else {
+                    selectedBatchRowNumbers.delete(rowNum);
+                }
+                queueFourGapStateSave();
 
-        if(result.average === null) {
-            const empty = document.createElement("p");
-            empty.className = "four-gap-empty";
-            empty.textContent =
-                "Bu sıra numarası için hesaplamaya uygun sayı dizisi bulunamadı.";
-            item.appendChild(empty);
-        } else {
-            const averageInfo = document.createElement("div");
-            averageInfo.className = "parity-result-number";
-            averageInfo.textContent =
-                `Ortalama: ${result.total} ÷ ${result.count} = ${result.average}`;
-            item.appendChild(averageInfo);
-
-            item.appendChild(
-                createDivisionResultDisplay(
-                    result.average,
-                    result.fifthMatches,
-                    result.rowNumber,
-                    `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
-                    false
-                )
-            );
-        }
+                const existingOutput = getEl("batch-division-results");
+                if(existingOutput && Array.isArray(batchDivisionAnalysisResults)) {
+                    existingOutput.replaceWith(
+                        renderBatchDivisionResults(batchDivisionAnalysisResults)
+                    );
+                }
+            }
+        });
 
         output.appendChild(item);
     });
+
+    output.appendChild(renderSelectedBatchResultsSection(safeResults));
 
     return output;
 }
