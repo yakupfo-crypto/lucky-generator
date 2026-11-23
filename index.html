@@ -35,6 +35,19 @@
         overflow-wrap: anywhere;
     }
 
+    #colored-count-badge {
+        display: none;
+        justify-content: flex-end;
+        align-items: center;
+        margin: 6px 0 4px;
+        font-size: 20px;
+        font-weight: 800;
+        color: #1565c0;
+        letter-spacing: 0.2px;
+        line-height: 1.3;
+        text-align: right;
+    }
+
     button{ background:#1976d2; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-size:16px; margin-top:5px; cursor:pointer; }
     .bottom-nav{ position:fixed; bottom:0; width:100%; background:#1976d2; display:flex; justify-content:space-around; padding:10px 0; z-index:1000; }
     .bottom-nav button{ background:none; color:white; border:none; width:auto; }
@@ -482,6 +495,7 @@
         <button type="button" id="btn-apply-bulk-results">
             Yapıştırılan Sayıları Renklendir
         </button>
+        <div id="colored-count-badge" aria-live="polite"></div>
 
         <div id="bulk-result-status" aria-live="polite"></div>
     </div>
@@ -731,6 +745,27 @@ function escapeHTML(str) {
  * Bu fonksiyon global kapsamda tanımlanmıştır. Böylece
  * window.onload içindeki olay dinleyicisi fonksiyona erişebilir.
  */
+function updateColoredCountDisplay() {
+    const badge = getEl("colored-count-badge");
+    if (!badge) return;
+
+    const coloredMainCount = document.querySelectorAll(
+        "#resultNumbers .ball:not(.joker).result-selected"
+    ).length;
+    const coloredJokerCount = document.querySelectorAll(
+        "#resultNumbers .ball.joker.result-selected"
+    ).length;
+    const totalColored = coloredMainCount + coloredJokerCount;
+
+    if (totalColored > 0) {
+        badge.textContent = `${totalColored} adet`;
+        badge.style.display = "flex";
+    } else {
+        badge.textContent = "";
+        badge.style.display = "none";
+    }
+}
+
 function applyBulkResultNumbers() {
     if (
         !panelDraft ||
@@ -849,6 +884,7 @@ function applyBulkResultNumbers() {
     }
 
     status.textContent = messages.join(" ");
+    updateColoredCountDisplay();
 }
 
 const CryptoEngine = {
@@ -4550,6 +4586,7 @@ async function openResultPanel(
         bulkStatus.textContent = "";
     }
 
+    updateColoredCountDisplay();
     const createRow = (title,limit,isJoker) => {
         const h = document.createElement("h4");
 
@@ -4691,6 +4728,8 @@ function toggleResult(el,id,val,isJoker) {
             `Ana sayı seçimi: ${panelDraft.main.length}/${panelSelectionLimits.main}. ` +
             `Joker sayı seçimi: ${panelDraft.joker.length}/${panelSelectionLimits.joker}.`;
     }
+
+    updateColoredCountDisplay();
 }
 
 async function deleteGroup(id) {
@@ -4930,6 +4969,8 @@ function cleanResult() {
     if (bulkStatus) {
         bulkStatus.textContent = "Tüm ana sayı ve joker seçimleri temizlendi.";
     }
+
+    updateColoredCountDisplay();
 }
 
 async function clearGeneratedSets() {
