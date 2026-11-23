@@ -4356,8 +4356,21 @@ async function renderViewGroup(group,reqId) {
     const resCard = document.createElement("div");
     resCard.className = "card";
 
+    const mainCount = group.results.main.length;
+    const jokerCount = group.results.joker.length;
+
+    const countsLines = [`Ana: ${mainCount} adet`];
+    if (group.jokerPerSet > 0) {
+        countsLines.push(`Joker: ${jokerCount} adet`);
+    }
+
     resCard.innerHTML =
-        `<b>Çıkan Sonuçlar:</b>
+        `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
+            <b style="margin-bottom:0;">Çıkan Sonuçlar:</b>
+            <div style="font-size:18px;font-weight:bold;color:#1976d2;line-height:1.35;text-align:right;">
+                ${countsLines.join('<br>')}
+            </div>
+        </div>
         <div style="margin:10px 0;font-family:monospace;background:#f0f0f0;padding:5px;border-radius:4px;">
             ${
                 hasRes
