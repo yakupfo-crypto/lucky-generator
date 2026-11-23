@@ -2892,6 +2892,93 @@ function findFourNonBlueRuns(group,rowNumber) {
     return matchingGroups;
 }
 
+
+async function resetFourGapComparisonSection() {
+    if (isProcessing) return;
+
+    const hasAnythingToClear =
+        selectedFourGapGroupIds.size > 0 ||
+        Boolean(selectedFifthGapGroupId) ||
+        String(fourGapRowNumberValue || "1") !== "1" ||
+        String(fourGapBatchRowNumbersValue || "").trim() !== "" ||
+        String(fourGapBatchStatusText || "").trim() !== "" ||
+        Boolean(fourGapAnalysisResults) ||
+        (Array.isArray(batchDivisionAnalysisResults) && batchDivisionAnalysisResults.length > 0);
+
+    if (!hasAnythingToClear) {
+        alert("Dört Listeyi Otomatik Karşılaştır bölümünde temizlenecek işlem veya seçim bulunmuyor.");
+        return;
+    }
+
+    if (!confirm("Dört Listeyi Otomatik Karşılaştır bölümündeki tüm seçimler, girilen sıra numaraları ve hesaplama sonuçları temizlensin mi?")) {
+        return;
+    }
+
+    selectedFourGapGroupIds.clear();
+    selectedFifthGapGroupId = "";
+    fourGapRowNumberValue = "1";
+    fourGapBatchRowNumbersValue = "";
+    clearSavedComparisonOutputs();
+
+    const oldOutput = getEl("four-gap-analysis-output");
+    if (oldOutput) {
+        oldOutput.remove();
+    }
+
+    const oldBatchOutput = getEl("batch-division-results");
+    if (oldBatchOutput) {
+        oldBatchOutput.remove();
+    }
+
+    const selectionCard = document.querySelector(".four-gap-select-card");
+    if (selectionCard) {
+        selectionCard.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.checked = false;
+            cb.disabled = false;
+        });
+
+        const countEl = getEl("four-gap-selection-count");
+        if (countEl) {
+            countEl.textContent = "Seçilen liste: 0 / 4";
+        }
+
+        const fifthSelect = getEl("fifth-gap-group-select");
+        if (fifthSelect) {
+            fifthSelect.value = "";
+            Array.from(fifthSelect.options).forEach(opt => {
+                if (opt.value) opt.disabled = false;
+            });
+        }
+
+        const rowNumberInput = getEl("four-gap-row-number");
+        if (rowNumberInput) {
+            rowNumberInput.value = "1";
+        }
+
+        const batchInput = getEl("four-gap-row-numbers");
+        if (batchInput) {
+            batchInput.value = "";
+        }
+
+        const batchStatus = getEl("batch-row-number-status");
+        if (batchStatus) {
+            batchStatus.textContent = "";
+        }
+
+        updateFourGapCheckboxStates(selectionCard);
+    }
+
+    try {
+        localStorage.removeItem(FOUR_GAP_STORAGE_KEY);
+    } catch (_) {}
+
+    try {
+        await deleteDraft(FOUR_GAP_DRAFT_ID);
+    } catch (_) {
+        await queueFourGapStateSave();
+    }
+}
+
 function clearFourGapAnalysisOutput() {
     clearSavedComparisonOutputs();
 
@@ -3153,6 +3240,16 @@ function createFourGapSelectionCard(groups) {
     batchCard.appendChild(batchStatus);
 
     card.appendChild(batchCard);
+
+    const clearAllComparisonBtn = document.createElement("button");
+    clearAllComparisonBtn.type = "button";
+    clearAllComparisonBtn.id = "btn-clear-four-gap-all";
+    clearAllComparisonBtn.className = "delete-all-btn";
+    clearAllComparisonBtn.style.marginTop = "14px";
+    clearAllComparisonBtn.style.marginBottom = "0";
+    clearAllComparisonBtn.textContent = "Karşılaştırma Bölümünü Temizle";
+    clearAllComparisonBtn.addEventListener("click", resetFourGapComparisonSection);
+    card.appendChild(clearAllComparisonBtn);
 
     updateFourGapCheckboxStates(card);
 
