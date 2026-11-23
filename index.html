@@ -586,7 +586,129 @@ let panelBaseVersion = null;
 
 let selectedFourGapGroupIds = new Set();
 let selectedFifthGapGroupId = "";
+let fourGapRowNumberValue = "1";
+let fourGapBatchRowNumbersValue = "";
+let fourGapBatchStatusText = "";
 let fourGapAnalysisResults = null;
+let batchDivisionAnalysisResults = null;
+let fourGapStateSaveQueue = Promise.resolve();
+let fourGapStateLoaded = false;
+
+const FOUR_GAP_DRAFT_ID = "fourGapComparisonState";
+const FOUR_GAP_STORAGE_KEY = "luckyGenerator_fourGapComparisonState_v1";
+
+function serializeFourGapState() {
+    return {
+        selectedFourGapGroupIds: [...selectedFourGapGroupIds].map(String),
+        selectedFifthGapGroupId: String(selectedFifthGapGroupId || ""),
+        rowNumberValue: String(fourGapRowNumberValue || "1"),
+        batchRowNumbersValue: String(fourGapBatchRowNumbersValue || ""),
+        batchStatusText: String(fourGapBatchStatusText || ""),
+        fourGapAnalysisResults: fourGapAnalysisResults || null,
+        batchDivisionAnalysisResults: batchDivisionAnalysisResults || null,
+        updatedAt: Date.now()
+    };
+}
+
+function applySerializedFourGapState(rawState) {
+    if (!rawState || typeof rawState !== "object" || Array.isArray(rawState)) {
+        return;
+    }
+
+    selectedFourGapGroupIds = new Set(
+        Array.isArray(rawState.selectedFourGapGroupIds)
+            ? rawState.selectedFourGapGroupIds.map(String).slice(0, 4)
+            : []
+    );
+
+    selectedFifthGapGroupId = rawState.selectedFifthGapGroupId
+        ? String(rawState.selectedFifthGapGroupId)
+        : "";
+
+    if (selectedFourGapGroupIds.has(selectedFifthGapGroupId)) {
+        selectedFifthGapGroupId = "";
+    }
+
+    fourGapRowNumberValue =
+        rawState.rowNumberValue !== undefined && rawState.rowNumberValue !== null
+            ? String(rawState.rowNumberValue)
+            : "1";
+
+    fourGapBatchRowNumbersValue =
+        rawState.batchRowNumbersValue !== undefined && rawState.batchRowNumbersValue !== null
+            ? String(rawState.batchRowNumbersValue)
+            : "";
+
+    fourGapBatchStatusText =
+        rawState.batchStatusText !== undefined && rawState.batchStatusText !== null
+            ? String(rawState.batchStatusText)
+            : "";
+
+    fourGapAnalysisResults =
+        rawState.fourGapAnalysisResults && typeof rawState.fourGapAnalysisResults === "object"
+            ? rawState.fourGapAnalysisResults
+            : null;
+
+    batchDivisionAnalysisResults =
+        Array.isArray(rawState.batchDivisionAnalysisResults)
+            ? rawState.batchDivisionAnalysisResults
+            : null;
+}
+
+function queueFourGapStateSave() {
+    const snapshot = serializeFourGapState();
+
+    try {
+        localStorage.setItem(FOUR_GAP_STORAGE_KEY, JSON.stringify(snapshot));
+    } catch (_) {}
+
+    fourGapStateSaveQueue = fourGapStateSaveQueue
+        .catch(() => {})
+        .then(() => saveDraft(FOUR_GAP_DRAFT_ID, snapshot))
+        .catch(e => {
+            ErrorHandler.report("Four Gap State Save Error", e);
+        });
+
+    return fourGapStateSaveQueue;
+}
+
+async function restoreFourGapState(forceReload = false) {
+    if (fourGapStateLoaded && !forceReload) {
+        return;
+    }
+
+    await fourGapStateSaveQueue.catch(() => {});
+
+    let restored = null;
+
+    try {
+        const draftRecord = await getDraft(FOUR_GAP_DRAFT_ID);
+        if (draftRecord && draftRecord.data && typeof draftRecord.data === "object") {
+            restored = draftRecord.data;
+        }
+    } catch (_) {}
+
+    if (!restored) {
+        try {
+            const rawLocal = localStorage.getItem(FOUR_GAP_STORAGE_KEY);
+            if (rawLocal) {
+                restored = JSON.parse(rawLocal);
+            }
+        } catch (_) {}
+    }
+
+    if (restored) {
+        applySerializedFourGapState(restored);
+    }
+
+    fourGapStateLoaded = true;
+}
+
+function clearSavedComparisonOutputs() {
+    fourGapAnalysisResults = null;
+    batchDivisionAnalysisResults = null;
+    fourGapBatchStatusText = "";
+}
 
 function escapeHTML(str) {
     if(!str) return "";
@@ -2003,6 +2125,39 @@ window.onload = async () => {
     );
 
     await requestPersistentStorage();
+    await restoreFourGapState(true);
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") {
+            queueFourGapStateSave();
+        } else if (document.visibilityState === "visible") {
+            restoreFourGapState(true).then(() => {
+                const currentPage = history.state?.page || "generate";
+                const currentGroupId = history.state?.groupId || null;
+                if (currentPage === "mySets" && !currentGroupId && !isProcessing) {
+                    renderCurrentState("mySets");
+                }
+            }).catch(() => {});
+        }
+    });
+
+    window.addEventListener("pagehide", () => {
+        queueFourGapStateSave();
+    });
+
+    window.addEventListener("storage", (event) => {
+        if (event.key === FOUR_GAP_STORAGE_KEY && event.newValue) {
+            try {
+                const parsed = JSON.parse(event.newValue);
+                applySerializedFourGapState(parsed);
+                const currentPage = history.state?.page || "generate";
+                const currentGroupId = history.state?.groupId || null;
+                if (currentPage === "mySets" && !currentGroupId && !isProcessing) {
+                    renderCurrentState("mySets");
+                }
+            } catch (_) {}
+        }
+    });
 
     const state =
         history.state ||
@@ -2555,6 +2710,10 @@ async function renderMySetsList(reqId) {
 
     if(!view || reqId !== lastRequestId) return;
 
+    await restoreFourGapState(false);
+
+    if(!view || reqId !== lastRequestId) return;
+
     const existingIds = new Set(groups.map(group => String(group.id)));
     const previousSelectionSize = selectedFourGapGroupIds.size;
     const previousFifthSelection = selectedFifthGapGroupId;
@@ -2575,7 +2734,8 @@ async function renderMySetsList(reqId) {
         selectedFourGapGroupIds.size !== previousSelectionSize ||
         selectedFifthGapGroupId !== previousFifthSelection
     ) {
-        fourGapAnalysisResults = null;
+        clearSavedComparisonOutputs();
+        queueFourGapStateSave();
     }
 
     view.innerHTML = "";
@@ -2636,6 +2796,12 @@ async function renderMySetsList(reqId) {
     if(fourGapAnalysisResults) {
         container.appendChild(
             renderFourGapAnalysisResults(fourGapAnalysisResults)
+        );
+    }
+
+    if(batchDivisionAnalysisResults && batchDivisionAnalysisResults.length > 0) {
+        container.appendChild(
+            renderBatchDivisionResults(batchDivisionAnalysisResults)
         );
     }
 
@@ -2727,7 +2893,7 @@ function findFourNonBlueRuns(group,rowNumber) {
 }
 
 function clearFourGapAnalysisOutput() {
-    fourGapAnalysisResults = null;
+    clearSavedComparisonOutputs();
 
     const oldOutput = getEl("four-gap-analysis-output");
 
@@ -2744,6 +2910,8 @@ function clearFourGapAnalysisOutput() {
     if(batchStatus) {
         batchStatus.textContent = "";
     }
+
+    queueFourGapStateSave();
 }
 
 function createFourGapSelectionCard(groups) {
@@ -2827,6 +2995,8 @@ function createFourGapSelectionCard(groups) {
             clearFourGapAnalysisOutput();
 
             updateFourGapCheckboxStates(card);
+
+            queueFourGapStateSave();
         });
     });
 
@@ -2883,6 +3053,8 @@ function createFourGapSelectionCard(groups) {
         clearFourGapAnalysisOutput();
 
         updateFourGapCheckboxStates(card);
+
+        queueFourGapStateSave();
     });
 
     card.appendChild(fifthSelect);
@@ -2900,8 +3072,15 @@ function createFourGapSelectionCard(groups) {
     rowNumberInput.min = "1";
     rowNumberInput.max = "100";
     rowNumberInput.step = "1";
-    rowNumberInput.value = "1";
+    rowNumberInput.value = fourGapRowNumberValue || "1";
     rowNumberInput.placeholder = "Örneğin: 2";
+
+    const persistRowNumberInput = () => {
+        fourGapRowNumberValue = rowNumberInput.value;
+        queueFourGapStateSave();
+    };
+    rowNumberInput.addEventListener("input", persistRowNumberInput);
+    rowNumberInput.addEventListener("change", persistRowNumberInput);
 
     rowNumberLabel.appendChild(rowNumberInput);
     card.appendChild(rowNumberLabel);
@@ -2940,6 +3119,15 @@ function createFourGapSelectionCard(groups) {
     const batchInput = document.createElement("textarea");
     batchInput.id = "four-gap-row-numbers";
     batchInput.placeholder = "Örnek: 1, 2, 3, 4";
+    batchInput.value = fourGapBatchRowNumbersValue || "";
+
+    const persistBatchInput = () => {
+        fourGapBatchRowNumbersValue = batchInput.value;
+        queueFourGapStateSave();
+    };
+    batchInput.addEventListener("input", persistBatchInput);
+    batchInput.addEventListener("change", persistBatchInput);
+
     batchCard.appendChild(batchInput);
 
     const batchActions = document.createElement("div");
@@ -2961,6 +3149,7 @@ function createFourGapSelectionCard(groups) {
     const batchStatus = document.createElement("div");
     batchStatus.id = "batch-row-number-status";
     batchStatus.className = "four-gap-count";
+    batchStatus.textContent = fourGapBatchStatusText || "";
     batchCard.appendChild(batchStatus);
 
     card.appendChild(batchCard);
@@ -3322,10 +3511,15 @@ async function runFourSelectedListsAnalysis() {
             rowNumber
         );
 
+        fourGapRowNumberValue = String(rowNumber);
+
         fourGapAnalysisResults = {
             rowNumber,
             results,
-            allSequences,
+            allSequences: allSequences.map(item => ({
+                listName: item.listName,
+                sequence: item.sequence
+            })),
             total:total.toString(),
             count,
             average,
@@ -3334,6 +3528,8 @@ async function runFourSelectedListsAnalysis() {
             fifthGroup:fifthGroup,
             fifthMatches
         };
+
+        await queueFourGapStateSave();
 
         const output = renderFourGapAnalysisResults(
             fourGapAnalysisResults
@@ -3459,13 +3655,20 @@ async function autoFillAvailableRowNumbers() {
         );
 
         input.value = rowNumbers.join(", ");
+        fourGapBatchRowNumbersValue = input.value;
+
+        const statusMsg =
+            `${rowNumbers.length} ortak gri sıra numarası otomatik dolduruldu. İstersen numaraları düzenleyebilirsin.`;
+        fourGapBatchStatusText = statusMsg;
 
         if(status) {
-            status.textContent =
-                `${rowNumbers.length} ortak gri sıra numarası otomatik dolduruldu. İstersen numaraları düzenleyebilirsin.`;
+            status.textContent = statusMsg;
         }
 
+        await queueFourGapStateSave();
+
     } catch(e) {
+        fourGapBatchStatusText = "";
         if(status) status.textContent = "";
         alert(e?.message || "Ortak sıra numaraları belirlenemedi.");
 
@@ -3612,73 +3815,33 @@ async function runBatchRowAnalysis() {
             )
         );
 
-        const output = document.createElement("div");
-        output.id = "batch-division-results";
-        output.className = "batch-division-results";
+        fourGapBatchRowNumbersValue = input.value;
+        batchDivisionAnalysisResults = results;
 
-        const heading = document.createElement("div");
-        heading.className = "four-gap-average-title";
-        heading.textContent = "Toplu Sıra Numarası Hesaplama Sonuçları";
-        output.appendChild(heading);
+        const statusMsg = `${results.length} sıra numarası ayrı ayrı hesaplandı.`;
+        fourGapBatchStatusText = statusMsg;
 
-        const topNote = document.createElement("p");
-        topNote.className = "fifth-gap-description";
-        topNote.textContent =
-            "Her sayının altındaki balon, beşinci listede o kırmızı kolon numarasına karşılık gelen kolondan ve girilen aynı gri sıra numarasından alınmıştır. Mavi balon, beşinci listede sonuç olarak işaretlenmiş balondur.";
-        output.appendChild(topNote);
+        await queueFourGapStateSave();
 
-        results.forEach(result => {
-            const item = document.createElement("div");
-            item.className = "batch-division-item";
-
-            const itemHeading = document.createElement("div");
-            itemHeading.className = "batch-division-heading";
-            itemHeading.textContent =
-                `Gri sıra numarası: ${result.rowNumber}`;
-            item.appendChild(itemHeading);
-
-            if(result.average === null) {
-                const empty = document.createElement("p");
-                empty.className = "four-gap-empty";
-                empty.textContent =
-                    "Bu sıra numarası için hesaplamaya uygun sayı dizisi bulunamadı.";
-                item.appendChild(empty);
-            } else {
-                const averageInfo = document.createElement("div");
-                averageInfo.className = "parity-result-number";
-                averageInfo.textContent =
-                    `Ortalama: ${result.total} ÷ ${result.count} = ${result.average}`;
-                item.appendChild(averageInfo);
-
-                item.appendChild(
-                    createDivisionResultDisplay(
-                        result.average,
-                        result.fifthMatches,
-                        result.rowNumber,
-                        `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
-                        false
-                    )
-                );
-            }
-
-            output.appendChild(item);
-        });
+        const output = renderBatchDivisionResults(results);
 
         const oldOutput = getEl("batch-division-results");
         if(oldOutput) {
             oldOutput.replaceWith(output);
         } else {
+            const singleOutput = getEl("four-gap-analysis-output");
             const selectionCard =
                 document.querySelector(".four-gap-select-card");
 
-            if(selectionCard) {
+            if(singleOutput) {
+                singleOutput.after(output);
+            } else if(selectionCard) {
                 selectionCard.after(output);
             }
         }
 
         if(status) {
-            status.textContent =
-                `${results.length} sıra numarası ayrı ayrı hesaplandı.`;
+            status.textContent = statusMsg;
         }
 
         output.scrollIntoView({
@@ -3693,6 +3856,62 @@ async function runBatchRowAnalysis() {
     } finally {
         setLoading(false);
     }
+}
+
+function renderBatchDivisionResults(results) {
+    const output = document.createElement("div");
+    output.id = "batch-division-results";
+    output.className = "batch-division-results";
+
+    const heading = document.createElement("div");
+    heading.className = "four-gap-average-title";
+    heading.textContent = "Toplu Sıra Numarası Hesaplama Sonuçları";
+    output.appendChild(heading);
+
+    const topNote = document.createElement("p");
+    topNote.className = "fifth-gap-description";
+    topNote.textContent =
+        "Her sayının altındaki balon, beşinci listede o kırmızı kolon numarasına karşılık gelen kolondan ve girilen aynı gri sıra numarasından alınmıştır. Mavi balon, beşinci listede sonuç olarak işaretlenmiş balondur.";
+    output.appendChild(topNote);
+
+    (Array.isArray(results) ? results : []).forEach(result => {
+        const item = document.createElement("div");
+        item.className = "batch-division-item";
+
+        const itemHeading = document.createElement("div");
+        itemHeading.className = "batch-division-heading";
+        itemHeading.textContent =
+            `Gri sıra numarası: ${result.rowNumber}`;
+        item.appendChild(itemHeading);
+
+        if(result.average === null) {
+            const empty = document.createElement("p");
+            empty.className = "four-gap-empty";
+            empty.textContent =
+                "Bu sıra numarası için hesaplamaya uygun sayı dizisi bulunamadı.";
+            item.appendChild(empty);
+        } else {
+            const averageInfo = document.createElement("div");
+            averageInfo.className = "parity-result-number";
+            averageInfo.textContent =
+                `Ortalama: ${result.total} ÷ ${result.count} = ${result.average}`;
+            item.appendChild(averageInfo);
+
+            item.appendChild(
+                createDivisionResultDisplay(
+                    result.average,
+                    result.fifthMatches,
+                    result.rowNumber,
+                    `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
+                    false
+                )
+            );
+        }
+
+        output.appendChild(item);
+    });
+
+    return output;
 }
 
 /* Bölme sonucunu gruplar, sıra numaraları ve beşinci listeden aktarılan balonlarla gösterir. */
@@ -4490,7 +4709,8 @@ async function deleteGroup(id) {
             selectedFifthGapGroupId = "";
         }
 
-        fourGapAnalysisResults = null;
+        clearSavedComparisonOutputs();
+        await queueFourGapStateSave();
 
         await renderMySetsList(lastRequestId);
 
