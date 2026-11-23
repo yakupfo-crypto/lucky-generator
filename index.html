@@ -442,43 +442,33 @@
         margin-bottom:8px;
         overflow-wrap:anywhere;
     }
-    .consecutive-filter-card{
-        background:#fff8e1;
-        border:2px solid #ffb300;
+    .consecutive-division-results{
+        margin-top:18px;
+        padding:14px 10px;
+        background:#f3faf4;
+        border:2px solid #2e7d32;
         border-radius:10px;
-        padding:14px 12px;
-        margin-top:16px;
-        margin-bottom:18px;
-        box-shadow:0 2px 6px rgba(0,0,0,0.08);
     }
-    .consecutive-filter-title{
-        color:#e65100;
+    .consecutive-division-title{
+        color:#1b5e20;
+        font-size:17px;
         font-weight:bold;
-        font-size:16px;
-        margin-bottom:6px;
+        margin-bottom:8px;
     }
-    .consecutive-filter-badges{
-        display:flex;
-        flex-wrap:wrap;
-        gap:8px;
-        margin-top:10px;
-    }
-    .consecutive-row-badge{
-        display:inline-flex;
-        align-items:center;
-        gap:6px;
+    .consecutive-division-item{
         background:#fff;
-        border:1px solid #ffb300;
-        color:#222;
-        padding:6px 10px;
-        border-radius:6px;
-        font-size:14px;
-        font-weight:bold;
+        border:2px solid #2e7d32;
+        border-radius:10px;
+        padding:12px 8px;
+        margin-bottom:14px;
+        overflow:hidden;
     }
-    .consecutive-row-badge span.seq-preview{
-        color:#1976d2;
-        font-family:monospace;
-        font-size:13px;
+    .consecutive-division-item:last-child{
+        margin-bottom:0;
+    }
+    .consecutive-division-item .division-result-card{
+        margin-top:0;
+        border:1px solid #90caf9;
     }
 
 </style>
@@ -2839,6 +2829,9 @@ async function renderMySetsList(reqId) {
 
     if(batchDivisionAnalysisResults && batchDivisionAnalysisResults.length > 0) {
         container.appendChild(
+            renderConsecutiveBatchDivisionResults(batchDivisionAnalysisResults)
+        );
+        container.appendChild(
             renderBatchDivisionResults(batchDivisionAnalysisResults)
         );
     }
@@ -2963,6 +2956,11 @@ async function resetFourGapComparisonSection() {
         oldOutput.remove();
     }
 
+    const oldConsecutiveOutput = getEl("consecutive-batch-division-results");
+    if (oldConsecutiveOutput) {
+        oldConsecutiveOutput.remove();
+    }
+
     const oldBatchOutput = getEl("batch-division-results");
     if (oldBatchOutput) {
         oldBatchOutput.remove();
@@ -3024,6 +3022,11 @@ function clearFourGapAnalysisOutput() {
 
     if(oldOutput) {
         oldOutput.remove();
+    }
+
+    const oldConsecutiveOutput = getEl("consecutive-batch-division-results");
+    if(oldConsecutiveOutput) {
+        oldConsecutiveOutput.remove();
     }
 
     const oldBatchOutput = getEl("batch-division-results");
@@ -3958,7 +3961,13 @@ async function runBatchRowAnalysis() {
 
         await queueFourGapStateSave();
 
+        const consecutiveOutput = renderConsecutiveBatchDivisionResults(results);
         const output = renderBatchDivisionResults(results);
+
+        const oldConsecutiveOutput = getEl("consecutive-batch-division-results");
+        if(oldConsecutiveOutput) {
+            oldConsecutiveOutput.remove();
+        }
 
         const oldOutput = getEl("batch-division-results");
         if(oldOutput) {
@@ -3975,11 +3984,13 @@ async function runBatchRowAnalysis() {
             }
         }
 
+        output.before(consecutiveOutput);
+
         if(status) {
             status.textContent = statusMsg;
         }
 
-        output.scrollIntoView({
+        consecutiveOutput.scrollIntoView({
             behavior:"smooth",
             block:"start"
         });
@@ -3993,123 +4004,100 @@ async function runBatchRowAnalysis() {
     }
 }
 
-/* İkinci sütundan dördüncü sütuna kadar (indeks 1, 2, 3) her adımda +1 artan ardışık sıra kontrolü */
-function checkConsecutiveColumns2To4(average) {
+/*
+ * Ortalamanın tam sayı kısmındaki ilk dört 3 haneli sütundan
+ * 2. sütundan 4. sütuna kadar (2., 3. ve 4. sütunlar) her adımda
+ * +1 artan ardışıklık mantığına uyup uymadığını kontrol eder.
+ * Örnek: 141 - 892 - 893 - 894 -> 892, 893, 894 (+1 artış) -> true
+ */
+function hasConsecutiveSecondToFourthColumns(average) {
     if (average === null || average === undefined) {
-        return { matched: false, columns: [] };
+        return false;
     }
+
     const groups = getDivisionIntegerGroups(average);
     if (groups.length < 4) {
-        return { matched: false, columns: [] };
+        return false;
     }
-    const col2Str = groups[1];
-    const col3Str = groups[2];
-    const col4Str = groups[3];
-    if (!/^\d+$/.test(col2Str) || !/^\d+$/.test(col3Str) || !/^\d+$/.test(col4Str)) {
-        return { matched: false, columns: [] };
+
+    const secondToFourth = groups.slice(1, 4);
+    if (!secondToFourth.every(g => /^\d+$/.test(g))) {
+        return false;
     }
-    const col2 = BigInt(col2Str);
-    const col3 = BigInt(col3Str);
-    const col4 = BigInt(col4Str);
-    const isConsecutive = (col3 === col2 + 1n) && (col4 === col3 + 1n);
-    return {
-        matched: isConsecutive,
-        columns: [col2Str, col3Str, col4Str]
-    };
+
+    const n2 = Number(secondToFourth[0]);
+    const n3 = Number(secondToFourth[1]);
+    const n4 = Number(secondToFourth[2]);
+
+    if (
+        !Number.isSafeInteger(n2) ||
+        !Number.isSafeInteger(n3) ||
+        !Number.isSafeInteger(n4)
+    ) {
+        return false;
+    }
+
+    return (n3 - n2 === 1) && (n4 - n3 === 1);
+}
+
+/*
+ * Toplu hesaplama sonuçları içinden 2. sütundan 4. sütuna kadar
+ * +1 artan ardışık sıra izleyen sonuçları ayrı bir bölümde gösterir.
+ */
+function renderConsecutiveBatchDivisionResults(results) {
+    const matchedResults = (Array.isArray(results) ? results : []).filter(
+        result => result && result.average !== null && hasConsecutiveSecondToFourthColumns(result.average)
+    );
+
+    const output = document.createElement("div");
+    output.id = "consecutive-batch-division-results";
+    output.className = "consecutive-division-results";
+
+    const heading = document.createElement("div");
+    heading.className = "consecutive-division-title";
+    heading.textContent =
+        `2. Sütundan 4. Sütuna +1 Ardışık Olan Gri Sıra Numarası Sonuçları (${matchedResults.length} Adet)`;
+    output.appendChild(heading);
+
+    const desc = document.createElement("p");
+    desc.className = "fifth-gap-description";
+    desc.textContent =
+        "Bölme sonucundaki 2., 3. ve 4. sütun sayıları her adımda +1 artan ardışık bir sıra izleyen gri sıra numarası sonuçları aşağıda ayrı bir bölümde listelenmiştir.";
+    output.appendChild(desc);
+
+    if (matchedResults.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "four-gap-empty";
+        empty.textContent =
+            "2. sütundan 4. sütuna kadar +1 artan ardışık sıra izleyen gri sıra numarası sonucu bulunamadı.";
+        output.appendChild(empty);
+        return output;
+    }
+
+    matchedResults.forEach(result => {
+        const item = document.createElement("div");
+        item.className = "consecutive-division-item";
+
+        item.appendChild(
+            createDivisionResultDisplay(
+                result.average,
+                result.fifthMatches,
+                result.rowNumber,
+                `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
+                false
+            )
+        );
+
+        output.appendChild(item);
+    });
+
+    return output;
 }
 
 function renderBatchDivisionResults(results) {
     const output = document.createElement("div");
     output.id = "batch-division-results";
     output.className = "batch-division-results";
-
-    const safeResults = Array.isArray(results) ? results : [];
-
-    /* Ardışıklık Mantığıyla (2. sütundan 4. sütuna her adımda +1 artan) eşleşen gri sıra numaraları bölümü */
-    const consecutiveMatches = safeResults
-        .map(result => {
-            const check = checkConsecutiveColumns2To4(result.average);
-            return check.matched ? { result, columns: check.columns } : null;
-        })
-        .filter(Boolean);
-
-    const consecutiveCard = document.createElement("div");
-    consecutiveCard.className = "consecutive-filter-card";
-    consecutiveCard.id = "consecutive-sequence-results";
-
-    const consecutiveTitle = document.createElement("div");
-    consecutiveTitle.className = "consecutive-filter-title";
-    consecutiveTitle.textContent =
-        "Ardışıklık Mantığıyla Eşleşen Gri Sıra Numarası Sonuçları (2. → 4. Sütun +1 Artış)";
-    consecutiveCard.appendChild(consecutiveTitle);
-
-    const consecutiveDesc = document.createElement("p");
-    consecutiveDesc.className = "fifth-gap-description";
-    consecutiveDesc.style.marginBottom = "6px";
-    consecutiveDesc.textContent =
-        "Bölme sonucunun 2. sütunundaki sayıdan 4. sütunundaki sayıya kadar her adımda +1 artan ardışık sıra (örneğin 892 - 893 - 894) izleyen gri sıra numarası sonuçları aşağıda ayrı olarak listelenir.";
-    consecutiveCard.appendChild(consecutiveDesc);
-
-    if (consecutiveMatches.length === 0) {
-        const emptyConsecutive = document.createElement("p");
-        emptyConsecutive.className = "four-gap-empty";
-        emptyConsecutive.style.marginBottom = "0";
-        emptyConsecutive.textContent =
-            "2. sütundan 4. sütuna kadar +1 artan ardışık sıra izleyen gri sıra numarası sonucu bulunamadı.";
-        consecutiveCard.appendChild(emptyConsecutive);
-    } else {
-        const countSummary = document.createElement("div");
-        countSummary.className = "four-gap-count";
-        countSummary.textContent =
-            `Ardışık kurala uyan gri sıra numaraları (${consecutiveMatches.length} adet): ` +
-            consecutiveMatches.map(m => m.result.rowNumber).join(", ");
-        consecutiveCard.appendChild(countSummary);
-
-        const badgesWrap = document.createElement("div");
-        badgesWrap.className = "consecutive-filter-badges";
-        badgesWrap.style.marginBottom = "12px";
-
-        consecutiveMatches.forEach(({ result, columns }) => {
-            const badge = document.createElement("div");
-            badge.className = "consecutive-row-badge";
-            badge.innerHTML =
-                `<span>Gri Sıra: ${result.rowNumber}</span>` +
-                `<span class="seq-preview">(${columns.join(" - ")})</span>`;
-            badgesWrap.appendChild(badge);
-        });
-        consecutiveCard.appendChild(badgesWrap);
-
-        consecutiveMatches.forEach(({ result }) => {
-            const subItem = document.createElement("div");
-            subItem.className = "batch-division-item";
-            subItem.style.marginBottom = "10px";
-
-            const subHeading = document.createElement("div");
-            subHeading.className = "batch-division-heading";
-            subHeading.textContent = `Gri sıra numarası: ${result.rowNumber}`;
-            subItem.appendChild(subHeading);
-
-            const averageInfo = document.createElement("div");
-            averageInfo.className = "parity-result-number";
-            averageInfo.textContent =
-                `Ortalama: ${result.total} ÷ ${result.count} = ${result.average}`;
-            subItem.appendChild(averageInfo);
-
-            subItem.appendChild(
-                createDivisionResultDisplay(
-                    result.average,
-                    result.fifthMatches,
-                    result.rowNumber,
-                    `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
-                    false
-                )
-            );
-
-            consecutiveCard.appendChild(subItem);
-        });
-    }
-
-    output.appendChild(consecutiveCard);
 
     const heading = document.createElement("div");
     heading.className = "four-gap-average-title";
@@ -4122,7 +4110,7 @@ function renderBatchDivisionResults(results) {
         "Her sayının altındaki balon, beşinci listede o kırmızı kolon numarasına karşılık gelen kolondan ve girilen aynı gri sıra numarasından alınmıştır. Mavi balon, beşinci listede sonuç olarak işaretlenmiş balondur.";
     output.appendChild(topNote);
 
-    safeResults.forEach(result => {
+    (Array.isArray(results) ? results : []).forEach(result => {
         const item = document.createElement("div");
         item.className = "batch-division-item";
 
