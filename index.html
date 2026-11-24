@@ -2940,6 +2940,11 @@ async function resetFourGapComparisonSection() {
         oldFilteredOneToFourOutput.remove();
     }
 
+        const oldFilteredNonConsecutiveOutput = getEl("filtered-non-consecutive-one-to-four-batch-results");
+        if (oldFilteredNonConsecutiveOutput) {
+            oldFilteredNonConsecutiveOutput.remove();
+        }
+
     const selectionCard = document.querySelector(".four-gap-select-card");
     if (selectionCard) {
         selectionCard.querySelectorAll('input[type="checkbox"]').forEach(cb => {
@@ -3012,6 +3017,11 @@ function clearFourGapAnalysisOutput() {
     if(oldFilteredOneToFourOutput) {
         oldFilteredOneToFourOutput.remove();
     }
+
+        const oldFilteredNonConsecutiveOutput = getEl("filtered-non-consecutive-one-to-four-batch-results");
+        if(oldFilteredNonConsecutiveOutput) {
+            oldFilteredNonConsecutiveOutput.remove();
+        }
 
     const batchStatus = getEl("batch-row-number-status");
     if(batchStatus) {
@@ -3952,6 +3962,11 @@ async function runBatchRowAnalysis() {
             oldFilteredOneToFourOutput.remove();
         }
 
+        const oldFilteredNonConsecutiveOutput = getEl("filtered-non-consecutive-one-to-four-batch-results");
+        if(oldFilteredNonConsecutiveOutput) {
+            oldFilteredNonConsecutiveOutput.remove();
+        }
+
         const oldOutput = getEl("batch-division-results");
         if(oldOutput) {
             oldOutput.replaceWith(output);
@@ -4179,6 +4194,93 @@ function renderFilteredConsecutiveOneToFourBatchResults(results) {
     return wrapper;
 }
 
+/*
+ * Birinci sütundan dördüncü sütuna kadar (1., 2., 3., 4. sütunlar)
+ * +1 artan ardışık mantığıyla olmadan, sadece her adımda farklı bir sıra izleyen kontrolü:
+ * - Her dört grubun da geçerli 3 haneli tam sayı olması gerekir.
+ * - Hiçbir adımda +1 artan ardışık ilişki olmamalıdır:
+ *   col2 !== col1 + 1 && col3 !== col2 + 1 && col4 !== col3 + 1
+ * - Her adımda bir önceki sütundan farklı bir değer/sıra izlemelidir (tekrar etmemelidir):
+ *   col2 !== col1 && col3 !== col2 && col4 !== col3
+ */
+function hasDifferentOrderOneToFour(average) {
+    if (average === null || average === undefined) {
+        return false;
+    }
+
+    const groups = getDivisionIntegerGroups(average);
+    if (groups.length < 4) {
+        return false;
+    }
+
+    const firstFour = groups.slice(0, 4);
+    if (!firstFour.every(g => /^\d{3}$/.test(g))) {
+        return false;
+    }
+
+    const col1 = Number(firstFour[0]);
+    const col2 = Number(firstFour[1]);
+    const col3 = Number(firstFour[2]);
+    const col4 = Number(firstFour[3]);
+
+    const noPlusOneStep =
+        (col2 !== col1 + 1) &&
+        (col3 !== col2 + 1) &&
+        (col4 !== col3 + 1);
+
+    const differentAtEachStep =
+        (col2 !== col1) &&
+        (col3 !== col2) &&
+        (col4 !== col3);
+
+    return noPlusOneStep && differentAtEachStep;
+}
+
+function renderFilteredNonConsecutiveOneToFourBatchResults(results) {
+    const wrapper = document.createElement("div");
+    wrapper.id = "filtered-non-consecutive-one-to-four-batch-results";
+    wrapper.className = "batch-division-results";
+    wrapper.style.marginTop = "22px";
+    wrapper.style.padding = "14px";
+    wrapper.style.background = "#eaf3ff";
+    wrapper.style.border = "1px solid #90caf9";
+    wrapper.style.borderRadius = "10px";
+
+    const heading = document.createElement("div");
+    heading.className = "four-gap-average-title";
+    heading.textContent = "Her Adımda Farklı Sıra İzleyen Gri Sıra Numarası Sonuçları (1-2-3-4. Sütunlar +1 Ardışık Olmadan)";
+    wrapper.appendChild(heading);
+
+    const desc = document.createElement("p");
+    desc.className = "fifth-gap-description";
+    desc.textContent =
+        "Bölme sonucunun 1. sütunundan 4. sütununa kadar +1 artan ardışık mantığıyla olmadan, her adımda farklı bir sıra izleyen gri sıra numarası bölüm kutuları aşağıda ayrı olarak listelenir.";
+    wrapper.appendChild(desc);
+
+    const safeResults = Array.isArray(results) ? results : [];
+    const filtered = safeResults.filter(r => hasDifferentOrderOneToFour(r.average));
+
+    const countBadge = document.createElement("div");
+    countBadge.className = "four-gap-count";
+    countBadge.textContent = `Kurala uyan bölüm kutusu sayısı: ${filtered.length}`;
+    wrapper.appendChild(countBadge);
+
+    if (filtered.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "four-gap-empty";
+        empty.textContent =
+            "Toplu hesaplama sonuçları arasında 1. sütundan 4. sütuna kadar +1 artan ardışık olmadan her adımda farklı bir sıra izleyen gri sıra numarası sonucu bulunamadı.";
+        wrapper.appendChild(empty);
+        return wrapper;
+    }
+
+    filtered.forEach(result => {
+        wrapper.appendChild(createBatchDivisionItemElement(result));
+    });
+
+    return wrapper;
+}
+
 function renderBatchDivisionResults(results) {
     const fragment = document.createDocumentFragment();
 
@@ -4204,6 +4306,7 @@ function renderBatchDivisionResults(results) {
     fragment.appendChild(output);
     fragment.appendChild(renderFilteredConsecutiveBatchResults(results));
     fragment.appendChild(renderFilteredConsecutiveOneToFourBatchResults(results));
+    fragment.appendChild(renderFilteredNonConsecutiveOneToFourBatchResults(results));
 
     return fragment;
 }
