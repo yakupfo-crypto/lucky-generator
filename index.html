@@ -2930,6 +2930,11 @@ async function resetFourGapComparisonSection() {
         oldBatchOutput.remove();
     }
 
+    const oldFilteredOutput = getEl("filtered-consecutive-batch-results");
+    if (oldFilteredOutput) {
+        oldFilteredOutput.remove();
+    }
+
     const selectionCard = document.querySelector(".four-gap-select-card");
     if (selectionCard) {
         selectionCard.querySelectorAll('input[type="checkbox"]').forEach(cb => {
@@ -2991,6 +2996,11 @@ function clearFourGapAnalysisOutput() {
     const oldBatchOutput = getEl("batch-division-results");
     if(oldBatchOutput) {
         oldBatchOutput.remove();
+    }
+
+    const oldFilteredOutput = getEl("filtered-consecutive-batch-results");
+    if(oldFilteredOutput) {
+        oldFilteredOutput.remove();
     }
 
     const batchStatus = getEl("batch-row-number-status");
@@ -3922,6 +3932,11 @@ async function runBatchRowAnalysis() {
 
         const output = renderBatchDivisionResults(results);
 
+        const oldFilteredOutput = getEl("filtered-consecutive-batch-results");
+        if(oldFilteredOutput) {
+            oldFilteredOutput.remove();
+        }
+
         const oldOutput = getEl("batch-division-results");
         if(oldOutput) {
             oldOutput.replaceWith(output);
@@ -3941,10 +3956,13 @@ async function runBatchRowAnalysis() {
             status.textContent = statusMsg;
         }
 
-        output.scrollIntoView({
-            behavior:"smooth",
-            block:"start"
-        });
+        const scrollTarget = getEl("batch-division-results");
+        if(scrollTarget) {
+            scrollTarget.scrollIntoView({
+                behavior:"smooth",
+                block:"start"
+            });
+        }
 
     } catch(e) {
         ErrorHandler.report("Batch Row Analysis Error",e);
@@ -3955,7 +3973,127 @@ async function runBatchRowAnalysis() {
     }
 }
 
+
+/*
+ * Ardışıklık filtresi:
+ * Bölme sonucunun tam sayı kısmındaki ilk 4 üç haneli grupta (1., 2., 3., 4. sütunlar):
+ * - Her dört grubun da geçerli 3 haneli tam sayı olması gerekir.
+ * - İkinci sütundan dördüncü sütuna kadar her adımda +1 artan ardışık sıra izlemelidir:
+ *   col3 === col2 + 1 && col4 === col3 + 1
+ * - Birinci sütun ise +1 artan ardışık sıraya dahil olmamalıdır:
+ *   col2 !== col1 + 1
+ */
+function hasConsecutiveTwoToFourWithoutFirst(average) {
+    if (average === null || average === undefined) {
+        return false;
+    }
+
+    const groups = getDivisionIntegerGroups(average);
+    if (groups.length < 4) {
+        return false;
+    }
+
+    const firstFour = groups.slice(0, 4);
+    if (!firstFour.every(g => /^\d{3}$/.test(g))) {
+        return false;
+    }
+
+    const col1 = Number(firstFour[0]);
+    const col2 = Number(firstFour[1]);
+    const col3 = Number(firstFour[2]);
+    const col4 = Number(firstFour[3]);
+
+    const twoToFourConsecutive = (col3 === col2 + 1) && (col4 === col3 + 1);
+    const firstNotConsecutive = (col2 !== col1 + 1);
+
+    return twoToFourConsecutive && firstNotConsecutive;
+}
+
+function createBatchDivisionItemElement(result) {
+    const item = document.createElement("div");
+    item.className = "batch-division-item";
+
+    const itemHeading = document.createElement("div");
+    itemHeading.className = "batch-division-heading";
+    itemHeading.textContent =
+        `Gri sıra numarası: ${result.rowNumber}`;
+    item.appendChild(itemHeading);
+
+    if(result.average === null) {
+        const empty = document.createElement("p");
+        empty.className = "four-gap-empty";
+        empty.textContent =
+            "Bu sıra numarası için hesaplamaya uygun sayı dizisi bulunamadı.";
+        item.appendChild(empty);
+    } else {
+        const averageInfo = document.createElement("div");
+        averageInfo.className = "parity-result-number";
+        averageInfo.textContent =
+            `Ortalama: ${result.total} ÷ ${result.count} = ${result.average}`;
+        item.appendChild(averageInfo);
+
+        item.appendChild(
+            createDivisionResultDisplay(
+                result.average,
+                result.fifthMatches,
+                result.rowNumber,
+                `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
+                false
+            )
+        );
+    }
+
+    return item;
+}
+
+function renderFilteredConsecutiveBatchResults(results) {
+    const wrapper = document.createElement("div");
+    wrapper.id = "filtered-consecutive-batch-results";
+    wrapper.className = "batch-division-results";
+    wrapper.style.marginTop = "22px";
+    wrapper.style.padding = "14px";
+    wrapper.style.background = "#eaf3ff";
+    wrapper.style.border = "1px solid #90caf9";
+    wrapper.style.borderRadius = "10px";
+
+    const heading = document.createElement("div");
+    heading.className = "four-gap-average-title";
+    heading.textContent = "Ardışık Kurala Uyan Gri Sıra Numarası Sonuçları (2-3-4. Sütunlar +1 Ardışık, 1. Sütun Hariç)";
+    wrapper.appendChild(heading);
+
+    const desc = document.createElement("p");
+    desc.className = "fifth-gap-description";
+    desc.textContent =
+        "Bölme sonucunun 1. sütunu +1 ardışık sıraya uymayıp, 2. sütundan 4. sütuna kadar her adımda +1 artan ardışık sıra izleyen gri sıra numarası bölüm kutuları aşağıda ayrı olarak listelenir.";
+    wrapper.appendChild(desc);
+
+    const safeResults = Array.isArray(results) ? results : [];
+    const filtered = safeResults.filter(r => hasConsecutiveTwoToFourWithoutFirst(r.average));
+
+    const countBadge = document.createElement("div");
+    countBadge.className = "four-gap-count";
+    countBadge.textContent = `Kurala uyan bölüm kutusu sayısı: ${filtered.length}`;
+    wrapper.appendChild(countBadge);
+
+    if (filtered.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "four-gap-empty";
+        empty.textContent =
+            "Toplu hesaplama sonuçları arasında 1. sütunu hariç olup 2. sütundan 4. sütuna kadar +1 artan ardışık sıra izleyen gri sıra numarası sonucu bulunamadı.";
+        wrapper.appendChild(empty);
+        return wrapper;
+    }
+
+    filtered.forEach(result => {
+        wrapper.appendChild(createBatchDivisionItemElement(result));
+    });
+
+    return wrapper;
+}
+
 function renderBatchDivisionResults(results) {
+    const fragment = document.createDocumentFragment();
+
     const output = document.createElement("div");
     output.id = "batch-division-results";
     output.className = "batch-division-results";
@@ -3972,43 +4110,13 @@ function renderBatchDivisionResults(results) {
     output.appendChild(topNote);
 
     (Array.isArray(results) ? results : []).forEach(result => {
-        const item = document.createElement("div");
-        item.className = "batch-division-item";
-
-        const itemHeading = document.createElement("div");
-        itemHeading.className = "batch-division-heading";
-        itemHeading.textContent =
-            `Gri sıra numarası: ${result.rowNumber}`;
-        item.appendChild(itemHeading);
-
-        if(result.average === null) {
-            const empty = document.createElement("p");
-            empty.className = "four-gap-empty";
-            empty.textContent =
-                "Bu sıra numarası için hesaplamaya uygun sayı dizisi bulunamadı.";
-            item.appendChild(empty);
-        } else {
-            const averageInfo = document.createElement("div");
-            averageInfo.className = "parity-result-number";
-            averageInfo.textContent =
-                `Ortalama: ${result.total} ÷ ${result.count} = ${result.average}`;
-            item.appendChild(averageInfo);
-
-            item.appendChild(
-                createDivisionResultDisplay(
-                    result.average,
-                    result.fifthMatches,
-                    result.rowNumber,
-                    `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
-                    false
-                )
-            );
-        }
-
-        output.appendChild(item);
+        output.appendChild(createBatchDivisionItemElement(result));
     });
 
-    return output;
+    fragment.appendChild(output);
+    fragment.appendChild(renderFilteredConsecutiveBatchResults(results));
+
+    return fragment;
 }
 
 /* Bölme sonucunu gruplar, sıra numaraları ve beşinci listeden aktarılan balonlarla gösterir. */
