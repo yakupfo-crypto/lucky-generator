@@ -442,34 +442,6 @@
         margin-bottom:8px;
         overflow-wrap:anywhere;
     }
-    .consecutive-division-results{
-        margin-top:18px;
-        padding:14px 10px;
-        background:#f3faf4;
-        border:2px solid #2e7d32;
-        border-radius:10px;
-    }
-    .consecutive-division-title{
-        color:#1b5e20;
-        font-size:17px;
-        font-weight:bold;
-        margin-bottom:8px;
-    }
-    .consecutive-division-item{
-        background:#fff;
-        border:2px solid #2e7d32;
-        border-radius:10px;
-        padding:12px 8px;
-        margin-bottom:14px;
-        overflow:hidden;
-    }
-    .consecutive-division-item:last-child{
-        margin-bottom:0;
-    }
-    .consecutive-division-item .division-result-card{
-        margin-top:0;
-        border:1px solid #90caf9;
-    }
 
 </style>
 </head>
@@ -2829,9 +2801,6 @@ async function renderMySetsList(reqId) {
 
     if(batchDivisionAnalysisResults && batchDivisionAnalysisResults.length > 0) {
         container.appendChild(
-            renderConsecutiveBatchDivisionResults(batchDivisionAnalysisResults)
-        );
-        container.appendChild(
             renderBatchDivisionResults(batchDivisionAnalysisResults)
         );
     }
@@ -2956,11 +2925,6 @@ async function resetFourGapComparisonSection() {
         oldOutput.remove();
     }
 
-    const oldConsecutiveOutput = getEl("consecutive-batch-division-results");
-    if (oldConsecutiveOutput) {
-        oldConsecutiveOutput.remove();
-    }
-
     const oldBatchOutput = getEl("batch-division-results");
     if (oldBatchOutput) {
         oldBatchOutput.remove();
@@ -3022,11 +2986,6 @@ function clearFourGapAnalysisOutput() {
 
     if(oldOutput) {
         oldOutput.remove();
-    }
-
-    const oldConsecutiveOutput = getEl("consecutive-batch-division-results");
-    if(oldConsecutiveOutput) {
-        oldConsecutiveOutput.remove();
     }
 
     const oldBatchOutput = getEl("batch-division-results");
@@ -3961,13 +3920,7 @@ async function runBatchRowAnalysis() {
 
         await queueFourGapStateSave();
 
-        const consecutiveOutput = renderConsecutiveBatchDivisionResults(results);
         const output = renderBatchDivisionResults(results);
-
-        const oldConsecutiveOutput = getEl("consecutive-batch-division-results");
-        if(oldConsecutiveOutput) {
-            oldConsecutiveOutput.remove();
-        }
 
         const oldOutput = getEl("batch-division-results");
         if(oldOutput) {
@@ -3984,13 +3937,11 @@ async function runBatchRowAnalysis() {
             }
         }
 
-        output.before(consecutiveOutput);
-
         if(status) {
             status.textContent = statusMsg;
         }
 
-        consecutiveOutput.scrollIntoView({
+        output.scrollIntoView({
             behavior:"smooth",
             block:"start"
         });
@@ -4002,96 +3953,6 @@ async function runBatchRowAnalysis() {
     } finally {
         setLoading(false);
     }
-}
-
-/*
- * Ortalamanın tam sayı kısmındaki ilk dört 3 haneli sütundan
- * 2. sütundan 4. sütuna kadar (2., 3. ve 4. sütunlar) her adımda
- * +1 artan ardışıklık mantığına uyup uymadığını kontrol eder.
- * Örnek: 141 - 892 - 893 - 894 -> 892, 893, 894 (+1 artış) -> true
- */
-function hasConsecutiveSecondToFourthColumns(average) {
-    if (average === null || average === undefined) {
-        return false;
-    }
-
-    const groups = getDivisionIntegerGroups(average);
-    if (groups.length < 4) {
-        return false;
-    }
-
-    const secondToFourth = groups.slice(1, 4);
-    if (!secondToFourth.every(g => /^\d+$/.test(g))) {
-        return false;
-    }
-
-    const n2 = Number(secondToFourth[0]);
-    const n3 = Number(secondToFourth[1]);
-    const n4 = Number(secondToFourth[2]);
-
-    if (
-        !Number.isSafeInteger(n2) ||
-        !Number.isSafeInteger(n3) ||
-        !Number.isSafeInteger(n4)
-    ) {
-        return false;
-    }
-
-    return (n3 - n2 === 1) && (n4 - n3 === 1);
-}
-
-/*
- * Toplu hesaplama sonuçları içinden 2. sütundan 4. sütuna kadar
- * +1 artan ardışık sıra izleyen sonuçları ayrı bir bölümde gösterir.
- */
-function renderConsecutiveBatchDivisionResults(results) {
-    const matchedResults = (Array.isArray(results) ? results : []).filter(
-        result => result && result.average !== null && hasConsecutiveSecondToFourthColumns(result.average)
-    );
-
-    const output = document.createElement("div");
-    output.id = "consecutive-batch-division-results";
-    output.className = "consecutive-division-results";
-
-    const heading = document.createElement("div");
-    heading.className = "consecutive-division-title";
-    heading.textContent =
-        `2. Sütundan 4. Sütuna +1 Ardışık Olan Gri Sıra Numarası Sonuçları (${matchedResults.length} Adet)`;
-    output.appendChild(heading);
-
-    const desc = document.createElement("p");
-    desc.className = "fifth-gap-description";
-    desc.textContent =
-        "Bölme sonucundaki 2., 3. ve 4. sütun sayıları her adımda +1 artan ardışık bir sıra izleyen gri sıra numarası sonuçları aşağıda ayrı bir bölümde listelenmiştir.";
-    output.appendChild(desc);
-
-    if (matchedResults.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "four-gap-empty";
-        empty.textContent =
-            "2. sütundan 4. sütuna kadar +1 artan ardışık sıra izleyen gri sıra numarası sonucu bulunamadı.";
-        output.appendChild(empty);
-        return output;
-    }
-
-    matchedResults.forEach(result => {
-        const item = document.createElement("div");
-        item.className = "consecutive-division-item";
-
-        item.appendChild(
-            createDivisionResultDisplay(
-                result.average,
-                result.fifthMatches,
-                result.rowNumber,
-                `Gri ${result.rowNumber} Sıra Numarasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
-                false
-            )
-        );
-
-        output.appendChild(item);
-    });
-
-    return output;
 }
 
 function renderBatchDivisionResults(results) {
