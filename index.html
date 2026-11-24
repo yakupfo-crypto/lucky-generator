@@ -4414,13 +4414,12 @@ function createBatchParityItemElement(result, parityType) {
     itemHeading.textContent = `Gri sıra numarası: ${result.rowNumber}`;
     item.appendChild(itemHeading);
 
-    const parityCountInfo = document.createElement("div");
-    parityCountInfo.className = "parity-result-count";
-    parityCountInfo.style.color = isOdd ? "#1976d2" : "#d32f2f";
-    parityCountInfo.textContent = isOdd
-        ? `Tek: ${subCount} adet`
-        : `Çift: ${subCount} adet`;
-    item.appendChild(parityCountInfo);
+    const paritySummaryInfo = document.createElement("div");
+    paritySummaryInfo.className = "parity-result-count";
+    paritySummaryInfo.style.color = "#333";
+    paritySummaryInfo.style.marginBottom = "6px";
+    paritySummaryInfo.textContent = `Çift: ${result.evenCount ?? 0} | Tek: ${result.oddCount ?? 0}`;
+    item.appendChild(paritySummaryInfo);
 
     if(subAverage === null || subCount === 0) {
         const empty = document.createElement("p");
