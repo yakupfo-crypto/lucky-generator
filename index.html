@@ -2945,15 +2945,15 @@ async function resetFourGapComparisonSection() {
             oldFilteredNonConsecutiveOutput.remove();
         }
 
-    const oldBatchOddOutput = getEl("batch-odd-parity-results");
-    if (oldBatchOddOutput) {
-        oldBatchOddOutput.remove();
-    }
+        const oldBatchOddParityOutput = getEl("batch-odd-parity-results");
+        if (oldBatchOddParityOutput) {
+            oldBatchOddParityOutput.remove();
+        }
 
-    const oldBatchEvenOutput = getEl("batch-even-parity-results");
-    if (oldBatchEvenOutput) {
-        oldBatchEvenOutput.remove();
-    }
+        const oldBatchEvenParityOutput = getEl("batch-even-parity-results");
+        if (oldBatchEvenParityOutput) {
+            oldBatchEvenParityOutput.remove();
+        }
 
     const selectionCard = document.querySelector(".four-gap-select-card");
     if (selectionCard) {
@@ -3033,25 +3033,15 @@ function clearFourGapAnalysisOutput() {
             oldFilteredNonConsecutiveOutput.remove();
         }
 
-        const oldBatchOddOutput = getEl("batch-odd-parity-results");
-        if(oldBatchOddOutput) {
-            oldBatchOddOutput.remove();
+        const oldBatchOddParityOutput = getEl("batch-odd-parity-results");
+        if (oldBatchOddParityOutput) {
+            oldBatchOddParityOutput.remove();
         }
 
-        const oldBatchEvenOutput = getEl("batch-even-parity-results");
-        if(oldBatchEvenOutput) {
-            oldBatchEvenOutput.remove();
+        const oldBatchEvenParityOutput = getEl("batch-even-parity-results");
+        if (oldBatchEvenParityOutput) {
+            oldBatchEvenParityOutput.remove();
         }
-
-    const oldBatchOddOutput = getEl("batch-odd-parity-results");
-    if(oldBatchOddOutput) {
-        oldBatchOddOutput.remove();
-    }
-
-    const oldBatchEvenOutput = getEl("batch-even-parity-results");
-    if(oldBatchEvenOutput) {
-        oldBatchEvenOutput.remove();
-    }
 
     const batchStatus = getEl("batch-row-number-status");
     if(batchStatus) {
@@ -3887,28 +3877,29 @@ function calculateBatchAverage(selectedGroups,fifthGroup,rowNumber) {
         rowNumber
     );
 
-    let oddTotal = 0n;
     let oddCount = 0;
-    let evenTotal = 0n;
+    let oddTotal = 0n;
     let evenCount = 0;
+    let evenTotal = 0n;
 
     allSequences.forEach(item => {
         const seq = String(item.sequence);
+        if(!/^\d+$/.test(seq)) return;
         const lastDigit = Number(seq.charAt(seq.length - 1));
-        if (lastDigit % 2 === 1) {
-            oddTotal += item.value;
+        if(lastDigit % 2 === 1) {
             oddCount++;
+            oddTotal += item.value;
         } else {
-            evenTotal += item.value;
             evenCount++;
+            evenTotal += item.value;
         }
     });
 
-    function computeBigIntAverage(sumVal, cntVal) {
-        if (cntVal === 0) return null;
-        const divisor = BigInt(cntVal);
+    function computeParityAvg(subTotal, subCount) {
+        if(subCount === 0) return null;
+        const divisor = BigInt(subCount);
         const scale = 1000000n;
-        const scaled = (sumVal * scale + divisor / 2n) / divisor;
+        const scaled = (subTotal * scale + divisor / 2n) / divisor;
         const whole = scaled / scale;
         const fraction = (scaled % scale)
             .toString()
@@ -3917,11 +3908,20 @@ function calculateBatchAverage(selectedGroups,fifthGroup,rowNumber) {
         return fraction ? `${whole}.${fraction}` : whole.toString();
     }
 
-    const oddAverage = computeBigIntAverage(oddTotal, oddCount);
-    const oddFifthMatches = findFifthListMatches(oddAverage, fifthGroup, rowNumber);
+    const oddAverage = computeParityAvg(oddTotal, oddCount);
+    const evenAverage = computeParityAvg(evenTotal, evenCount);
 
-    const evenAverage = computeBigIntAverage(evenTotal, evenCount);
-    const evenFifthMatches = findFifthListMatches(evenAverage, fifthGroup, rowNumber);
+    const oddFifthMatches = findFifthListMatches(
+        oddAverage,
+        fifthGroup,
+        rowNumber
+    );
+
+    const evenFifthMatches = findFifthListMatches(
+        evenAverage,
+        fifthGroup,
+        rowNumber
+    );
 
     return {
         rowNumber,
@@ -3930,11 +3930,11 @@ function calculateBatchAverage(selectedGroups,fifthGroup,rowNumber) {
         average,
         fifthMatches,
         oddCount,
-        oddTotal: oddTotal.toString(),
+        oddTotal:oddTotal.toString(),
         oddAverage,
         oddFifthMatches,
         evenCount,
-        evenTotal: evenTotal.toString(),
+        evenTotal:evenTotal.toString(),
         evenAverage,
         evenFifthMatches
     };
@@ -4039,6 +4039,16 @@ async function runBatchRowAnalysis() {
         const oldFilteredNonConsecutiveOutput = getEl("filtered-non-consecutive-one-to-four-batch-results");
         if(oldFilteredNonConsecutiveOutput) {
             oldFilteredNonConsecutiveOutput.remove();
+        }
+
+        const oldBatchOddParityOutput = getEl("batch-odd-parity-results");
+        if (oldBatchOddParityOutput) {
+            oldBatchOddParityOutput.remove();
+        }
+
+        const oldBatchEvenParityOutput = getEl("batch-even-parity-results");
+        if (oldBatchEvenParityOutput) {
+            oldBatchEvenParityOutput.remove();
         }
 
         const oldOutput = getEl("batch-division-results");
@@ -4355,85 +4365,6 @@ function renderFilteredNonConsecutiveOneToFourBatchResults(results) {
     return wrapper;
 }
 
-function createBatchParityItemElement(result, parityType) {
-    const isOdd = parityType === "odd";
-    const count = isOdd ? (result.oddCount || 0) : (result.evenCount || 0);
-    const total = isOdd ? (result.oddTotal || "0") : (result.evenTotal || "0");
-    const average = isOdd ? (result.oddAverage ?? null) : (result.evenAverage ?? null);
-    const fifthMatches = isOdd ? (result.oddFifthMatches || []) : (result.evenFifthMatches || []);
-    const labelPrefix = isOdd ? "Son rakamına göre tekler" : "Son rakamına göre çiftler";
-
-    const item = document.createElement("div");
-    item.className = "batch-division-item";
-
-    const itemHeading = document.createElement("div");
-    itemHeading.className = "batch-division-heading";
-    itemHeading.textContent = `Gri sıra numarası: ${result.rowNumber}`;
-    item.appendChild(itemHeading);
-
-    if (average === null || count === 0) {
-        const empty = document.createElement("p");
-        empty.className = "four-gap-empty";
-        empty.textContent =
-            `Bu sıra numarası için ${labelPrefix.toLowerCase()} grubunda hesaplamaya uygun sayı dizisi bulunamadı.`;
-        item.appendChild(empty);
-    } else {
-        const averageInfo = document.createElement("div");
-        averageInfo.className = "parity-result-number";
-        averageInfo.textContent =
-            `Ortalama: ${total} ÷ ${count} = ${average}`;
-        item.appendChild(averageInfo);
-
-        item.appendChild(
-            createDivisionResultDisplay(
-                average,
-                fifthMatches,
-                result.rowNumber,
-                `Gri ${result.rowNumber} Sıra Numarası - ${labelPrefix} Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
-                false
-            )
-        );
-    }
-
-    return item;
-}
-
-function renderBatchParityResultsSection(results, parityType) {
-    const isOdd = parityType === "odd";
-    const wrapper = document.createElement("div");
-    wrapper.id = isOdd ? "batch-odd-parity-results" : "batch-even-parity-results";
-    wrapper.className = "batch-division-results";
-    wrapper.style.marginTop = "22px";
-    wrapper.style.padding = "14px";
-    wrapper.style.background = isOdd ? "#eaf3ff" : "#fff5f5";
-    wrapper.style.border = isOdd ? "1px solid #90caf9" : "1px solid #ef9a9a";
-    wrapper.style.borderRadius = "10px";
-
-    const heading = document.createElement("div");
-    heading.className = "four-gap-average-title";
-    if (!isOdd) {
-        heading.style.color = "#d32f2f";
-    }
-    heading.textContent = isOdd
-        ? "Son Rakamına Göre Tekler Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri"
-        : "Son Rakamına Göre Çiftler Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri";
-    wrapper.appendChild(heading);
-
-    const desc = document.createElement("p");
-    desc.className = "fifth-gap-description";
-    desc.textContent = isOdd
-        ? "Her gri sıra numarası için yalnızca son rakamı tek olan sayı dizilerinin ortalaması, bölme sonucu ve beşinci liste eşleşmeleri aşağıda ayrı bölüm olarak listelenir."
-        : "Her gri sıra numarası için yalnızca son rakamı çift olan sayı dizilerinin ortalaması, bölme sonucu ve beşinci liste eşleşmeleri aşağıda ayrı bölüm olarak listelenir.";
-    wrapper.appendChild(desc);
-
-    const safeResults = Array.isArray(results) ? results : [];
-    safeResults.forEach(result => {
-        wrapper.appendChild(createBatchParityItemElement(result, parityType));
-    });
-
-    return wrapper;
-}
-
 function renderBatchDivisionResults(results) {
     const fragment = document.createDocumentFragment();
 
@@ -4457,13 +4388,100 @@ function renderBatchDivisionResults(results) {
     });
 
     fragment.appendChild(output);
-    fragment.appendChild(renderBatchParityResultsSection(results, "odd"));
-    fragment.appendChild(renderBatchParityResultsSection(results, "even"));
     fragment.appendChild(renderFilteredConsecutiveBatchResults(results));
     fragment.appendChild(renderFilteredConsecutiveOneToFourBatchResults(results));
     fragment.appendChild(renderFilteredNonConsecutiveOneToFourBatchResults(results));
+    fragment.appendChild(renderBatchParityResults(results, "odd"));
+    fragment.appendChild(renderBatchParityResults(results, "even"));
 
     return fragment;
+}
+
+function createBatchParityItemElement(result, parityType) {
+    const isOdd = parityType === "odd";
+    const subCount = isOdd ? (result.oddCount ?? 0) : (result.evenCount ?? 0);
+    const subTotal = isOdd ? (result.oddTotal ?? "0") : (result.evenTotal ?? "0");
+    const subAverage = isOdd ? (result.oddAverage ?? null) : (result.evenAverage ?? null);
+    const subFifthMatches = isOdd ? (result.oddFifthMatches || []) : (result.evenFifthMatches || []);
+    const labelPrefix = isOdd ? "Son rakamına göre tekler" : "Son rakamına göre çiftler";
+
+    const item = document.createElement("div");
+    item.className = "batch-division-item";
+
+    const itemHeading = document.createElement("div");
+    itemHeading.className = "batch-division-heading";
+    itemHeading.style.color = isOdd ? "#1976d2" : "#d32f2f";
+    itemHeading.textContent = `Gri sıra numarası: ${result.rowNumber}`;
+    item.appendChild(itemHeading);
+
+    if(subAverage === null || subCount === 0) {
+        const empty = document.createElement("p");
+        empty.className = "four-gap-empty";
+        empty.textContent =
+            `Bu sıra numarası için ${labelPrefix.toLowerCase()} grubunda hesaplamaya uygun sayı dizisi bulunamadı.`;
+        item.appendChild(empty);
+    } else {
+        const averageInfo = document.createElement("div");
+        averageInfo.className = "parity-result-number";
+        averageInfo.textContent =
+            `Ortalama: ${subTotal} ÷ ${subCount} = ${subAverage}`;
+        item.appendChild(averageInfo);
+
+        item.appendChild(
+            createDivisionResultDisplay(
+                subAverage,
+                subFifthMatches,
+                result.rowNumber,
+                `Gri ${result.rowNumber} Sıra Numarası - ${labelPrefix} Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri`,
+                false
+            )
+        );
+    }
+
+    return item;
+}
+
+function renderBatchParityResults(results, parityType) {
+    const isOdd = parityType === "odd";
+    const wrapper = document.createElement("div");
+    wrapper.id = isOdd ? "batch-odd-parity-results" : "batch-even-parity-results";
+    wrapper.className = "batch-division-results";
+    wrapper.style.marginTop = "22px";
+    wrapper.style.padding = "14px";
+    wrapper.style.background = isOdd ? "#eaf3ff" : "#fff5f5";
+    wrapper.style.border = isOdd ? "1px solid #90caf9" : "1px solid #ef9a9a";
+    wrapper.style.borderRadius = "10px";
+
+    const heading = document.createElement("div");
+    heading.className = "four-gap-average-title";
+    heading.style.color = isOdd ? "#1976d2" : "#d32f2f";
+    heading.textContent = isOdd
+        ? "Son Rakamına Göre Tekler Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri"
+        : "Son Rakamına Göre Çiftler Ortalamasının Bölme Sonucu ve Beşinci Liste Eşleşmeleri";
+    wrapper.appendChild(heading);
+
+    const desc = document.createElement("p");
+    desc.className = "fifth-gap-description";
+    desc.textContent = isOdd
+        ? "Toplu hesaplamadaki her gri sıra numarası için son rakamına göre tek sayı dizilerinin ortalaması, bölme sonucu ve beşinci liste eşleşmeleri görseldeki yöntemle aşağıda ayrı bölüm kutularında listelenir."
+        : "Toplu hesaplamadaki her gri sıra numarası için son rakamına göre çift sayı dizilerinin ortalaması, bölme sonucu ve beşinci liste eşleşmeleri görseldeki yöntemle aşağıda ayrı bölüm kutularında listelenir.";
+    wrapper.appendChild(desc);
+
+    const safeResults = Array.isArray(results) ? results : [];
+
+    if(safeResults.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "four-gap-empty";
+        empty.textContent = "Hesaplanacak sıra numarası sonucu bulunamadı.";
+        wrapper.appendChild(empty);
+        return wrapper;
+    }
+
+    safeResults.forEach(result => {
+        wrapper.appendChild(createBatchParityItemElement(result, parityType));
+    });
+
+    return wrapper;
 }
 
 /* Bölme sonucunu gruplar, sıra numaraları ve beşinci listeden aktarılan balonlarla gösterir. */
