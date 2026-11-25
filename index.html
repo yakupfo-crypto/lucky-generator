@@ -4417,8 +4417,14 @@ function createBatchParityItemElement(result, parityType) {
     const paritySummaryInfo = document.createElement("div");
     paritySummaryInfo.className = "parity-result-count";
     paritySummaryInfo.style.color = "#333";
-    paritySummaryInfo.style.marginBottom = "6px";
-    paritySummaryInfo.textContent = `Çift: ${result.evenCount ?? 0} | Tek: ${result.oddCount ?? 0}`;
+    paritySummaryInfo.style.fontSize = "19px";
+    paritySummaryInfo.style.fontWeight = "bold";
+    paritySummaryInfo.style.lineHeight = "1.4";
+    paritySummaryInfo.style.marginBottom = "8px";
+    const evenCountVal = result.evenCount ?? 0;
+    const oddCountVal = result.oddCount ?? 0;
+    const totalCountVal = result.count ?? (evenCountVal + oddCountVal);
+    paritySummaryInfo.textContent = `Çift: ${evenCountVal} | Tek: ${oddCountVal} | Toplam: ${totalCountVal}`;
     item.appendChild(paritySummaryInfo);
 
     if(subAverage === null || subCount === 0) {
